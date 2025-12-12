@@ -1,0 +1,114 @@
+package utils
+
+import (
+	"testing"
+)
+
+func TestSanitizeFilename(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantErr   bool
+		checkFunc func(string) bool
+	}{
+		{
+			name:    "normal filename",
+			input:   "test.jpg",
+			wantErr: false,
+			checkFunc: func(s string) bool {
+				return s == "test.jpg"
+			},
+		},
+		{
+			name:    "path traversal attempt",
+			input:   "../../../etc/passwd",
+			wantErr: false,
+			checkFunc: func(s string) bool {
+				return s != "" && s != "../../../etc/passwd" && !contains(s, "..")
+			},
+		},
+		{
+			name:    "empty filename",
+			input:   "",
+			wantErr: true,
+		},
+		{
+			name:    "filename with dangerous characters",
+			input:   "file<>name.jpg",
+			wantErr: false,
+			checkFunc: func(s string) bool {
+				return !contains(s, "<") && !contains(s, ">")
+			},
+		},
+		{
+			name:    "filename with path separators",
+			input:   "path/to/file.jpg",
+			wantErr: false,
+			checkFunc: func(s string) bool {
+				return !contains(s, "/") && !contains(s, "\\")
+			},
+		},
+		{
+			name:    "very long filename",
+			input:   string(make([]byte, 300)) + ".jpg",
+			wantErr: false,
+			checkFunc: func(s string) bool {
+				return len(s) <= MaxFilenameLength
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := SanitizeFilename(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SanitizeFilename() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && tt.checkFunc != nil {
+				if !tt.checkFunc(got) {
+					t.Errorf("SanitizeFilename() = %v, failed check", got)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateFilename(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{"valid filename", "test.jpg", false},
+		{"empty filename", "", true},
+		{"path traversal", "../../file.jpg", true},
+		{"path separator", "path/file.jpg", true},
+		{"dangerous chars", "file<>name.jpg", true},
+		{"too long", string(make([]byte, 300)) + ".jpg", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateFilename(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateFilename() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			containsMiddle(s, substr)))
+}
+
+func containsMiddle(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
