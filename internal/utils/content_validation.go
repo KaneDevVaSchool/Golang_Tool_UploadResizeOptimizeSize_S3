@@ -9,16 +9,15 @@ import (
 	"strings"
 )
 
-// ValidateFileContent validates that file content matches the file extension
+// ValidateFileContent validate file content có khớp với extension không
 func ValidateFileContent(file multipart.File, filename string) error {
-	// Read first 512 bytes for MIME detection
+	// * Đọc 512 bytes đầu để detect MIME type
 	buffer := make([]byte, 512)
 	n, err := file.Read(buffer)
 	if err != nil && err != io.EOF {
 		return errors.New("unable to read file content")
 	}
 
-	// Reset file pointer for later use
 	if _, seekErr := file.Seek(0, 0); seekErr != nil {
 		return errors.New("unable to reset file pointer")
 	}
@@ -27,20 +26,15 @@ func ValidateFileContent(file multipart.File, filename string) error {
 		return errors.New("file is empty")
 	}
 
-	// Detect MIME type from content
 	detectedType := http.DetectContentType(buffer[:n])
-
-	// Get expected MIME type from extension
 	expectedType := GetContentType(filename)
 
-	// Extract base type (e.g., "image" from "image/jpeg")
 	detectedBase := strings.Split(detectedType, "/")[0]
 	expectedBase := strings.Split(expectedType, "/")[0]
 
-	// For images, be more strict
 	ext := strings.ToLower(filepath.Ext(filename))
 	if IsImage(filename) {
-		// Validate image MIME types strictly
+		// ! Validate image MIME types chặt chẽ hơn
 		imageMIMEs := map[string][]string{
 			".jpg":  {"image/jpeg"},
 			".jpeg": {"image/jpeg"},
@@ -57,7 +51,6 @@ func ValidateFileContent(file multipart.File, filename string) error {
 			return errors.New("unsupported image format")
 		}
 
-		// Check if detected type matches any valid MIME for this extension
 		matched := false
 		for _, validMIME := range validMIMEs {
 			if strings.HasPrefix(detectedType, validMIME) || detectedType == validMIME {
@@ -70,7 +63,7 @@ func ValidateFileContent(file multipart.File, filename string) error {
 			return errors.New("file content does not match image type")
 		}
 	} else {
-		// For other file types, check base type matches
+		// * Với các file type khác, chỉ kiểm tra base type
 		if detectedBase != expectedBase && detectedBase != "application" {
 			return errors.New("file content does not match file type")
 		}

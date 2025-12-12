@@ -23,7 +23,7 @@ import (
 	_ "golang.org/x/image/webp" // Support WebP format
 )
 
-// ImageSize represents a resized image size
+// ImageSize đại diện cho resized image size
 type ImageSize struct {
 	Name   string
 	Width  int
@@ -32,7 +32,7 @@ type ImageSize struct {
 	URL    string
 }
 
-// ImageResizeService handles image resizing operations
+// ImageResizeService xử lý image resizing operations
 type ImageResizeService struct {
 	wpUploadsDir string
 	baseURL      string
@@ -40,14 +40,14 @@ type ImageResizeService struct {
 	optimizer    *ImageOptimizer
 }
 
-// ImageSizeConfig defines image size configuration
+// ImageSizeConfig định nghĩa image size configuration
 type ImageSizeConfig struct {
 	Name   string
 	Width  int
 	Height int
 }
 
-// NewImageResizeService creates a new image resize service
+// NewImageResizeService tạo image resize service mới
 func NewImageResizeService(wpUploadsDir, baseURL string, sizes []ImageSizeConfig, optimizer *ImageOptimizer) *ImageResizeService {
 	return &ImageResizeService{
 		wpUploadsDir: wpUploadsDir,
@@ -57,28 +57,24 @@ func NewImageResizeService(wpUploadsDir, baseURL string, sizes []ImageSizeConfig
 	}
 }
 
-// ResizeImage resizes an image and creates multiple sizes
+// ResizeImage resize image và tạo multiple sizes
 func (s *ImageResizeService) ResizeImage(ctx context.Context, originalPath, filename string) ([]ImageSize, error) {
-	// Check cancellation before starting
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("resize cancelled: %w", ctx.Err())
 	default:
 	}
 
-	// Read original image
 	file, err := os.Open(originalPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open original image %s: %w", originalPath, err)
 	}
 	defer file.Close()
 
-	// Reset file pointer
 	if _, err := file.Seek(0, 0); err != nil {
 		return nil, fmt.Errorf("failed to seek file: %w", err)
 	}
 
-	// Check cancellation after file operations
 	select {
 	case <-ctx.Done():
 		return nil, fmt.Errorf("resize cancelled: %w", ctx.Err())
@@ -96,7 +92,7 @@ func (s *ImageResizeService) ResizeImage(ctx context.Context, originalPath, file
 
 	log.Printf("[ImageResize] Original image: %dx%d, format: %s", originalWidth, originalHeight, format)
 
-	// Create year/month directory structure (WordPress style)
+	// * Tạo year/month directory structure (WordPress style)
 	year := utils.GetCurrentYear()
 	month := utils.GetCurrentMonth()
 	uploadPath := filepath.Join(s.wpUploadsDir, year, month)
@@ -109,9 +105,8 @@ func (s *ImageResizeService) ResizeImage(ctx context.Context, originalPath, file
 
 	var results []ImageSize
 
-	// Process each size
 	for i, sizeConfig := range s.sizes {
-		// Check context cancellation periodically (every 5 sizes)
+		// * Check context cancellation periodically (mỗi 5 sizes)
 		if i%5 == 0 {
 			select {
 			case <-ctx.Done():
@@ -119,7 +114,6 @@ func (s *ImageResizeService) ResizeImage(ctx context.Context, originalPath, file
 			default:
 			}
 		}
-		// Check cancellation periodically
 		select {
 		case <-ctx.Done():
 			return nil, fmt.Errorf("resize cancelled during processing: %w", ctx.Err())
@@ -128,11 +122,10 @@ func (s *ImageResizeService) ResizeImage(ctx context.Context, originalPath, file
 
 		resizedImg := s.resizeImage(ctx, img, sizeConfig.Width, sizeConfig.Height, originalWidth, originalHeight)
 
-		// Generate filename for this size
 		sizeFilename := s.generateSizeFilename(baseName, ext, sizeConfig.Name)
 		sizePath := filepath.Join(uploadPath, sizeFilename)
 
-		// Save resized image (temporary path for optimization) with error recovery
+		// * Save resized image vào temp path trước (để optimization) với error recovery
 		tempPath := sizePath + ".tmp"
 		maxSaveRetries := 2
 		var saveErr error
@@ -151,7 +144,6 @@ func (s *ImageResizeService) ResizeImage(ctx context.Context, originalPath, file
 			continue
 		}
 
-		// Optimize image if optimizer is available
 		if s.optimizer != nil {
 			optResult, err := s.optimizer.OptimizeImage(ctx, tempPath, sizePath)
 			if err != nil {
@@ -170,18 +162,15 @@ func (s *ImageResizeService) ResizeImage(ctx context.Context, originalPath, file
 					log.Printf("[ImageResize] Fallback: using unoptimized version for %s", sizeConfig.Name)
 				}
 			} else {
-				// Remove temp file
 				if removeErr := os.Remove(tempPath); removeErr != nil {
 					log.Printf("[ImageResize] Failed to remove temp file %s: %v", tempPath, removeErr)
 				}
 				log.Printf("[ImageResize] Optimized %s: saved %.2f%% (%d bytes)",
 					sizeConfig.Name, optResult.SavedPercent, optResult.SavedBytes)
 
-				// Record metrics
 				metrics.GetMetrics().RecordImageOptimize(optResult.SavedBytes)
 			}
 		} else {
-			// No optimizer, just rename temp to final
 			if err := os.Rename(tempPath, sizePath); err != nil {
 				log.Printf("[ImageResize] Failed to rename temp file %s to %s: %v", tempPath, sizePath, err)
 				// Try to cleanup temp file
@@ -191,10 +180,8 @@ func (s *ImageResizeService) ResizeImage(ctx context.Context, originalPath, file
 			}
 		}
 
-		// Record resize metric
 		metrics.GetMetrics().RecordImageResize()
 
-		// Generate URL
 		sizeURL := s.generateURL(year, month, sizeFilename)
 
 		results = append(results, ImageSize{
@@ -267,7 +254,6 @@ func (s *ImageResizeService) resizeImage(ctx context.Context, img image.Image, m
 		}
 	}
 
-	// Create new image with calculated dimensions
 	return s.resizeBilinear(ctx, img, newWidth, newHeight)
 }
 
@@ -367,7 +353,6 @@ func (s *ImageResizeService) resizeBilinear(ctx context.Context, img image.Image
 		}()
 	}
 
-	// Send rows to workers
 	go func() {
 		defer close(rowChan)
 		for y := 0; y < height; y++ {
@@ -379,15 +364,13 @@ func (s *ImageResizeService) resizeBilinear(ctx context.Context, img image.Image
 		}
 	}()
 
-	// Wait for all workers to complete
 	wg.Wait()
 
 	return dst
 }
 
-// bilinearInterpolate performs bilinear color interpolation
+// bilinearInterpolate thực hiện bilinear color interpolation
 func bilinearInterpolate(c11, c21, c12, c22 color.Color, fx, fy float64) color.Color {
-	// Convert colors to RGBA
 	r11, g11, b11, a11 := c11.RGBA()
 	r21, g21, b21, a21 := c21.RGBA()
 	r12, g12, b12, a12 := c12.RGBA()
@@ -398,7 +381,7 @@ func bilinearInterpolate(c11, c21, c12, c22 color.Color, fx, fy float64) color.C
 		return float64(v>>8) / 255.0
 	}
 
-	// Interpolate horizontally first
+	// * Interpolate horizontally trước
 	r1 := toFloat(r11)*(1-fx) + toFloat(r21)*fx
 	g1 := toFloat(g11)*(1-fx) + toFloat(g21)*fx
 	b1 := toFloat(b11)*(1-fx) + toFloat(b21)*fx
@@ -409,13 +392,12 @@ func bilinearInterpolate(c11, c21, c12, c22 color.Color, fx, fy float64) color.C
 	b2 := toFloat(b12)*(1-fx) + toFloat(b22)*fx
 	a2 := toFloat(a12)*(1-fx) + toFloat(a22)*fx
 
-	// Interpolate vertically
+	// * Sau đó interpolate vertically
 	r := r1*(1-fy) + r2*fy
 	g := g1*(1-fy) + g2*fy
 	b := b1*(1-fy) + b2*fy
 	a := a1*(1-fy) + a2*fy
 
-	// Convert back to uint8
 	return color.RGBA{
 		R: uint8(math.Round(r * 255)),
 		G: uint8(math.Round(g * 255)),
@@ -424,7 +406,7 @@ func bilinearInterpolate(c11, c21, c12, c22 color.Color, fx, fy float64) color.C
 	}
 }
 
-// saveImage saves image to file
+// saveImage lưu image vào file
 func (s *ImageResizeService) saveImage(img image.Image, path string, format string) error {
 	file, err := os.Create(path)
 	if err != nil {
@@ -440,16 +422,15 @@ func (s *ImageResizeService) saveImage(img image.Image, path string, format stri
 	case "gif":
 		return gif.Encode(file, img, nil)
 	case "webp":
-		// WebP encoding requires external library, fallback to JPEG
+		// * WebP encoding cần external library, fallback về JPEG
 		log.Printf("[ImageResize] WebP encoding not fully supported, converting to JPEG")
 		return jpeg.Encode(file, img, &jpeg.Options{Quality: DefaultJPEGQuality})
 	default:
-		// Default to JPEG
 		return jpeg.Encode(file, img, &jpeg.Options{Quality: DefaultJPEGQuality})
 	}
 }
 
-// generateSizeFilename generates filename for resized image
+// generateSizeFilename tạo filename cho resized image
 func (s *ImageResizeService) generateSizeFilename(baseName, ext, sizeName string) string {
 	if sizeName == "full" || sizeName == "original" {
 		return baseName + ext
@@ -457,14 +438,13 @@ func (s *ImageResizeService) generateSizeFilename(baseName, ext, sizeName string
 	return baseName + "-" + sizeName + ext
 }
 
-// generateURL generates URL for the file
+// generateURL tạo URL cho file
 func (s *ImageResizeService) generateURL(year, month, filename string) string {
-	// Remove trailing slash from baseURL if present
 	base := strings.TrimSuffix(s.baseURL, "/")
 	return base + "/wp-content/uploads/" + year + "/" + month + "/" + filename
 }
 
-// SaveOriginal saves the original image to wp-uploads and optimizes it
+// SaveOriginal lưu original image vào wp-uploads và optimize nó
 func (s *ImageResizeService) SaveOriginal(ctx context.Context, sourcePath, filename string) (string, string, error) {
 	// Check cancellation before starting
 	select {

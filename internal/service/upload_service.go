@@ -201,9 +201,8 @@ func (s *uploadService) UploadImage(ctx context.Context, filename string, file i
 	}, nil
 }
 
-// UploadImageWithTransaction uploads image with database transaction support
+// UploadImageWithTransaction upload image với database transaction support
 func (s *uploadService) UploadImageWithTransaction(ctx context.Context, filename string, file io.Reader, fileSize int64, maxSize int64) (resp *models.UploadResponse, record *models.UploadRecord, err error) {
-	// Start database transaction
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)

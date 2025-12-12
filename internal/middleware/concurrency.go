@@ -9,7 +9,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-// ConcurrencyLimiter limits the number of concurrent requests using semaphore
+// ConcurrencyLimiter giới hạn số concurrent requests dùng semaphore
 type ConcurrencyLimiter struct {
 	sem            *semaphore.Weighted
 	maxConcurrent  int64
@@ -18,10 +18,10 @@ type ConcurrencyLimiter struct {
 	acquireTimeout time.Duration
 }
 
-// NewConcurrencyLimiter creates a new concurrency limiter
+// NewConcurrencyLimiter tạo concurrency limiter mới
 func NewConcurrencyLimiter(maxConcurrent int64, acquireTimeout time.Duration) *ConcurrencyLimiter {
 	if acquireTimeout == 0 {
-		acquireTimeout = 30 * time.Second // Default: 30 seconds
+		acquireTimeout = 30 * time.Second
 	}
 	return &ConcurrencyLimiter{
 		sem:            semaphore.NewWeighted(maxConcurrent),
@@ -30,14 +30,13 @@ func NewConcurrencyLimiter(maxConcurrent int64, acquireTimeout time.Duration) *C
 	}
 }
 
-// ConcurrencyLimitMiddleware limits concurrent requests using semaphore
+// ConcurrencyLimitMiddleware giới hạn concurrent requests dùng semaphore
 func ConcurrencyLimitMiddleware(limiter *ConcurrencyLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Try to acquire semaphore with context cancellation support
 			ctx := r.Context()
 
-			// Set timeout for acquiring semaphore (prevent indefinite wait)
+			// ! Set timeout khi acquire semaphore để tránh wait vô hạn
 			acquireCtx, cancel := context.WithTimeout(ctx, limiter.acquireTimeout)
 			defer cancel()
 
@@ -67,7 +66,7 @@ func ConcurrencyLimitMiddleware(limiter *ConcurrencyLimiter) func(http.Handler) 
 	}
 }
 
-// GetStats returns current concurrency statistics
+// GetStats trả về concurrency statistics hiện tại
 func (c *ConcurrencyLimiter) GetStats() (current, waiting int64) {
 	return atomic.LoadInt64(&c.current), atomic.LoadInt64(&c.waiting)
 }

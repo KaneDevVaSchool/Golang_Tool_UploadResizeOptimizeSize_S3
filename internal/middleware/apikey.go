@@ -5,17 +5,17 @@ import (
 	"net/http"
 )
 
-// APIKeyAuth middleware validates API key from header or query parameter
+// APIKeyAuth middleware validate API key từ header
 func APIKeyAuth(apiKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if apiKey == "" {
-				// No API key configured, allow all requests
+				// * Không có API key configured, allow tất cả requests
 				next.ServeHTTP(w, r)
 				return
 			}
 
-			// Check X-API-Key header only (security: never accept API key from query parameters)
+			// ! Chỉ check X-API-Key header (không bao giờ accept từ query parameters)
 			providedKey := r.Header.Get("X-API-Key")
 			if providedKey == "" {
 				w.Header().Set("Content-Type", "application/json")
@@ -24,7 +24,7 @@ func APIKeyAuth(apiKey string) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Use constant-time comparison to prevent timing attacks
+			// ! Dùng constant-time comparison để tránh timing attacks
 			if subtle.ConstantTimeCompare([]byte(providedKey), []byte(apiKey)) != 1 {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusForbidden)

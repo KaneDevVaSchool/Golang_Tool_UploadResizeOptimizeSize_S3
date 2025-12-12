@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// IsImage checks if file is an image
+// IsImage kiểm tra file có phải là ảnh không
 func IsImage(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	validExts := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".ico"}
@@ -21,7 +21,7 @@ func IsImage(filename string) bool {
 	return false
 }
 
-// IsDocument checks if file is a document
+// IsDocument kiểm tra file có phải là document không
 func IsDocument(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	validExts := []string{".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".odt", ".ods", ".odp"}
@@ -33,7 +33,7 @@ func IsDocument(filename string) bool {
 	return false
 }
 
-// IsVideo checks if file is a video
+// IsVideo kiểm tra file có phải là video không
 func IsVideo(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	validExts := []string{".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mkv", ".m4v", ".3gp"}
@@ -45,7 +45,7 @@ func IsVideo(filename string) bool {
 	return false
 }
 
-// IsAudio checks if file is an audio file
+// IsAudio kiểm tra file có phải là audio không
 func IsAudio(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	validExts := []string{".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a", ".wma", ".opus"}
@@ -57,7 +57,7 @@ func IsAudio(filename string) bool {
 	return false
 }
 
-// IsArchive checks if file is an archive
+// IsArchive kiểm tra file có phải là archive không
 func IsArchive(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
 	validExts := []string{".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz"}
@@ -69,12 +69,12 @@ func IsArchive(filename string) bool {
 	return false
 }
 
-// IsAllowedFileType checks if file type is allowed
+// IsAllowedFileType kiểm tra file type có được phép không
 func IsAllowedFileType(filename string) bool {
 	return IsImage(filename) || IsDocument(filename) || IsVideo(filename) || IsAudio(filename) || IsArchive(filename)
 }
 
-// GetFileCategory returns the category of the file
+// GetFileCategory trả về category của file
 func GetFileCategory(filename string) string {
 	if IsImage(filename) {
 		return "images"
@@ -91,14 +91,13 @@ func GetFileCategory(filename string) string {
 	if IsArchive(filename) {
 		return "archives"
 	}
-	return "files" // Default category
+	return "files"
 }
 
-// GetContentType returns MIME type based on file extension
+// GetContentType trả về MIME type dựa trên extension của file
 func GetContentType(filename string) string {
 	ext := strings.ToLower(filepath.Ext(filename))
 
-	// Images
 	switch ext {
 	case ".jpg", ".jpeg":
 		return "image/jpeg"
@@ -116,7 +115,6 @@ func GetContentType(filename string) string {
 		return "image/x-icon"
 	}
 
-	// Documents
 	switch ext {
 	case ".pdf":
 		return "application/pdf"
@@ -144,7 +142,6 @@ func GetContentType(filename string) string {
 		return "application/vnd.oasis.opendocument.presentation"
 	}
 
-	// Videos
 	switch ext {
 	case ".mp4":
 		return "video/mp4"
@@ -166,7 +163,6 @@ func GetContentType(filename string) string {
 		return "video/3gpp"
 	}
 
-	// Audio
 	switch ext {
 	case ".mp3":
 		return "audio/mpeg"
@@ -186,7 +182,6 @@ func GetContentType(filename string) string {
 		return "audio/opus"
 	}
 
-	// Archives
 	switch ext {
 	case ".zip":
 		return "application/zip"
@@ -204,28 +199,26 @@ func GetContentType(filename string) string {
 		return "application/x-xz"
 	}
 
-	// Default: application/octet-stream
 	return "application/octet-stream"
 }
 
-// GenerateS3Key generates a unique S3 key with timestamp and random component
-// Files are organized by category: images/, documents/, videos/, audio/, archives/, files/
+// GenerateS3Key tạo S3 key duy nhất với timestamp và random component
+// * Files được tổ chức theo category: images/, documents/, videos/, audio/, archives/, files/
 func GenerateS3Key(filename string) string {
 	timestamp := time.Now().Format("20060102-150405")
 	ext := filepath.Ext(filename)
 	name := strings.TrimSuffix(filename, ext)
 	name = strings.ReplaceAll(name, " ", "-")
 
-	// Get file category for organization
 	category := GetFileCategory(filename)
 
-	// Add random component to prevent collisions in concurrent scenarios
+	// * Random component để tránh collision trong concurrent scenarios
 	randomBytes := make([]byte, 8)
 	if _, err := rand.Read(randomBytes); err == nil {
-		randomStr := base64.URLEncoding.EncodeToString(randomBytes)[:12] // Use first 12 chars
+		randomStr := base64.URLEncoding.EncodeToString(randomBytes)[:12]
 		return fmt.Sprintf("%s/%s-%s-%s%s", category, name, timestamp, randomStr, ext)
 	}
 
-	// Fallback if random generation fails (shouldn't happen, but be safe)
+	// ! Fallback nếu random generation fail
 	return fmt.Sprintf("%s/%s-%s-%d%s", category, name, timestamp, time.Now().UnixNano(), ext)
 }

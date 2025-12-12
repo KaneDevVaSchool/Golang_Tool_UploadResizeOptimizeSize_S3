@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-// RateLimiter implements token bucket algorithm for rate limiting
+// RateLimiter implement token bucket algorithm cho rate limiting
 type RateLimiter struct {
 	mu          sync.RWMutex
 	visitors    map[string]*visitor
-	rate        int           // requests per window
-	window      time.Duration // time window
+	rate        int           // số requests cho phép trong window
+	window      time.Duration // thời gian window
 	cleanupTick time.Duration
 	lastCleanup time.Time
 	ctx         context.Context
@@ -26,10 +26,7 @@ type visitor struct {
 	mu       sync.Mutex
 }
 
-// NewRateLimiter creates a new rate limiter
-// rate: number of requests allowed
-// window: time window for the rate limit
-// cleanupInterval: how often to clean up old visitors
+// NewRateLimiter tạo rate limiter mới
 func NewRateLimiter(rate int, window, cleanupInterval time.Duration) *RateLimiter {
 	ctx, cancel := context.WithCancel(context.Background())
 	rl := &RateLimiter{
@@ -42,14 +39,13 @@ func NewRateLimiter(rate int, window, cleanupInterval time.Duration) *RateLimite
 		cancel:      cancel,
 	}
 
-	// Start cleanup goroutine with context cancellation support
 	go rl.cleanup()
 
 	return rl
 }
 
-// cleanup removes old visitors to prevent memory leaks
-// Optimized for high concurrency: batch deletion to reduce lock contention
+// cleanup xóa old visitors để tránh memory leaks
+// * Tối ưu cho high concurrency: batch deletion để giảm lock contention
 func (rl *RateLimiter) cleanup() {
 	ticker := time.NewTicker(rl.cleanupTick)
 	defer ticker.Stop()
@@ -57,17 +53,16 @@ func (rl *RateLimiter) cleanup() {
 	for {
 		select {
 		case <-rl.ctx.Done():
-			return // Stop cleanup goroutine when context is cancelled
+			return
 		case <-ticker.C:
 			now := time.Now()
 			cutoff := rl.window * 2
 			var toDelete []string
 
-			// First pass: collect IPs to delete (minimal lock time)
-			// Check timestamps without holding visitor lock to avoid deadlock
+			// * First pass: collect IPs cần delete (minimal lock time)
+			// * Check timestamps mà không hold visitor lock để tránh deadlock
 			rl.mu.RLock()
 			for ip, v := range rl.visitors {
-				// Quick check without locking visitor - safe for read
 				v.mu.Lock()
 				lastSeen := v.lastSeen
 				v.mu.Unlock()
@@ -78,11 +73,11 @@ func (rl *RateLimiter) cleanup() {
 			}
 			rl.mu.RUnlock()
 
-			// Second pass: delete collected IPs (write lock only for deletion)
+			// * Second pass: delete collected IPs (write lock chỉ khi delete)
 			if len(toDelete) > 0 {
 				rl.mu.Lock()
 				for _, ip := range toDelete {
-					// Double-check visitor still exists and is still old
+					// * Double-check visitor vẫn tồn tại và vẫn old
 					if v, exists := rl.visitors[ip]; exists {
 						v.mu.Lock()
 						if now.Sub(v.lastSeen) > cutoff {
@@ -97,12 +92,12 @@ func (rl *RateLimiter) cleanup() {
 	}
 }
 
-// Stop stops the rate limiter and cancels the cleanup goroutine
+// Stop dừng rate limiter và cancel cleanup goroutine
 func (rl *RateLimiter) Stop() {
 	rl.cancel()
 }
 
-// getVisitor returns or creates a visitor for the given IP
+// getVisitor trả về hoặc tạo visitor cho IP
 func (rl *RateLimiter) getVisitor(ip string) *visitor {
 	rl.mu.RLock()
 	v, exists := rl.visitors[ip]
@@ -110,7 +105,7 @@ func (rl *RateLimiter) getVisitor(ip string) *visitor {
 
 	if !exists {
 		rl.mu.Lock()
-		// Double-check after acquiring write lock
+		// * Double-check sau khi acquire write lock
 		v, exists = rl.visitors[ip]
 		if !exists {
 			v = &visitor{
@@ -125,7 +120,7 @@ func (rl *RateLimiter) getVisitor(ip string) *visitor {
 	return v
 }
 
-// Allow checks if a request from the given IP should be allowed
+// Allow kiểm tra request từ IP có được phép không
 func (rl *RateLimiter) Allow(ip string) bool {
 	v := rl.getVisitor(ip)
 
@@ -135,12 +130,12 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	now := time.Now()
 	elapsed := now.Sub(v.lastSeen)
 
-	// Refill tokens based on elapsed time
+	// * Refill tokens dựa trên elapsed time
 	if elapsed >= rl.window {
 		v.tokens = rl.rate
 		v.lastSeen = now
 	} else {
-		// Refill proportional to elapsed time
+		// * Refill tỷ lệ với elapsed time
 		tokensToAdd := int(float64(rl.rate) * elapsed.Seconds() / rl.window.Seconds())
 		if tokensToAdd > 0 {
 			v.tokens += tokensToAdd
@@ -159,7 +154,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	return false
 }
 
-// RateLimitMiddleware creates a middleware that rate limits requests
+// RateLimitMiddleware tạo middleware rate limit requests
 func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -175,13 +170,12 @@ func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
 	}
 }
 
-// getClientIP extracts the real client IP from the request
+// getClientIP trích xuất real client IP từ request
 func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header (for proxies/load balancers)
+	// * Kiểm tra X-Forwarded-For header (cho proxies/load balancers)
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// X-Forwarded-For can contain multiple IPs separated by comma
-		// Format: "client, proxy1, proxy2"
-		// We want the leftmost (original client) IP
+		// * X-Forwarded-For có thể chứa nhiều IPs, format: "client, proxy1, proxy2"
+		// * Lấy IP đầu tiên (original client IP)
 		ips := strings.Split(xff, ",")
 		if len(ips) > 0 {
 			ip := strings.TrimSpace(ips[0])
@@ -191,12 +185,12 @@ func getClientIP(r *http.Request) string {
 		}
 	}
 
-	// Check X-Real-IP header
+	// * Kiểm tra X-Real-IP header
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
 		return strings.TrimSpace(xri)
 	}
 
-	// Fallback to RemoteAddr (remove port if present)
+	// * Fallback về RemoteAddr (remove port nếu có)
 	addr := r.RemoteAddr
 	if idx := strings.LastIndex(addr, ":"); idx != -1 {
 		addr = addr[:idx]

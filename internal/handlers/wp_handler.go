@@ -29,7 +29,7 @@ func NewWPHandler(imageResizeService *service.ImageResizeService, maxUploadSize 
 	}
 }
 
-// WPUploadResponseData response upload WordPress
+// WPUploadResponseData đại diện cho response upload WordPress
 type WPUploadResponseData struct {
 	File  WPFileInfo   `json:"file"`
 	Sizes []WPSizeInfo `json:"sizes"`

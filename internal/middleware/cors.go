@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// CORS middleware handles Cross-Origin Resource Sharing
+// CORS middleware xử lý Cross-Origin Resource Sharing
 type CORS struct {
 	allowedOrigins []string
 	allowedMethods []string
@@ -14,18 +14,17 @@ type CORS struct {
 	maxAge         int
 }
 
-// NewCORS creates a new CORS middleware
+// NewCORS tạo CORS middleware mới
 func NewCORS(allowedOrigins []string) *CORS {
 	if len(allowedOrigins) == 0 {
-		// Default: allow all origins (for development)
+		// * Default: allow all origins (chỉ dùng cho development)
 		allowedOrigins = []string{"*"}
 	}
 
-	// Validate origins and warn about security risks
+	// ! Production nên restrict về specific domains thay vì "*"
 	for _, origin := range allowedOrigins {
 		if origin == "*" {
-			// Log warning but don't fail - useful for development
-			// In production, this should be restricted to specific domains
+			// Chỉ dùng cho development
 		}
 	}
 
@@ -33,22 +32,21 @@ func NewCORS(allowedOrigins []string) *CORS {
 		allowedOrigins: allowedOrigins,
 		allowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		allowedHeaders: []string{"Content-Type", "Authorization", "X-API-Key"},
-		maxAge:         3600, // 1 hour
+		maxAge:         3600,
 	}
 }
 
-// CORSMiddleware creates a middleware that handles CORS
+// CORSMiddleware tạo middleware xử lý CORS
 func (c *CORS) CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
-		// Handle preflight OPTIONS request
+		// * Xử lý preflight OPTIONS request
 		if r.Method == http.MethodOptions {
 			c.handlePreflight(w, r, origin)
 			return
 		}
 
-		// Set CORS headers for actual request
 		c.setCORSHeaders(w, origin)
 
 		next.ServeHTTP(w, r)

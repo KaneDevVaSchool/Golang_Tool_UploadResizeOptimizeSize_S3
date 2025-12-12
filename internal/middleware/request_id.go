@@ -9,20 +9,17 @@ import (
 
 const RequestIDKey = "request_id"
 
-// RequestIDMiddleware adds a unique request ID to each request
+// RequestIDMiddleware thêm unique request ID vào mỗi request
 func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check if request ID already exists (from upstream proxy)
+		// * Kiểm tra nếu request ID đã tồn tại (từ upstream proxy)
 		requestID := r.Header.Get("X-Request-ID")
 		if requestID == "" {
-			// Generate new UUID
 			requestID = uuid.New().String()
 		}
 
-		// Add to response header
 		w.Header().Set("X-Request-ID", requestID)
 
-		// Add to request context
 		ctx := context.WithValue(r.Context(), RequestIDKey, requestID)
 		r = r.WithContext(ctx)
 
@@ -30,7 +27,7 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// GetRequestID retrieves the request ID from context
+// GetRequestID lấy request ID từ context
 func GetRequestID(ctx context.Context) string {
 	if id, ok := ctx.Value(RequestIDKey).(string); ok {
 		return id

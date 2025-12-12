@@ -12,7 +12,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 
-		// Include request ID in logs for better traceability
+		// * Include request ID trong logs để dễ trace
 		requestID := GetRequestID(r.Context())
 		if requestID != "" {
 			log.Printf(

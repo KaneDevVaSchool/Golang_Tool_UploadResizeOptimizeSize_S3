@@ -11,21 +11,20 @@ const (
 	MaxFilenameLength = 255
 )
 
-// SanitizeFilename sanitizes a filename to prevent path traversal and other security issues
+// SanitizeFilename sanitize filename để chống path traversal và các lỗ hổng bảo mật
 func SanitizeFilename(filename string) (string, error) {
 	if len(filename) == 0 {
 		return "", errors.New("filename cannot be empty")
 	}
 
-	// Remove any path components (only keep base name)
 	filename = filepath.Base(filename)
 
-	// Remove path traversal attempts
+	// ! Xóa path traversal attempts
 	filename = strings.ReplaceAll(filename, "..", "")
 	filename = strings.ReplaceAll(filename, "/", "-")
 	filename = strings.ReplaceAll(filename, "\\", "-")
 
-	// Remove control characters and other dangerous characters
+	// ! Xóa control characters và các ký tự nguy hiểm
 	var builder strings.Builder
 	for _, r := range filename {
 		if unicode.IsControl(r) || r == '<' || r == '>' || r == ':' || r == '"' || r == '|' || r == '?' || r == '*' {
@@ -34,15 +33,12 @@ func SanitizeFilename(filename string) (string, error) {
 		builder.WriteRune(r)
 	}
 	filename = builder.String()
-
-	// Trim whitespace
 	filename = strings.TrimSpace(filename)
 
 	if len(filename) == 0 {
 		return "", errors.New("filename becomes empty after sanitization")
 	}
 
-	// Limit length
 	if len(filename) > MaxFilenameLength {
 		ext := filepath.Ext(filename)
 		maxNameLen := MaxFilenameLength - len(ext)
@@ -55,7 +51,7 @@ func SanitizeFilename(filename string) (string, error) {
 	return filename, nil
 }
 
-// ValidateFilename validates filename before processing
+// ValidateFilename validate filename trước khi xử lý
 func ValidateFilename(filename string) error {
 	if len(filename) == 0 {
 		return errors.New("filename cannot be empty")
@@ -65,7 +61,7 @@ func ValidateFilename(filename string) error {
 		return errors.New("filename too long (max 255 characters)")
 	}
 
-	// Check for path traversal attempts
+	// ! Kiểm tra path traversal attempts
 	if strings.Contains(filename, "..") {
 		return errors.New("filename contains invalid path components")
 	}
@@ -74,7 +70,7 @@ func ValidateFilename(filename string) error {
 		return errors.New("filename contains path separators")
 	}
 
-	// Check for dangerous characters
+	// ! Kiểm tra dangerous characters
 	for _, char := range []rune{'<', '>', ':', '"', '|', '?', '*'} {
 		if strings.ContainsRune(filename, char) {
 			return errors.New("filename contains invalid characters")

@@ -39,7 +39,7 @@ func NewAPIHandler(uploadService service.UploadService, s3Repository repository.
 	}
 }
 
-// UploadResponseData represents successful upload response
+// UploadResponseData đại diện cho successful upload response
 type UploadResponseData struct {
 	URL  string `json:"url"`
 	Key  string `json:"key"`
@@ -47,7 +47,7 @@ type UploadResponseData struct {
 	Name string `json:"name"`
 }
 
-// UploadWithTransactionResponseData represents successful upload with transaction response
+// UploadWithTransactionResponseData đại diện cho successful upload với transaction response
 type UploadWithTransactionResponseData struct {
 	URL    string                `json:"url"`
 	Key    string                `json:"key"`
@@ -56,7 +56,7 @@ type UploadWithTransactionResponseData struct {
 	Record *UploadRecordResponse `json:"record"`
 }
 
-// UploadRecordResponse represents upload record in response
+// UploadRecordResponse đại diện cho upload record trong response
 type UploadRecordResponse struct {
 	ID           int64   `json:"id"`
 	Filename     string  `json:"filename"`
@@ -71,7 +71,7 @@ type UploadRecordResponse struct {
 	UpdatedAt    string  `json:"updated_at"`
 }
 
-// uploadRequestData holds validated upload request data
+// uploadRequestData chứa validated upload request data
 type uploadRequestData struct {
 	File   io.ReadCloser
 	Header *multipart.FileHeader
@@ -177,7 +177,7 @@ func (h *APIHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// toUploadRecordResponse chuyển đổi models.UploadRecord sang UploadRecordResponse
+// toUploadRecordResponse chuyển đổi models.UploadRecord thành UploadRecordResponse
 func toUploadRecordResponse(record *models.UploadRecord) *UploadRecordResponse {
 	resp := &UploadRecordResponse{
 		ID:           record.ID,
@@ -203,7 +203,7 @@ func toUploadRecordResponse(record *models.UploadRecord) *UploadRecordResponse {
 	return resp
 }
 
-// HandleUploadWithTransaction xử lý upload file với transaction database
+// HandleUploadWithTransaction xử lý upload file với database transaction
 func (h *APIHandler) HandleUploadWithTransaction(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[API] Nhận request upload với transaction từ IP: %s, Method: %s", r.RemoteAddr, r.Method)
 

@@ -6,7 +6,7 @@ import (
 	"s3-upload-tool/internal/service"
 )
 
-// errorMapper map internal errors sang user-friendly messages
+// errorMapper map internal errors thành user-friendly messages
 type errorMapper struct {
 	mappings map[string]string
 }
@@ -27,7 +27,7 @@ var defaultErrorMapper = &errorMapper{
 	},
 }
 
-// mapError chuyển đổi internal error sang user-friendly message
+// mapError chuyển đổi internal error thành user-friendly message
 func (m *errorMapper) mapError(err error) string {
 	if err == nil {
 		return "An unexpected error occurred"
