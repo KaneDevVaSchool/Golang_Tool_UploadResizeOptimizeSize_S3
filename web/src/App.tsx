@@ -442,10 +442,12 @@ export default function App() {
         const ordered = orderIds.map((id) => resultMap.get(id)).filter(Boolean) as ResultItem[];
         setResults(ordered);
         if (ordered.every((c) => !c.result)) {
+          const firstError = ordered.find((c) => c.error)?.error;
           setError(
-            mode === "wp"
-              ? "Không thu nhỏ được ảnh nào. Kiểm tra kết nối rồi thử lại."
-              : "Không lưu được ảnh nào. Kiểm tra kết nối rồi thử lại.",
+            firstError ||
+              (mode === "wp"
+                ? "Không thu nhỏ được ảnh nào. Kiểm tra kết nối rồi thử lại."
+                : "Không lưu được ảnh nào. Kiểm tra kết nối rồi thử lại."),
           );
         }
       }

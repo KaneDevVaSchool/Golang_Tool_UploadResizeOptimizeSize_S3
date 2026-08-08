@@ -32,11 +32,15 @@ func SetupFromEnv() (func(), error) {
 
 // Setup configures log output to stdout + daily rotating file.
 func Setup(dir, prefix string) (func(), error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("create log dir %s: %w", dir, err)
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		absDir = dir
+	}
+	if err := os.MkdirAll(absDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create log dir %s: %w", absDir, err)
 	}
 
-	dw := &dailyWriter{dir: dir, prefix: prefix}
+	dw := &dailyWriter{dir: absDir, prefix: prefix}
 	if err := dw.ensureFile(time.Now()); err != nil {
 		return nil, err
 	}
@@ -44,7 +48,8 @@ func Setup(dir, prefix string) (func(), error) {
 	log.SetOutput(io.MultiWriter(os.Stdout, dw))
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
-	log.Printf("[Logging] Writing logs to %s (%s-YYYY-MM-DD.log)", dir, prefix)
+	today := filepath.Join(absDir, fmt.Sprintf("%s-%s.log", prefix, time.Now().Format("2006-01-02")))
+	log.Printf("[Logging] Writing logs to %s", today)
 
 	return func() {
 		_ = dw.Close()
@@ -66,7 +71,11 @@ func (w *dailyWriter) Write(p []byte) (int, error) {
 	if err := w.ensureFileLocked(time.Now()); err != nil {
 		return 0, err
 	}
-	return w.file.Write(p)
+	n, err := w.file.Write(p)
+	if err == nil {
+		_ = w.file.Sync()
+	}
+	return n, err
 }
 
 func (w *dailyWriter) Close() error {
