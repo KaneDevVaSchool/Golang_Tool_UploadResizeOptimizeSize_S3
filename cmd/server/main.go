@@ -9,10 +9,21 @@ import (
 	"syscall"
 	"time"
 
+	"s3-upload-tool/internal/config"
 	"s3-upload-tool/internal/container"
+	"s3-upload-tool/internal/logging"
 )
 
 func main() {
+	_ = config.LoadEnvFile()
+
+	closeLogs, err := logging.SetupFromEnv()
+	if err != nil {
+		log.Printf("Warning: file logging disabled: %v", err)
+	} else {
+		defer closeLogs()
+	}
+
 	ctn, err := container.NewContainer()
 	if err != nil {
 		log.Fatalf("Failed to initialize container: %v", err)

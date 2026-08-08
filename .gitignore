@@ -28,6 +28,10 @@ uploads/
 wp-uploads/
 *.tmp
 
+# Application logs (Laravel-style storage/logs)
+storage/logs/*.log
+!storage/logs/.gitkeep
+
 # Web UI
 web/node_modules/
 web/dist/

@@ -5,10 +5,13 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
 )
+
+var loadEnvOnce sync.Once
 
 type ConfigBuilder struct {
 	config *Config
@@ -248,27 +251,32 @@ func (b *ConfigBuilder) Build() (*Config, error) {
 }
 
 func LoadEnvFile() error {
-	envFiles := []string{".env", ".env.local"}
+	var loadErr error
+	loadEnvOnce.Do(func() {
+		envFiles := []string{".env", ".env.local"}
 
-	for _, envFile := range envFiles {
-		if _, err := os.Stat(envFile); err == nil {
-			if err := loadEnvFileWithoutBOM(envFile); err != nil {
-				log.Printf("Lỗi: Không thể load file %s", envFile)
-				log.Printf("Chi tiết: %v", err)
-				log.Printf("Vui lòng kiểm tra format file .env")
-				log.Printf("Format đúng: KEY=value (không có $env: hoặc quotes)")
-				log.Printf("Ví dụ: AWS_ACCESS_KEY_ID=your_key")
-				log.Printf("Xem file .env.example để biết format đúng")
-				log.Printf("Hoặc chạy: .\fix-env.ps1 để tự động sửa")
-				continue
+		for _, envFile := range envFiles {
+			if _, err := os.Stat(envFile); err == nil {
+				if err := loadEnvFileWithoutBOM(envFile); err != nil {
+					log.Printf("Lỗi: Không thể load file %s", envFile)
+					log.Printf("Chi tiết: %v", err)
+					log.Printf("Vui lòng kiểm tra format file .env")
+					log.Printf("Format đúng: KEY=value (không có $env: hoặc quotes)")
+					log.Printf("Ví dụ: AWS_ACCESS_KEY_ID=your_key")
+					log.Printf("Xem file .env.example để biết format đúng")
+					log.Printf("Hoặc chạy: .\fix-env.ps1 để tự động sửa")
+					loadErr = err
+					continue
+				}
+				log.Printf("✓ Đã load file %s thành công", envFile)
+				loadErr = nil
+				return
 			}
-			log.Printf("✓ Đã load file %s thành công", envFile)
-			return nil
 		}
-	}
 
-	log.Println("Không tìm thấy file .env, sử dụng environment variables")
-	return nil
+		log.Println("Không tìm thấy file .env, sử dụng environment variables")
+	})
+	return loadErr
 }
 
 func loadEnvFileWithoutBOM(filename string) error {
