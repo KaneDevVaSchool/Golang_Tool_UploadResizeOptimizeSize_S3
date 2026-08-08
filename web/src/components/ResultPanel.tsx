@@ -9,6 +9,7 @@ import {
   type UploadMode,
   type UploadResult,
 } from "../lib/api";
+import { ImageLightbox } from "./ImageLightbox";
 
 export type ResultItem = {
   id: string;
@@ -28,6 +29,7 @@ type ResultPanelProps = {
 export function ResultPanel({ mode, items, onReset, onRetryFailed }: ResultPanelProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedAll, setCopiedAll] = useState(false);
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
   const okCount = items.filter((i) => i.result).length;
   const failCount = items.length - okCount;
   const urls = items.filter((i) => i.result).map((i) => resultUrl(i.result!));
@@ -80,7 +82,13 @@ export function ResultPanel({ mode, items, onReset, onRetryFailed }: ResultPanel
                 : `Xong ${okCount}/${items.length} ảnh`}
             </h3>
             <p className="result-sub">
-              {failCount > 0 ? `${failCount} ảnh lỗi — thử gửi lại bên dưới.` : "Chép đường dẫn khi cần dùng."}
+              {failCount > 0
+                ? mode === "wp"
+                  ? `${failCount} ảnh lỗi — thử thu nhỏ lại bên dưới.`
+                  : `${failCount} ảnh lỗi — thử lưu lại bên dưới.`
+                : mode === "wp"
+                  ? "Chép đường dẫn — có bản thu nhỏ theo kích thước khi cần."
+                  : "Chép đường dẫn — dùng trên SIS, LMS, website khi cần."}
             </p>
           </div>
         </div>
@@ -92,11 +100,11 @@ export function ResultPanel({ mode, items, onReset, onRetryFailed }: ResultPanel
           )}
           {failCount > 0 && onRetryFailed && (
             <button type="button" className="btn btn-primary" onClick={onRetryFailed}>
-              Gửi lại ảnh lỗi
+              {mode === "wp" ? "Thu nhỏ lại ảnh lỗi" : "Lưu lại ảnh lỗi"}
             </button>
           )}
           <button type="button" className="btn btn-ghost" onClick={onReset}>
-            Gửi ảnh khác
+            {mode === "wp" ? "Thu nhỏ ảnh khác" : "Lưu ảnh khác"}
           </button>
         </div>
       </div>
@@ -115,7 +123,14 @@ export function ResultPanel({ mode, items, onReset, onRetryFailed }: ResultPanel
             >
               <div className="result-card-media">
                 {item.previewUrl ? (
-                  <img src={item.previewUrl} alt={item.fileName} />
+                  <button
+                    type="button"
+                    className="result-card-media-btn"
+                    aria-label={`Xem toàn màn hình: ${item.fileName}`}
+                    onClick={() => setLightbox({ src: item.previewUrl!, alt: item.fileName })}
+                  >
+                    <img src={item.previewUrl} alt="" decoding="async" loading="lazy" />
+                  </button>
                 ) : (
                   <span>{item.fileName.slice(0, 1)}</span>
                 )}
@@ -155,13 +170,22 @@ export function ResultPanel({ mode, items, onReset, onRetryFailed }: ResultPanel
                     </div>
                   </>
                 ) : (
-                  <span className="result-error">{item.error || "Gửi không thành công"}</span>
+                  <span className="result-error">
+                    {item.error || (mode === "wp" ? "Thu nhỏ không thành công" : "Lưu không thành công")}
+                  </span>
                 )}
               </div>
             </motion.article>
           );
         })}
       </div>
+
+      <ImageLightbox
+        open={Boolean(lightbox)}
+        src={lightbox?.src ?? ""}
+        alt={lightbox?.alt ?? ""}
+        onClose={() => setLightbox(null)}
+      />
     </motion.section>
   );
 }

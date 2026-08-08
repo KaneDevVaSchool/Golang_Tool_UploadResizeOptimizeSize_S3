@@ -1,9 +1,10 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { Dropzone } from "./components/Dropzone";
 import { PreviewPanel, type PreviewItem } from "./components/PreviewPanel";
 import { ResultPanel, type ResultItem } from "./components/ResultPanel";
+import { Onboarding, OnboardingTrigger, readOnboardingDone } from "./components/Onboarding";
 import { StepTimeline, type TimelineStep } from "./components/StepTimeline";
 import {
   abortActiveUpload,
@@ -19,6 +20,7 @@ import {
   DEFAULT_TRANSFORM,
   type ImageTransform,
 } from "./lib/imageTransform";
+import { createThumbObjectURL, revokeObjectUrl } from "./lib/previewImage";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 18 },
@@ -38,10 +40,56 @@ function toPreviewItems(files: File[]): PreviewItem[] {
     id: makeId(),
     file,
     previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+    thumbUrl: null,
     progress: 0,
     status: "ready" as const,
     transform: { ...DEFAULT_TRANSFORM },
   }));
+}
+
+function revokePreviewItem(item: PreviewItem) {
+  revokeObjectUrl(item.previewUrl);
+  if (item.thumbUrl && item.thumbUrl !== item.previewUrl) {
+    revokeObjectUrl(item.thumbUrl);
+  }
+}
+
+function revokeResultPreviews(list: ResultItem[] | null | undefined, keep?: Set<string | null>) {
+  list?.forEach((item) => {
+    if (!item.previewUrl) return;
+    if (keep?.has(item.previewUrl)) return;
+    revokeObjectUrl(item.previewUrl);
+  });
+}
+
+function IconSave() {
+  return (
+    <svg className="mode-switch-icon" viewBox="0 0 20 20" fill="none" aria-hidden>
+      <path
+        d="M4 14.5V5.8A1.8 1.8 0 015.8 4h6.4L16 7.8v6.7A1.8 1.8 0 0114.2 16H5.8A1.8 1.8 0 014 14.2z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path d="M7 4v4h5V4" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M7 12.5h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconShrink() {
+  return (
+    <svg className="mode-switch-icon" viewBox="0 0 20 20" fill="none" aria-hidden>
+      <rect x="3.5" y="3.5" width="13" height="13" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M7 13V9.5M7 13h3.5M7 13l6-6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 export default function App() {
@@ -60,10 +108,28 @@ export default function App() {
   const [activeId, setActiveId] = useState<string>("");
   const [results, setResults] = useState<ResultItem[] | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(() => !readOnboardingDone());
+  const [mascotHint, setMascotHint] = useState(false);
+  const [narrow, setNarrow] = useState(false);
 
   const itemsRef = useRef(items);
+  const resultsRef = useRef(results);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 860px)");
+    const sync = () => setNarrow(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
   const uploadAbortRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const addMoreInputRef = useRef<HTMLInputElement>(null);
   itemsRef.current = items;
+  resultsRef.current = results;
+
+  const modeLabel = mode === "wp" ? "thu nhỏ" : "lưu";
+  const modeVerbCap = mode === "wp" ? "Thu nhỏ" : "Lưu";
 
   useEffect(() => {
     let cancelled = false;
@@ -102,9 +168,9 @@ export default function App() {
     return () => {
       abortActiveUpload();
       uploadAbortRef.current?.abort();
-      itemsRef.current.forEach((item) => {
-        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-      });
+      const keep = new Set(itemsRef.current.map((i) => i.previewUrl));
+      itemsRef.current.forEach(revokePreviewItem);
+      revokeResultPreviews(resultsRef.current, keep);
     };
   }, []);
 
@@ -114,14 +180,42 @@ export default function App() {
   const showDecor = !items.length && !results;
   const fileAccept = mode === "wp" ? "image/*" : "image/*,.pdf,.zip,.txt,.csv,.json";
 
+  const homeLede =
+    "Kho ảnh chung của Trường Việt Mỹ — lưu tập trung, tối ưu dung lượng và lấy link dùng ngay trên các hệ thống nội bộ.";
+
+  const lede =
+    mode === "wp"
+      ? "Chọn ảnh — hệ thống thu nhỏ, tối ưu và tạo nhiều kích thước. Lấy link dùng ngay."
+      : "Chọn ảnh hoặc tài liệu — lưu tập trung, hỗ trợ file lớn. Lấy link dùng ngay khi cần.";
+
+  const modeHint =
+    mode === "wp"
+      ? `Chỉ ảnh · tối đa ${maxSizeLabel} · thu nhỏ + nhiều kích thước`
+      : `Ảnh & tài liệu · tới ${absoluteMaxLabel} · lưu nguyên bản`;
+
+  const valueAnchors = [
+    {
+      title: "Tập trung",
+      body: "Một kho dùng chung — giảm gửi file rời, dễ quản lý và đồng bộ toàn trường.",
+    },
+    {
+      title: "Tối ưu",
+      body: "Thu nhỏ & nén thông minh — ảnh nhẹ hơn, trang và ứng dụng tải nhanh hơn.",
+    },
+    {
+      title: "Liên thông",
+      body: "Mỗi ảnh một đường dẫn riêng",
+    },
+  ] as const;
+
   function revokeAll(list: PreviewItem[]) {
-    list.forEach((item) => {
-      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-    });
+    list.forEach(revokePreviewItem);
   }
 
   function clearAll() {
     if (busy) cancelUpload();
+    const keep = new Set(items.map((i) => i.previewUrl));
+    revokeResultPreviews(results, keep);
     revokeAll(items);
     setItems([]);
     setActiveId("");
@@ -131,12 +225,67 @@ export default function App() {
     setConfirmOpen(false);
   }
 
+  function attachThumbs(batch: PreviewItem[]) {
+    batch.forEach((item) => {
+      if (!item.previewUrl) return;
+      void createThumbObjectURL(item.file).then((thumbUrl) => {
+        setItems((prev) => {
+          const stillThere = prev.some((i) => i.id === item.id);
+          if (!stillThere) {
+            revokeObjectUrl(thumbUrl);
+            return prev;
+          }
+          return prev.map((i) => {
+            if (i.id !== item.id) return i;
+            // Fall back to full preview URL if downscale fails (e.g. odd formats)
+            const nextThumb = thumbUrl ?? i.previewUrl;
+            if (i.thumbUrl && i.thumbUrl !== nextThumb && i.thumbUrl !== i.previewUrl) {
+              revokeObjectUrl(i.thumbUrl);
+            }
+            return { ...i, thumbUrl: nextThumb };
+          });
+        });
+      });
+    });
+  }
+
+  function openFilePicker() {
+    if (busy) return;
+    if (items.length > 0 && !results) {
+      addMoreInputRef.current?.click();
+      return;
+    }
+    fileInputRef.current?.click();
+  }
+
   function handleSelect(files: File[]) {
     if (!files.length) return;
-    setError(null);
     setResults(null);
     setConfirmOpen(false);
-    const next = toPreviewItems(files);
+
+    const accepted: File[] = [];
+    const rejected: string[] = [];
+    for (const file of files) {
+      const err = validateClientFile(file, mode, limits);
+      if (err) rejected.push(err);
+      else accepted.push(file);
+    }
+
+    if (rejected.length) {
+      const preview = rejected.slice(0, 3).join(" ");
+      const extra = rejected.length > 3 ? ` (+${rejected.length - 3} file khác)` : "";
+      setError(
+        accepted.length
+          ? `Đã bỏ ${rejected.length} file không hợp lệ. ${preview}${extra}`
+          : `Không chọn được file. ${preview}${extra}`,
+      );
+    } else {
+      setError(null);
+    }
+
+    if (!accepted.length) return;
+
+    const next = toPreviewItems(accepted);
     setItems((prev) => {
       const merged = [...prev, ...next];
       setActiveId((current) =>
@@ -144,12 +293,13 @@ export default function App() {
       );
       return merged;
     });
+    attachThumbs(next);
   }
 
   function removeItem(id: string) {
     setItems((prev) => {
       const target = prev.find((i) => i.id === id);
-      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      if (target) revokePreviewItem(target);
       const next = prev.filter((i) => i.id !== id);
       if (activeId === id) setActiveId(next[0]?.id ?? "");
       if (!next.length) setResults(null);
@@ -178,7 +328,7 @@ export default function App() {
     uploadAbortRef.current?.abort();
     abortActiveUpload();
     setBusy(false);
-    setError("Đã hủy gửi ảnh.");
+    setError(mode === "wp" ? "Đã hủy thu nhỏ ảnh." : "Đã hủy lưu ảnh.");
     setItems((prev) =>
       prev.map((item) =>
         item.status === "uploading"
@@ -193,6 +343,11 @@ export default function App() {
     uploadAbortRef.current = controller;
     setBusy(true);
     setError(null);
+    const keepPreview = new Set(itemsRef.current.map((i) => i.previewUrl));
+    previous?.forEach((r) => {
+      if (r.result && r.previewUrl) keepPreview.add(r.previewUrl);
+    });
+    revokeResultPreviews(resultsRef.current, keepPreview);
     setResults(null);
 
     const resultMap = new Map<string, ResultItem>();
@@ -202,6 +357,7 @@ export default function App() {
 
     const orderIds = previous?.map((r) => r.id) ?? toUpload.map((t) => t.id);
     let aborted = false;
+    const failFallback = mode === "wp" ? "Thu nhỏ không thành công" : "Lưu không thành công";
 
     try {
       const health = await fetchHealth(controller.signal).catch(() => undefined);
@@ -266,7 +422,7 @@ export default function App() {
             });
             break;
           }
-          const message = err instanceof Error ? err.message : "Gửi không thành công";
+          const message = err instanceof Error ? err.message : failFallback;
           setItems((prev) =>
             prev.map((item) =>
               item.id === current.id ? { ...item, status: "error", error: message } : item,
@@ -286,7 +442,11 @@ export default function App() {
         const ordered = orderIds.map((id) => resultMap.get(id)).filter(Boolean) as ResultItem[];
         setResults(ordered);
         if (ordered.every((c) => !c.result)) {
-          setError("Không gửi được ảnh nào. Kiểm tra kết nối rồi thử lại.");
+          setError(
+            mode === "wp"
+              ? "Không thu nhỏ được ảnh nào. Kiểm tra kết nối rồi thử lại."
+              : "Không lưu được ảnh nào. Kiểm tra kết nối rồi thử lại.",
+          );
         }
       }
     } finally {
@@ -310,38 +470,108 @@ export default function App() {
     await runUpload(failedItems, results);
   }
 
+  const confirmTitle = useMemo(() => {
+    if (items.length > 1) {
+      return mode === "wp"
+        ? `Thu nhỏ ${items.length} ảnh chứ?`
+        : `Lưu ${items.length} ảnh chứ?`;
+    }
+    return mode === "wp" ? "Thu nhỏ ảnh này chứ?" : "Lưu ảnh này chứ?";
+  }, [items.length, mode]);
+
   const confirmMessage = useMemo(() => {
     const n = items.length;
-    const verb = mode === "wp" ? "thu nhỏ" : "lưu";
+    const confirmBtn = mode === "wp" ? "Có, thu nhỏ" : "Có, lưu";
     if (n <= 1) {
-      return `Gửi “${items[0]?.file.name ?? "ảnh"}” để ${verb}? Ảnh chỉ lên máy chủ khi bạn bấm “Có, gửi”.`;
+      return `${modeVerbCap} “${items[0]?.file.name ?? "ảnh"}”? Ảnh chỉ lên kho khi bạn bấm “${confirmBtn}”.`;
     }
-    return `Gửi ${n} ảnh để ${verb}? Ảnh chỉ lên máy chủ khi bạn bấm “Có, gửi”.`;
-  }, [items, mode]);
+    return `${modeVerbCap} ${n} ảnh? Ảnh chỉ lên kho khi bạn bấm “${confirmBtn}”.`;
+  }, [items, mode, modeVerbCap]);
 
   return (
-    <>
+    <LayoutGroup>
       <div className="bg-logo" aria-hidden />
       <div className="title-atmosphere" aria-hidden />
 
       {showDecor && (
-        <div className="mascot-scene" aria-hidden>
+        <div className="mascot-scene">
           <motion.div
-            className="mascot mascot-b"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35, duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+            className="mascot mascot-silhouette"
+            aria-hidden
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.15, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <img src="/images/vas-dragon-silhouette.png" alt="" />
+          </motion.div>
+          <motion.div
+            className="mascot mascot-left"
+            aria-hidden
+            initial={{ opacity: 0, x: -28, y: 20 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            transition={{ delay: 0.28, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
           >
             <img src="/images/vas-mascot-wave.png" alt="" />
           </motion.div>
+          <motion.div
+            className={`mascot mascot-right${narrow ? "" : " mascot-hotspot"}`}
+            data-hint={!narrow && mascotHint && !onboardingOpen ? "true" : undefined}
+            initial={{ opacity: 0, x: 28, y: 16 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            transition={{ delay: 0.4, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            onMouseEnter={() => {
+              if (!narrow) setMascotHint(true);
+            }}
+            onMouseLeave={() => setMascotHint(false)}
+            onFocusCapture={() => {
+              if (!narrow) setMascotHint(true);
+            }}
+            onBlurCapture={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                setMascotHint(false);
+              }
+            }}
+          >
+            {narrow ? (
+              <img src="/images/vas-mascot-wave.png" alt="" />
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="mascot-hit"
+                  aria-label="Xem giới thiệu Kho ảnh"
+                  onClick={() => setOnboardingOpen(true)}
+                >
+                  <img src="/images/vas-mascot-wave.png" alt="" />
+                </button>
+                <OnboardingTrigger
+                  visible={mascotHint && !onboardingOpen}
+                  onClick={() => setOnboardingOpen(true)}
+                />
+              </>
+            )}
+          </motion.div>
+        </div>
+      )}
+
+      <Onboarding open={onboardingOpen} onDone={() => setOnboardingOpen(false)} />
+      {(narrow || !showDecor) && (
+        <div className="onboard-fallback">
+          <OnboardingTrigger
+            visible={!onboardingOpen}
+            onClick={() => setOnboardingOpen(true)}
+          />
         </div>
       )}
 
       <div className="app-shell">
         <header className="topbar">
-          <div className="chrome-mark">
-            <img src="/images/vas-white.png" alt="VA Schools" className="chrome-logo" />
-            <div className="chrome-divider" aria-hidden />
+          <div className="chrome-brand">
+            <div className="chrome-logo-plate">
+              <img src="/images/vas-white.png" alt="VA Schools" className="chrome-logo" />
+            </div>
+          </div>
+          <div className="chrome-tools">
             <div
               className="health-dot"
               data-ok={healthy === true ? "true" : healthy === false ? "false" : undefined}
@@ -351,19 +581,22 @@ export default function App() {
                 {healthy === null ? "Đang mở…" : healthy ? "Sẵn sàng" : "Chưa kết nối"}
               </span>
             </div>
-          </div>
-          <div className="limit-note" title={`Tối đa ${maxSizeLabel} · file lớn tới ${absoluteMaxLabel}`}>
-            <span className="limit-note-kicker">Giới hạn</span>
-            <span className="limit-note-value">
-              {maxSizeLabel}
-              <span className="limit-note-sep">/</span>
-              {absoluteMaxLabel}
-            </span>
+            <div
+              className="limit-note"
+              title={`Tối đa ${maxSizeLabel} · file lớn tới ${absoluteMaxLabel}`}
+            >
+              <span className="limit-note-kicker">Giới hạn</span>
+              <span className="limit-note-value">
+                {maxSizeLabel}
+                <span className="limit-note-sep">/</span>
+                {absoluteMaxLabel}
+              </span>
+            </div>
           </div>
         </header>
 
         <div className="workspace">
-          <section className="intro">
+          <section className={`intro${showDecor ? " intro-home" : ""}`}>
             <motion.img
               className="wordmark"
               src="/images/vas-wordmark-stacked.png"
@@ -374,38 +607,72 @@ export default function App() {
               animate="show"
             />
             <motion.p className="kicker" custom={1} variants={fadeUp} initial="hidden" animate="show">
-              Gửi ảnh dễ dàng
+              Kho ảnh · Hệ thống Trường Việt Mỹ
             </motion.p>
             <motion.h1 className="headline" custom={2} variants={fadeUp} initial="hidden" animate="show">
-              Chọn ảnh, chỉnh rồi gửi
+              {showDecor ? "Ảnh chuẩn cho cả hệ thống" : "Lưu một lần, dùng mọi nơi"}
             </motion.h1>
-            <motion.p className="lede" custom={3} variants={fadeUp} initial="hidden" animate="show">
-              Kéo nhiều ảnh vào, chỉnh nhẹ nếu cần, rồi gửi khi bạn sẵn sàng.
+            <motion.p
+              className="lede"
+              key={showDecor ? "home" : mode}
+              custom={3}
+              variants={fadeUp}
+              initial="hidden"
+              animate="show"
+            >
+              {showDecor ? homeLede : lede}
             </motion.p>
 
-            <StepTimeline current={timelineStep} done={phaseDone && !busy} />
+            {showDecor && (
+              <motion.ul
+                className="value-anchors"
+                custom={4}
+                variants={fadeUp}
+                initial="hidden"
+                animate="show"
+                aria-label="Giá trị mang lại cho Trường Việt Mỹ"
+              >
+                {valueAnchors.map((item) => (
+                  <li key={item.title}>
+                    <strong>{item.title}</strong>
+                    <span>{item.body}</span>
+                  </li>
+                ))}
+              </motion.ul>
+            )}
+
+            <StepTimeline current={timelineStep} done={phaseDone && !busy} mode={mode} />
 
             <motion.div className="cta-row" custom={5} variants={fadeUp} initial="hidden" animate="show">
-              <div className="mode-switch" role="group" aria-label="Cách gửi ảnh">
-                <button type="button" data-active={mode === "s3"} onClick={() => setMode("s3")} disabled={busy}>
-                  Lưu ảnh
-                </button>
-                <button type="button" data-active={mode === "wp"} onClick={() => setMode("wp")} disabled={busy}>
-                  Thu nhỏ ảnh
-                </button>
+              <div className="mode-block">
+                <div className="mode-switch" role="group" aria-label="Cách xử lý ảnh">
+                  <button
+                    type="button"
+                    data-active={mode === "s3"}
+                    onClick={() => setMode("s3")}
+                    disabled={busy}
+                  >
+                    <IconSave />
+                    Lưu ảnh
+                  </button>
+                  <button
+                    type="button"
+                    data-active={mode === "wp"}
+                    onClick={() => setMode("wp")}
+                    disabled={busy}
+                  >
+                    <IconShrink />
+                    Thu nhỏ ảnh
+                  </button>
+                </div>
+                <p className="mode-hint" key={mode} aria-live="polite">
+                  {showDecor
+                    ? mode === "wp"
+                      ? "Dùng khi cần ảnh nhẹ, nhiều kích thước cho web và LMS."
+                      : "Dùng khi cần lưu gốc — ảnh hoặc tài liệu — để chia sẻ lâu dài."
+                    : modeHint}
+                </p>
               </div>
-              {!items.length && !results && (
-                <motion.button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={busy}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => document.querySelector<HTMLInputElement>(".file-input")?.click()}
-                >
-                  Chọn nhiều ảnh
-                </motion.button>
-              )}
             </motion.div>
           </section>
 
@@ -425,22 +692,30 @@ export default function App() {
                   items={items}
                   activeId={activeId || items[0].id}
                   busy={busy}
-                  modeLabel={mode === "wp" ? "thu nhỏ" : "lưu"}
+                  modeLabel={modeLabel}
                   onSelectItem={setActiveId}
                   onRemoveItem={removeItem}
-                  onAddMore={() => document.querySelector<HTMLInputElement>(".file-input")?.click()}
+                  onAddMore={openFilePicker}
                   onClearAll={clearAll}
                   onRequestSend={requestSend}
                   onCancelUpload={cancelUpload}
                   onTransformChange={updateTransform}
                 />
               ) : (
-                <Dropzone key="drop" busy={busy} onSelect={handleSelect} accept={fileAccept} />
+                <Dropzone
+                  key="drop"
+                  busy={busy}
+                  mode={mode}
+                  onSelect={handleSelect}
+                  accept={fileAccept}
+                  inputRef={fileInputRef}
+                />
               )}
             </AnimatePresence>
 
             {items.length > 0 && !results && (
               <input
+                ref={addMoreInputRef}
                 className="file-input"
                 type="file"
                 multiple
@@ -456,10 +731,11 @@ export default function App() {
 
         <ConfirmDialog
           open={confirmOpen}
-          title={items.length > 1 ? `Gửi ${items.length} ảnh chứ?` : "Gửi ảnh này chứ?"}
+          title={confirmTitle}
           message={confirmMessage}
-          confirmLabel="Có, gửi"
+          confirmLabel={mode === "wp" ? "Có, thu nhỏ" : "Có, lưu"}
           cancelLabel="Chưa"
+          busyLabel={`Đang ${modeLabel}…`}
           busy={busy}
           onConfirm={confirmSend}
           onCancel={() => setConfirmOpen(false)}
@@ -479,6 +755,6 @@ export default function App() {
           )}
         </AnimatePresence>
       </div>
-    </>
+    </LayoutGroup>
   );
 }

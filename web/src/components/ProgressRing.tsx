@@ -1,8 +1,10 @@
 type ProgressRingProps = {
   percent: number;
+  /** e.g. "lưu" | "thu nhỏ" */
+  modeLabel?: string;
 };
 
-export function ProgressRing({ percent }: ProgressRingProps) {
+export function ProgressRing({ percent, modeLabel = "lưu" }: ProgressRingProps) {
   const size = 96;
   const stroke = 6;
   const radius = (size - stroke) / 2;
@@ -17,7 +19,7 @@ export function ProgressRing({ percent }: ProgressRingProps) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={clamped}
-      aria-label="Tiến độ gửi ảnh"
+      aria-label={modeLabel === "thu nhỏ" ? "Tiến độ thu nhỏ ảnh" : "Tiến độ lưu ảnh"}
     >
       <svg className="progress-ring" width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <circle className="track" cx={size / 2} cy={size / 2} r={radius} />
@@ -32,7 +34,7 @@ export function ProgressRing({ percent }: ProgressRingProps) {
       </svg>
       <div className="progress-label">{clamped}%</div>
       <p className="progress-copy" aria-live="polite">
-        {clamped < 100 ? "Đang gửi…" : "Xong rồi!"}
+        {clamped < 100 ? `Đang ${modeLabel}…` : "Xong rồi!"}
       </p>
     </div>
   );

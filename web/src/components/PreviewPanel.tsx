@@ -1,23 +1,24 @@
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  useEffect,
-  useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatBytes } from "../lib/api";
 import {
   cssImageTransform,
   DEFAULT_TRANSFORM,
+  hasTransform,
   normalizeRotation,
   type ImageTransform,
 } from "../lib/imageTransform";
+import { ImageLightbox } from "./ImageLightbox";
+import { PreviewImage } from "./PreviewImage";
 import { ProgressRing } from "./ProgressRing";
+import { ZoomViewport, type ZoomControls } from "./ZoomViewport";
 
 export type PreviewItem = {
   id: string;
   file: File;
   previewUrl: string | null;
+  /** Downscaled JPEG for the thumb strip (optional until ready) */
+  thumbUrl: string | null;
   progress: number;
   status: "ready" | "uploading" | "done" | "error";
   error?: string;
@@ -28,6 +29,7 @@ type PreviewPanelProps = {
   items: PreviewItem[];
   activeId: string;
   busy: boolean;
+  /** "lưu" | "thu nhỏ" — used in meta / progress / CTA */
   modeLabel: string;
   onSelectItem: (id: string) => void;
   onRemoveItem: (id: string) => void;
@@ -38,16 +40,9 @@ type PreviewPanelProps = {
   onTransformChange: (id: string, transform: ImageTransform) => void;
 };
 
-const ZOOM_MIN = 1;
-const ZOOM_MAX = 4;
-const ZOOM_STEP = 0.25;
-
-type ViewState = { zoom: number; x: number; y: number };
-
-const FIT_VIEW: ViewState = { zoom: 1, x: 0, y: 0 };
-
-function clamp(n: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, n));
+function modeVerbCapitalized(modeLabel: string) {
+  if (modeLabel === "thu nhỏ") return "Thu nhỏ";
+  return "Lưu";
 }
 
 function IconRotateLeft() {
@@ -149,6 +144,21 @@ function IconFit() {
   );
 }
 
+function IconFullscreen() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden>
+      <path
+        d="M8 4H5v3M16 4h3v3M19 16v3h-3M8 20H5v-3"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <rect x="8.5" y="8.5" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 function IconReset() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden>
@@ -159,6 +169,48 @@ function IconReset() {
         strokeLinecap="round"
       />
       <path d="M4.5 4.5v4h4" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconEdit() {
+  return (
+    <svg viewBox="0 0 16 16" width="10" height="10" fill="none" aria-hidden>
+      <path
+        d="M10.5 2.5l3 3L5 14H2v-3L10.5 2.5z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconRemove() {
+  return (
+    <svg viewBox="0 0 16 16" width="10" height="10" fill="none" aria-hidden>
+      <path
+        d="M4.25 4.25l7.5 7.5M11.75 4.25l-7.5 7.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function IconPrev() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden>
+      <path d="M14.5 6L9 12l5.5 6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconNext() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden>
+      <path d="M9.5 6L15 12l-5.5 6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -177,72 +229,62 @@ export function PreviewPanel({
   onTransformChange,
 }: PreviewPanelProps) {
   const active = items.find((i) => i.id === activeId) ?? items[0];
+  const activeIndex = items.findIndex((i) => i.id === active?.id);
   const totalBytes = items.reduce((sum, i) => sum + i.file.size, 0);
   const uploading = items.find((i) => i.status === "uploading");
-
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const [view, setView] = useState<ViewState>(FIT_VIEW);
-  const viewRef = useRef(view);
-  viewRef.current = view;
-
-  const pointers = useRef(new Map<number, { x: number; y: number }>());
-  const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
-  const panRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
-  const lastTapRef = useRef(0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const thumbsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setView(FIT_VIEW);
-    pointers.current.clear();
-    pinchRef.current = null;
-    panRef.current = null;
+    setFullscreen(false);
   }, [active?.id]);
 
   useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return;
-    const onWheelNative = (e: WheelEvent) => {
-      if (el.dataset.editable !== "true") return;
-      e.preventDefault();
-      const dir = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-      setView((prev) => {
-        const zoom = clamp(prev.zoom + dir, ZOOM_MIN, ZOOM_MAX);
-        if (zoom === 1) return FIT_VIEW;
-        const rect = el.getBoundingClientRect();
-        const cx = e.clientX - rect.left - rect.width / 2;
-        const cy = e.clientY - rect.top - rect.height / 2;
-        const ratio = zoom / prev.zoom;
-        return {
-          zoom,
-          x: cx - (cx - prev.x) * ratio,
-          y: cy - (cy - prev.y) * ratio,
-        };
-      });
-    };
-    el.addEventListener("wheel", onWheelNative, { passive: false });
-    return () => el.removeEventListener("wheel", onWheelNative);
+    if (busy) setFullscreen(false);
+  }, [busy]);
+
+  useEffect(() => {
+    if (!active?.id || !thumbsRef.current) return;
+    const el = thumbsRef.current.querySelector<HTMLElement>(`[data-thumb-id="${active.id}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [active?.id]);
+
+  useEffect(() => {
+    if (busy || !active) return;
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement | null)?.isContentEditable) {
+        return;
+      }
+      if ((e.key === "f" || e.key === "F") && active.previewUrl) {
+        e.preventDefault();
+        setFullscreen(true);
+        return;
+      }
+      if (items.length < 2) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        const prev = items[(activeIndex - 1 + items.length) % items.length];
+        if (prev) onSelectItem(prev.id);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const next = items[(activeIndex + 1) % items.length];
+        if (next) onSelectItem(next.id);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, active, activeIndex, items, onSelectItem]);
 
   if (!active) return null;
 
   const transform = active.transform ?? DEFAULT_TRANSFORM;
   const canEdit = !busy && Boolean(active.previewUrl);
-
-  function setZoom(next: number, origin?: { x: number; y: number }) {
-    setView((prev) => {
-      const zoom = clamp(next, ZOOM_MIN, ZOOM_MAX);
-      if (zoom === 1) return FIT_VIEW;
-      if (!origin || !viewportRef.current) return { ...prev, zoom };
-      const rect = viewportRef.current.getBoundingClientRect();
-      const cx = origin.x - rect.left - rect.width / 2;
-      const cy = origin.y - rect.top - rect.height / 2;
-      const ratio = zoom / prev.zoom;
-      return {
-        zoom,
-        x: cx - (cx - prev.x) * ratio,
-        y: cy - (cy - prev.y) * ratio,
-      };
-    });
-  }
+  const rotation = normalizeRotation(transform.rotation);
+  const swapAxes = rotation === 90 || rotation === 270;
+  const imgStyle = { transform: cssImageTransform(transform) };
+  const edited = hasTransform(transform);
+  const canNav = items.length > 1 && !busy;
 
   function updateTransform(patch: Partial<ImageTransform>) {
     const next: ImageTransform = {
@@ -257,77 +299,127 @@ export function PreviewPanel({
     updateTransform({ rotation: normalizeRotation(transform.rotation + delta) });
   }
 
-  function onPointerDown(e: ReactPointerEvent) {
-    if (!canEdit) return;
-    const el = viewportRef.current;
-    if (!el) return;
-    el.setPointerCapture(e.pointerId);
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    if (pointers.current.size === 2) {
-      const pts = [...pointers.current.values()];
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      pinchRef.current = { dist: Math.max(dist, 1), zoom: viewRef.current.zoom };
-      panRef.current = null;
-      return;
-    }
-
-    if (viewRef.current.zoom > 1) {
-      panRef.current = {
-        x: e.clientX,
-        y: e.clientY,
-        ox: viewRef.current.x,
-        oy: viewRef.current.y,
-      };
-    }
-
-    const now = Date.now();
-    if (now - lastTapRef.current < 280) {
-      if (viewRef.current.zoom > 1) setView(FIT_VIEW);
-      else setZoom(2, { x: e.clientX, y: e.clientY });
-      lastTapRef.current = 0;
-    } else {
-      lastTapRef.current = now;
-    }
+  function selectRelative(delta: number) {
+    if (!canNav) return;
+    const next = items[(activeIndex + delta + items.length) % items.length];
+    if (next) onSelectItem(next.id);
   }
 
-  function onPointerMove(e: ReactPointerEvent) {
-    if (!canEdit || !pointers.current.has(e.pointerId)) return;
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  function renderToolbar(controls: ZoomControls) {
+    return (
+      <div
+        className="preview-toolbar"
+        role="toolbar"
+        aria-label="Chỉnh ảnh"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <div className="preview-tool-group">
+          <button
+            type="button"
+            className="preview-tool"
+            aria-label="Xoay trái 90°"
+            title="Xoay trái"
+            onClick={() => rotateBy(-90)}
+          >
+            <IconRotateLeft />
+          </button>
+          <button
+            type="button"
+            className="preview-tool"
+            aria-label="Xoay phải 90°"
+            title="Xoay phải"
+            onClick={() => rotateBy(90)}
+          >
+            <IconRotateRight />
+          </button>
+          <button
+            type="button"
+            className="preview-tool"
+            aria-label="Lật ngang"
+            title="Lật ngang"
+            data-active={transform.flipH ? "true" : undefined}
+            onClick={() => updateTransform({ flipH: !transform.flipH })}
+          >
+            <IconFlipH />
+          </button>
+          <button
+            type="button"
+            className="preview-tool"
+            aria-label="Lật dọc"
+            title="Lật dọc"
+            data-active={transform.flipV ? "true" : undefined}
+            onClick={() => updateTransform({ flipV: !transform.flipV })}
+          >
+            <IconFlipV />
+          </button>
+        </div>
 
-    if (pointers.current.size === 2 && pinchRef.current) {
-      const pts = [...pointers.current.values()];
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
-      const next = pinchRef.current.zoom * (dist / pinchRef.current.dist);
-      setZoom(next, mid);
-      return;
-    }
-
-    if (panRef.current && viewRef.current.zoom > 1) {
-      const dx = e.clientX - panRef.current.x;
-      const dy = e.clientY - panRef.current.y;
-      setView((prev) => ({
-        ...prev,
-        x: panRef.current!.ox + dx,
-        y: panRef.current!.oy + dy,
-      }));
-    }
+        <div className="preview-tool-group">
+          <button
+            type="button"
+            className="preview-tool"
+            aria-label="Giảm phóng"
+            title="Giảm phóng"
+            disabled={!controls.canZoomOut}
+            onClick={controls.zoomOut}
+          >
+            <IconZoomOut />
+          </button>
+          <button
+            type="button"
+            className="preview-zoom-label lightbox-zoom-btn"
+            title="Đặt 100%"
+            onClick={() => controls.setZoomPercent(100)}
+          >
+            {Math.round(controls.zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            className="preview-tool"
+            aria-label="Phóng to"
+            title="Phóng to"
+            disabled={!controls.canZoomIn}
+            onClick={controls.zoomIn}
+          >
+            <IconZoomIn />
+          </button>
+          <button
+            type="button"
+            className="preview-tool"
+            aria-label="Vừa khung"
+            title="Vừa khung"
+            disabled={!controls.canFit}
+            onClick={controls.fit}
+          >
+            <IconFit />
+          </button>
+          <button
+            type="button"
+            className="preview-tool"
+            aria-label="Xem toàn màn hình"
+            title="Toàn màn hình (F)"
+            disabled={!active.previewUrl}
+            onClick={() => setFullscreen(true)}
+          >
+            <IconFullscreen />
+          </button>
+          <button
+            type="button"
+            className="preview-tool"
+            aria-label="Đặt lại xoay và lật"
+            title="Đặt lại"
+            disabled={!edited}
+            onClick={() => {
+              onTransformChange(active.id, { ...DEFAULT_TRANSFORM });
+              controls.fit();
+            }}
+          >
+            <IconReset />
+          </button>
+        </div>
+      </div>
+    );
   }
-
-  function onPointerUp(e: ReactPointerEvent) {
-    pointers.current.delete(e.pointerId);
-    if (pointers.current.size < 2) pinchRef.current = null;
-    if (pointers.current.size === 0) panRef.current = null;
-    try {
-      viewportRef.current?.releasePointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const edited =
-    transform.rotation !== 0 || transform.flipH || transform.flipV || view.zoom !== 1;
 
   return (
     <motion.div
@@ -338,217 +430,149 @@ export function PreviewPanel({
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
     >
       <div className="preview-stage">
-        <div
-          ref={viewportRef}
-          className="preview-viewport"
-          data-zoomed={view.zoom > 1 ? "true" : "false"}
-          data-editable={canEdit ? "true" : "false"}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+        {canNav && (
+          <>
+            <button
+              type="button"
+              className="preview-nav preview-nav-prev"
+              aria-label="Ảnh trước"
+              title="Ảnh trước (←)"
+              onClick={() => selectRelative(-1)}
+            >
+              <IconPrev />
+            </button>
+            <button
+              type="button"
+              className="preview-nav preview-nav-next"
+              aria-label="Ảnh sau"
+              title="Ảnh sau (→)"
+              onClick={() => selectRelative(1)}
+            >
+              <IconNext />
+            </button>
+          </>
+        )}
+
+        <ZoomViewport
+          enabled={canEdit}
+          resetKey={active.id}
+          className="preview-zoom"
+          hintFit="Kéo để xem · chạm đôi để vừa khung"
+          hintZoom="Chạm đôi phóng 300% · pinch / cuộn zoom · ← → đổi ảnh"
+          chrome={canEdit ? renderToolbar : undefined}
         >
           <AnimatePresence mode="wait">
             <motion.div
               key={active.id}
-              className="preview-media-shell"
+              className="preview-media"
+              data-swap={swapAxes ? "true" : "false"}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.28 }}
+              transition={{ duration: 0.22 }}
             >
-              <div
-                className="preview-media-frame"
-                style={{
-                  transform: `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.zoom})`,
-                }}
-              >
-                {active.previewUrl ? (
-                  <img
-                    src={active.previewUrl}
-                    alt={active.file.name}
-                    draggable={false}
-                    style={{ transform: cssImageTransform(transform) }}
-                  />
-                ) : (
-                  <p className="preview-fallback">File này không xem trước được — vẫn gửi được.</p>
-                )}
-              </div>
-            </motion.div>
-          </AnimatePresence>
-
-          {canEdit && (
-            <div className="preview-hint" aria-hidden>
-              {view.zoom > 1 ? "Kéo để xem · chạm đôi để vừa khung" : "Chạm đôi để phóng · pinch / cuộn để zoom"}
-            </div>
-          )}
-        </div>
-
-        {canEdit && (
-          <div
-            className="preview-toolbar"
-            role="toolbar"
-            aria-label="Chỉnh ảnh"
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <div className="preview-tool-group">
-              <button
-                type="button"
-                className="preview-tool"
-                aria-label="Xoay trái 90°"
-                title="Xoay trái"
-                onClick={() => rotateBy(-90)}
-              >
-                <IconRotateLeft />
-              </button>
-              <button
-                type="button"
-                className="preview-tool"
-                aria-label="Xoay phải 90°"
-                title="Xoay phải"
-                onClick={() => rotateBy(90)}
-              >
-                <IconRotateRight />
-              </button>
-              <button
-                type="button"
-                className="preview-tool"
-                aria-label="Lật ngang"
-                title="Lật ngang"
-                data-active={transform.flipH ? "true" : undefined}
-                onClick={() => updateTransform({ flipH: !transform.flipH })}
-              >
-                <IconFlipH />
-              </button>
-              <button
-                type="button"
-                className="preview-tool"
-                aria-label="Lật dọc"
-                title="Lật dọc"
-                data-active={transform.flipV ? "true" : undefined}
-                onClick={() => updateTransform({ flipV: !transform.flipV })}
-              >
-                <IconFlipV />
-              </button>
-            </div>
-
-            <div className="preview-tool-group">
-              <button
-                type="button"
-                className="preview-tool"
-                aria-label="Thu nhỏ"
-                title="Thu nhỏ"
-                disabled={view.zoom <= ZOOM_MIN}
-                onClick={() => setZoom(view.zoom - ZOOM_STEP)}
-              >
-                <IconZoomOut />
-              </button>
-              <span className="preview-zoom-label">{Math.round(view.zoom * 100)}%</span>
-              <button
-                type="button"
-                className="preview-tool"
-                aria-label="Phóng to"
-                title="Phóng to"
-                disabled={view.zoom >= ZOOM_MAX}
-                onClick={() => setZoom(view.zoom + ZOOM_STEP)}
-              >
-                <IconZoomIn />
-              </button>
-              <button
-                type="button"
-                className="preview-tool"
-                aria-label="Vừa khung"
-                title="Vừa khung"
-                disabled={view.zoom === 1 && view.x === 0 && view.y === 0}
-                onClick={() => setView(FIT_VIEW)}
-              >
-                <IconFit />
-              </button>
-              <button
-                type="button"
-                className="preview-tool"
-                aria-label="Đặt lại xoay và lật"
-                title="Đặt lại"
-                disabled={
-                  transform.rotation === 0 && !transform.flipH && !transform.flipV
-                }
-                onClick={() => {
-                  onTransformChange(active.id, { ...DEFAULT_TRANSFORM });
-                  setView(FIT_VIEW);
-                }}
-              >
-                <IconReset />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {busy && uploading && (
-          <motion.div
-            className="preview-busy"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <ProgressRing percent={uploading.progress} />
-            <p className="progress-copy">
-              Đang gửi {items.filter((i) => i.status === "done").length + 1}/{items.length}
-            </p>
-          </motion.div>
-        )}
-      </div>
-
-      <div className="preview-thumbs" role="list">
-        {items.map((item, index) => (
-          <motion.div
-            key={item.id}
-            role="listitem"
-            className="preview-thumb"
-            data-active={item.id === active.id}
-            data-status={item.status}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.04, duration: 0.3 }}
-            title={item.file.name}
-          >
-            <button
-              type="button"
-              className="preview-thumb-select"
-              disabled={busy}
-              onClick={() => onSelectItem(item.id)}
-              aria-label={`Chọn ảnh ${index + 1}: ${item.file.name}`}
-              aria-current={item.id === active.id ? "true" : undefined}
-            >
-              {item.previewUrl ? (
-                <img
-                  src={item.previewUrl}
-                  alt=""
-                  style={{ transform: cssImageTransform(item.transform ?? DEFAULT_TRANSFORM) }}
+              {active.previewUrl ? (
+                <PreviewImage
+                  src={active.previewUrl}
+                  alt={active.file.name}
+                  style={imgStyle}
+                  fit="contain"
                 />
               ) : (
-                <span className="preview-thumb-fallback">{item.file.name.slice(0, 1)}</span>
+                <p className="preview-fallback">
+                  File này không xem trước được — vẫn {modeLabel} được.
+                </p>
               )}
-            </button>
-            <span className="preview-thumb-badge">{index + 1}</span>
-            {(item.transform?.rotation || item.transform?.flipH || item.transform?.flipV) && (
-              <span className="preview-thumb-edit" aria-hidden>
-                ✎
-              </span>
-            )}
-            {!busy && items.length > 1 && (
+            </motion.div>
+          </AnimatePresence>
+        </ZoomViewport>
+
+        <AnimatePresence>
+          {busy && uploading && (
+            <motion.div
+              className="preview-busy"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <ProgressRing percent={uploading.progress} modeLabel={modeLabel} />
+              <p className="progress-copy">
+                Đang {modeLabel} {items.filter((i) => i.status === "done").length + 1}/{items.length}
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="preview-thumbs" role="list" ref={thumbsRef}>
+        {items.map((item, index) => {
+          const t = item.transform ?? DEFAULT_TRANSFORM;
+          const rot = normalizeRotation(t.rotation);
+          const thumbSwap = rot === 90 || rot === 270;
+          const thumbEdited = hasTransform(t);
+          return (
+            <motion.div
+              key={item.id}
+              role="listitem"
+              className="preview-thumb"
+              data-thumb-id={item.id}
+              data-active={item.id === active.id}
+              data-status={item.status}
+              data-edited={thumbEdited ? "true" : undefined}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(index, 8) * 0.03, duration: 0.28 }}
+              title={item.file.name}
+            >
               <button
                 type="button"
-                className="preview-thumb-remove"
-                aria-label="Gỡ ảnh này"
-                onClick={() => onRemoveItem(item.id)}
+                className="preview-thumb-select"
+                disabled={busy}
+                onClick={() => onSelectItem(item.id)}
+                aria-label={`Chọn ảnh ${index + 1}: ${item.file.name}`}
+                aria-current={item.id === active.id ? "true" : undefined}
               >
-                ×
+                {item.thumbUrl ? (
+                  <span className="preview-thumb-frame" data-swap={thumbSwap ? "true" : "false"}>
+                    <img
+                      src={item.thumbUrl}
+                      alt=""
+                      decoding="async"
+                      loading="lazy"
+                      style={{ transform: cssImageTransform(t) }}
+                    />
+                  </span>
+                ) : item.previewUrl ? (
+                  <span className="preview-thumb-skeleton" aria-hidden />
+                ) : (
+                  <span className="preview-thumb-fallback">{item.file.name.slice(0, 1)}</span>
+                )}
               </button>
-            )}
-          </motion.div>
-        ))}
+              <span className="preview-thumb-badge">{index + 1}</span>
+              {thumbEdited && (
+                <span className="preview-thumb-edit" aria-hidden title="Đã chỉnh">
+                  <IconEdit />
+                </span>
+              )}
+              {!busy && items.length > 1 && (
+                <button
+                  type="button"
+                  className="preview-thumb-remove"
+                  aria-label={`Gỡ ảnh: ${item.file.name}`}
+                  title="Gỡ ảnh"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveItem(item.id);
+                  }}
+                >
+                  <IconRemove />
+                </button>
+              )}
+            </motion.div>
+          );
+        })}
         {!busy && (
-          <button type="button" className="preview-thumb preview-thumb-add" onClick={onAddMore}>
+          <button type="button" className="preview-thumb preview-thumb-add" onClick={onAddMore} aria-label="Thêm ảnh">
             +
           </button>
         )}
@@ -575,10 +599,13 @@ export function PreviewPanel({
       <div className="preview-meta">
         <div className="file-info">
           <strong title={active.file.name}>
-            {items.length > 1 ? `${items.length} ảnh đã chọn` : active.file.name}
+            {items.length > 1
+              ? `${activeIndex + 1}/${items.length} · ${active.file.name}`
+              : active.file.name}
           </strong>
           <span>
-            {formatBytes(totalBytes)}
+            {formatBytes(active.file.size)}
+            {items.length > 1 ? ` · tổng ${formatBytes(totalBytes)}` : ""}
             {edited ? " · đã chỉnh" : " · xem trước"} · chưa {modeLabel}
             {transform.rotation ? ` · xoay ${transform.rotation}°` : ""}
           </span>
@@ -586,7 +613,7 @@ export function PreviewPanel({
         <div className="preview-actions">
           {busy ? (
             <button type="button" className="btn btn-danger" onClick={onCancelUpload}>
-              Hủy gửi
+              {modeLabel === "thu nhỏ" ? "Hủy thu nhỏ" : "Hủy lưu"}
             </button>
           ) : (
             <button type="button" className="btn btn-danger" onClick={onClearAll}>
@@ -594,10 +621,25 @@ export function PreviewPanel({
             </button>
           )}
           <button type="button" className="btn btn-primary" onClick={onRequestSend} disabled={busy}>
-            {busy ? "Đang gửi…" : items.length > 1 ? `Gửi ${items.length} ảnh` : "Gửi đi"}
+            {busy
+              ? `Đang ${modeLabel}…`
+              : items.length > 1
+                ? `${modeVerbCapitalized(modeLabel)} ${items.length} ảnh`
+                : `${modeVerbCapitalized(modeLabel)} ảnh`}
           </button>
         </div>
       </div>
+
+      {active.previewUrl && (
+        <ImageLightbox
+          open={fullscreen}
+          src={active.previewUrl}
+          alt={active.file.name}
+          imageStyle={imgStyle}
+          swapAxes={swapAxes}
+          onClose={() => setFullscreen(false)}
+        />
+      )}
     </motion.div>
   );
 }

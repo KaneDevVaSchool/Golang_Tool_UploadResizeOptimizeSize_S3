@@ -1,20 +1,22 @@
 import { motion } from "framer-motion";
+import type { UploadMode } from "../lib/api";
 
 export type TimelineStep = 1 | 2 | 3;
-
-const STEPS = [
-  { id: 1 as const, label: "Chọn" },
-  { id: 2 as const, label: "Chỉnh" },
-  { id: 3 as const, label: "Gửi" },
-];
 
 type StepTimelineProps = {
   current: TimelineStep;
   done?: boolean;
+  mode?: UploadMode;
 };
 
-export function StepTimeline({ current, done = false }: StepTimelineProps) {
+export function StepTimeline({ current, done = false, mode = "s3" }: StepTimelineProps) {
   const active = done ? 3 : current;
+  const lastLabel = mode === "wp" ? "Thu nhỏ" : "Lưu";
+  const steps = [
+    { id: 1 as const, label: "Chọn" },
+    { id: 2 as const, label: "Xử lý" },
+    { id: 3 as const, label: lastLabel },
+  ];
 
   return (
     <motion.ol
@@ -22,9 +24,9 @@ export function StepTimeline({ current, done = false }: StepTimelineProps) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-      aria-label="Các bước gửi ảnh"
+      aria-label={mode === "wp" ? "Các bước thu nhỏ ảnh" : "Các bước lưu ảnh"}
     >
-      {STEPS.map((step, index) => {
+      {steps.map((step, index) => {
         const state = done || step.id < active ? "done" : step.id === active ? "active" : "todo";
         return (
           <li key={step.id} className="timeline-step" data-state={state}>
@@ -40,7 +42,7 @@ export function StepTimeline({ current, done = false }: StepTimelineProps) {
               </span>
               <span className="timeline-label">{step.label}</span>
             </div>
-            {index < STEPS.length - 1 && (
+            {index < steps.length - 1 && (
               <span className="timeline-connector" aria-hidden data-filled={step.id < active || done}>
                 <span className="timeline-connector-fill" />
               </span>
