@@ -281,8 +281,6 @@ export function PreviewPanel({
   const transform = active.transform ?? DEFAULT_TRANSFORM;
   const canEdit = !busy && Boolean(active.previewUrl);
   const rotation = normalizeRotation(transform.rotation);
-  const swapAxes = rotation === 90 || rotation === 270;
-  const imgStyle = { transform: cssImageTransform(transform) };
   const edited = hasTransform(transform);
   const canNav = items.length > 1 && !busy;
 
@@ -458,14 +456,13 @@ export function PreviewPanel({
           resetKey={active.id}
           className="preview-zoom"
           hintFit="Kéo để xem · chạm đôi để vừa khung"
-          hintZoom="Chạm đôi phóng 300% · pinch / cuộn zoom · ← → đổi ảnh"
+          hintZoom="Kéo hoặc cuộn để xem · chạm đôi phóng · ← → đổi ảnh"
           chrome={canEdit ? renderToolbar : undefined}
         >
           <AnimatePresence mode="wait">
             <motion.div
               key={active.id}
               className="preview-media"
-              data-swap={swapAxes ? "true" : "false"}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -475,8 +472,8 @@ export function PreviewPanel({
                 <PreviewImage
                   src={active.previewUrl}
                   alt={active.file.name}
-                  style={imgStyle}
-                  fit="contain"
+                  transformStyle={cssImageTransform(transform)}
+                  rotation={rotation}
                 />
               ) : (
                 <p className="preview-fallback">
@@ -635,8 +632,8 @@ export function PreviewPanel({
           open={fullscreen}
           src={active.previewUrl}
           alt={active.file.name}
-          imageStyle={imgStyle}
-          swapAxes={swapAxes}
+          transformStyle={cssImageTransform(transform)}
+          rotation={rotation}
           onClose={() => setFullscreen(false)}
         />
       )}

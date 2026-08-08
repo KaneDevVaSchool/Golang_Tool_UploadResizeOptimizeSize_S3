@@ -1,15 +1,16 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useEffect, useRef, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { PreviewImage } from "./PreviewImage";
 import { ZoomViewport, type ZoomControls } from "./ZoomViewport";
 
 type ImageLightboxProps = {
   open: boolean;
   src: string;
   alt: string;
-  imageStyle?: CSSProperties;
-  /** True when image is rotated 90°/270° — keeps full frame after CSS rotate */
-  swapAxes?: boolean;
+  /** CSS rotate/flip string for the image */
+  transformStyle?: string;
+  rotation?: number;
   onClose: () => void;
 };
 
@@ -110,7 +111,14 @@ function LightboxToolbar({ controls }: { controls: ZoomControls }) {
   );
 }
 
-export function ImageLightbox({ open, src, alt, imageStyle, swapAxes = false, onClose }: ImageLightboxProps) {
+export function ImageLightbox({
+  open,
+  src,
+  alt,
+  transformStyle,
+  rotation = 0,
+  onClose,
+}: ImageLightboxProps) {
   const controlsRef = useRef<ZoomControls | null>(null);
   const onControlsChange = useCallback((controls: ZoomControls) => {
     controlsRef.current = controls;
@@ -169,10 +177,10 @@ export function ImageLightbox({ open, src, alt, imageStyle, swapAxes = false, on
 
           <motion.div
             className="lightbox-stage"
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
           >
             <header className="lightbox-topbar">
               <p className="lightbox-title" title={alt}>
@@ -190,15 +198,21 @@ export function ImageLightbox({ open, src, alt, imageStyle, swapAxes = false, on
 
             <ZoomViewport
               enabled
-              resetKey={src}
+              resetKey={`${src}|${rotation}|${transformStyle ?? ""}`}
               className="lightbox-viewport"
               hintFit="Kéo để xem · chạm đôi để vừa khung"
-              hintZoom="Chạm đôi để phóng 300% · pinch / cuộn để zoom tới 1200%"
+              hintZoom="Kéo hoặc cuộn để xem · chạm đôi phóng tới 300%"
               onControlsChange={onControlsChange}
               chrome={(controls) => <LightboxToolbar controls={controls} />}
             >
-              <div className="preview-media" data-swap={swapAxes ? "true" : "false"}>
-                <img src={src} alt={alt} draggable={false} style={imageStyle} className="lightbox-img" />
+              <div className="preview-media">
+                <PreviewImage
+                  key={`${src}|${rotation}|${transformStyle ?? ""}`}
+                  src={src}
+                  alt={alt}
+                  transformStyle={transformStyle}
+                  rotation={rotation}
+                />
               </div>
             </ZoomViewport>
           </motion.div>

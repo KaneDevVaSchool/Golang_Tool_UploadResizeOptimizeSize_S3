@@ -1338,21 +1338,20 @@ img {
   position: relative;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  /* clip after CSS rotate; overflow:hidden alone crops 90°/270° pre-rotate boxes */
+  overflow: visible;
+  clip-path: inset(0);
+  -webkit-clip-path: inset(0);
   touch-action: none;
   user-select: none;
   cursor: default;
 }
 
 .preview-viewport[data-editable="true"] {
-  cursor: zoom-in;
-}
-
-.preview-viewport[data-editable="true"][data-zoomed="true"] {
   cursor: grab;
 }
 
-.preview-viewport[data-editable="true"][data-zoomed="true"]:active {
+.preview-viewport[data-editable="true"]:active {
   cursor: grabbing;
 }
 
@@ -1370,9 +1369,7 @@ img {
   position: absolute;
   inset: 0;
   background: transparent;
-  overflow: hidden;
-  /* Definite size for reliable object-fit (avoid max-height:% crop) */
-  container-type: size;
+  overflow: visible;
 }
 
 .preview-media-shell {
@@ -1387,33 +1384,24 @@ img {
   will-change: transform;
 }
 
+/* Full-bleed measure box — image is pixel-sized to true aspect (see PreviewImage) */
 .preview-img-wrap {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
   min-height: 0;
+  overflow: visible;
 }
 
-.preview-img-wrap .preview-img,
-.preview-media > .preview-img-wrap {
-  width: 100%;
-  height: 100%;
-}
-
-/* Fill the stage box, then letterbox — full image, true aspect ratio */
-.preview-media img,
-.preview-img-wrap .preview-img,
-.lightbox-img {
-  width: 100%;
-  height: 100%;
+.preview-img-wrap .preview-img {
+  display: block;
   max-width: none;
   max-height: none;
-  object-fit: contain;
-  object-position: center;
-  display: block;
+  object-fit: fill;
   pointer-events: none;
   -webkit-user-drag: none;
+  transform-origin: center center;
 }
 
 .preview-img-wrap .preview-img[data-ready="false"] {
@@ -1423,14 +1411,6 @@ img {
 .preview-img-wrap .preview-img[data-ready="true"] {
   opacity: 1;
   transition: opacity 0.22s ease;
-}
-
-/* After 90°/270° CSS rotate, swap box so the photo still fits (no eye-crop) */
-.preview-media[data-swap="true"] img,
-.preview-media[data-swap="true"] .preview-img,
-.preview-media[data-swap="true"] .lightbox-img {
-  width: 100cqh;
-  height: 100cqw;
 }
 
 .preview-skeleton {
