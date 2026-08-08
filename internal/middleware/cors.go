@@ -31,7 +31,7 @@ func NewCORS(allowedOrigins []string) *CORS {
 	return &CORS{
 		allowedOrigins: allowedOrigins,
 		allowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		allowedHeaders: []string{"Content-Type", "Authorization", "X-API-Key"},
+		allowedHeaders: []string{"Content-Type", "Authorization", "X-API-Key", "X-CSRF-Token"},
 		maxAge:         3600,
 	}
 }

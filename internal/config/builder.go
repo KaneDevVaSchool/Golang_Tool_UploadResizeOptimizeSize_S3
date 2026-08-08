@@ -64,16 +64,28 @@ func (b *ConfigBuilder) WithAWS(region, bucketName string, useACL bool, usePresi
 	return b
 }
 
-func (b *ConfigBuilder) WithUpload(maxSize int64, uploadTimeout time.Duration) *ConfigBuilder {
-	if maxSize == 0 {
-		maxSize = 2 << 20
+func (b *ConfigBuilder) WithUpload(maxSize, absoluteMaxSize int64, uploadTimeout time.Duration) *ConfigBuilder {
+	if maxSize <= 0 {
+		maxSize = 20 << 20
+	}
+	if absoluteMaxSize <= 0 {
+		absoluteMaxSize = 200 << 20
+	}
+	if absoluteMaxSize < maxSize {
+		absoluteMaxSize = maxSize
+	}
+	// Keep chunk count bounded (aligned with maxChunksPerUpload in chunk service)
+	const maxChunks = 64
+	if absoluteMaxSize/maxSize > maxChunks {
+		absoluteMaxSize = maxSize * maxChunks
 	}
 	if uploadTimeout == 0 {
-		uploadTimeout = 60 * time.Second // Default 60s for S3 upload
+		uploadTimeout = 5 * time.Minute
 	}
 	b.config.Upload = UploadConfig{
-		MaxSize:       maxSize,
-		UploadTimeout: uploadTimeout,
+		MaxSize:         maxSize,
+		AbsoluteMaxSize: absoluteMaxSize,
+		UploadTimeout:   uploadTimeout,
 	}
 	return b
 }
@@ -317,14 +329,14 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 	csrfEnabled := getEnv("CSRF_ENABLED", "true") == "true"
 	csrfSecureCookie := getEnv("CSRF_SECURE_COOKIE", "false") == "true"
 
-	// Server timeouts
-	readTimeout := time.Duration(parseInt(getEnv("SERVER_READ_TIMEOUT_SECONDS", "15"), 15)) * time.Second
-	writeTimeout := time.Duration(parseInt(getEnv("SERVER_WRITE_TIMEOUT_SECONDS", "30"), 30)) * time.Second
-	idleTimeout := time.Duration(parseInt(getEnv("SERVER_IDLE_TIMEOUT_SECONDS", "60"), 60)) * time.Second
+	// Server timeouts (raised for large / chunked uploads)
+	readTimeout := time.Duration(parseInt(getEnv("SERVER_READ_TIMEOUT_SECONDS", "180"), 180)) * time.Second
+	writeTimeout := time.Duration(parseInt(getEnv("SERVER_WRITE_TIMEOUT_SECONDS", "180"), 180)) * time.Second
+	idleTimeout := time.Duration(parseInt(getEnv("SERVER_IDLE_TIMEOUT_SECONDS", "120"), 120)) * time.Second
 	shutdownTimeout := time.Duration(parseInt(getEnv("SERVER_SHUTDOWN_TIMEOUT_SECONDS", "5"), 5)) * time.Second
 
-	// Upload timeout
-	uploadTimeout := time.Duration(parseInt(getEnv("UPLOAD_TIMEOUT_SECONDS", "60"), 60)) * time.Second
+	// Upload timeout (S3 put / multipart)
+	uploadTimeout := time.Duration(parseInt(getEnv("UPLOAD_TIMEOUT_SECONDS", "300"), 300)) * time.Second
 
 	// Concurrency limit
 	concurrencyEnabled := getEnv("CONCURRENCY_LIMIT_ENABLED", "true") == "true"
@@ -420,7 +432,11 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 			usePresignedURL,
 			presignedURLExpiry,
 		).
-		WithUpload(2<<20, uploadTimeout).
+		WithUpload(
+			int64(parseInt(getEnv("UPLOAD_MAX_SIZE_MB", "20"), 20))<<20,
+			int64(parseInt(getEnv("UPLOAD_ABSOLUTE_MAX_MB", "200"), 200))<<20,
+			uploadTimeout,
+		).
 		WithDatabase(dbEnabled, dbDriver, dbDataSource, dbMaxOpen, dbMaxIdle, dbMaxLifetime).
 		WithDirectories("./uploads", wpUploadsDir).
 		WithRateLimit(rateLimitEnabled, rateLimitRequests, rateLimitWindow, rateLimitCleanup).

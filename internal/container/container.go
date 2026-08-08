@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,18 +24,19 @@ import (
 )
 
 type Container struct {
-	Config           *config.Config
-	DB               *database.DB
-	S3Client         *s3.Client
-	Uploader         *manager.Uploader
-	S3Repository     repository.S3Repository
-	UploadRepository repository.UploadRepository
-	UploadService    service.UploadService
-	APIHandler       *handlers.APIHandler
-	WPHandler        *handlers.WPHandler
-	RepoFactory      *repository.RepositoryFactory
-	ServiceFactory   *service.ServiceFactory
-	RateLimiters     []*middleware.RateLimiter
+	Config             *config.Config
+	DB                 *database.DB
+	S3Client           *s3.Client
+	Uploader           *manager.Uploader
+	S3Repository       repository.S3Repository
+	UploadRepository   repository.UploadRepository
+	UploadService      service.UploadService
+	ChunkUploadService service.ChunkUploadService
+	APIHandler         *handlers.APIHandler
+	WPHandler          *handlers.WPHandler
+	RepoFactory        *repository.RepositoryFactory
+	ServiceFactory     *service.ServiceFactory
+	RateLimiters       []*middleware.RateLimiter
 }
 
 // GetDBStats trả về thống kê connection pool nếu DB có sẵn
@@ -95,10 +97,10 @@ func NewContainer() (*Container, error) {
 		o.UsePathStyle = false
 	})
 
-	// * Cấu hình uploader cho concurrent uploads
+	// * Multipart lên S3: part 8MB, concurrency 4 — tối ưu cho file ~20MB+
 	uploader := manager.NewUploader(s3Client, func(u *manager.Uploader) {
-		u.PartSize = 10 * 1024 * 1024
-		u.Concurrency = 5
+		u.PartSize = 8 * 1024 * 1024
+		u.Concurrency = 4
 		u.LeavePartsOnError = false
 	})
 
@@ -153,7 +155,27 @@ func NewContainer() (*Container, error) {
 		return nil, err
 	}
 
-	apiHandler := handlers.NewAPIHandler(uploadService, s3Repo, cfg.Upload.MaxSize, db)
+	chunkService := service.NewChunkUploadService(
+		s3Repo,
+		cfg.AWS.BucketName,
+		cfg.AWS.Region,
+		cfg.Directories.UploadDir,
+		cfg.Upload.MaxSize,
+		cfg.Upload.AbsoluteMaxSize,
+		cfg.Upload.UploadTimeout,
+		cfg.AWS.UseACL,
+		cfg.AWS.UsePresignedURL,
+		cfg.AWS.PresignedURLExpiry,
+	)
+
+	apiHandler := handlers.NewAPIHandler(
+		uploadService,
+		chunkService,
+		s3Repo,
+		cfg.Upload.MaxSize,
+		cfg.Upload.AbsoluteMaxSize,
+		db,
+	)
 
 	// WordPress handler with image resize and optimization
 	var wpHandler *handlers.WPHandler
@@ -188,17 +210,18 @@ func NewContainer() (*Container, error) {
 	}
 
 	return &Container{
-		Config:           cfg,
-		DB:               db,
-		S3Client:         s3Client,
-		Uploader:         uploader,
-		S3Repository:     s3Repo,
-		UploadRepository: uploadRepo,
-		UploadService:    uploadService,
-		APIHandler:       apiHandler,
-		WPHandler:        wpHandler,
-		RepoFactory:      repoFactory,
-		ServiceFactory:   serviceFactory,
+		Config:             cfg,
+		DB:                 db,
+		S3Client:           s3Client,
+		Uploader:           uploader,
+		S3Repository:       s3Repo,
+		UploadRepository:   uploadRepo,
+		UploadService:      uploadService,
+		ChunkUploadService: chunkService,
+		APIHandler:         apiHandler,
+		WPHandler:          wpHandler,
+		RepoFactory:        repoFactory,
+		ServiceFactory:     serviceFactory,
 	}, nil
 }
 
@@ -209,6 +232,10 @@ func (c *Container) GetServerHandler() http.Handler {
 	apiMux := http.NewServeMux()
 	apiMux.HandleFunc("/api/v1/upload", c.APIHandler.HandleUpload)
 	apiMux.HandleFunc("/api/v1/upload-transaction", c.APIHandler.HandleUploadWithTransaction)
+	apiMux.HandleFunc("/api/v1/upload/init", c.APIHandler.HandleChunkInit)
+	apiMux.HandleFunc("/api/v1/upload/chunk", c.APIHandler.HandleChunkUpload)
+	apiMux.HandleFunc("/api/v1/upload/complete", c.APIHandler.HandleChunkComplete)
+	apiMux.HandleFunc("/api/v1/upload/abort", c.APIHandler.HandleChunkAbort)
 	apiMux.HandleFunc("/api/v1/health", c.APIHandler.HandleHealth)
 
 	// Metrics endpoint with rate limiting (if enabled) to prevent abuse
@@ -249,18 +276,14 @@ func (c *Container) GetServerHandler() http.Handler {
 	// Mount API routes
 	mux.Handle("/api/", apiHandler)
 
-	// Root endpoint - return API info
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"service":"s3-upload-api","version":"1.0","endpoints":["/api/v1/upload","/api/v1/upload-transaction","/api/v1/health","/api/v1/metrics","/api/v1/wp-upload"]}`))
-	})
-
 	// Serve WordPress uploads directory (with security)
 	if c.Config.WordPress.Enabled {
 		wpFs := secureFileServer(http.Dir(c.Config.Directories.WPUploadsDir))
 		mux.Handle("/wp-content/uploads/", http.StripPrefix("/wp-content/uploads/", wpFs))
 	}
+
+	// SPA / static UI from web/dist when built; otherwise JSON API info
+	mux.Handle("/", spaFileServer("web/dist"))
 
 	handler := http.Handler(mux)
 
@@ -307,6 +330,11 @@ func (c *Container) Shutdown() {
 	}
 	log.Println("[Container] All rate limiters stopped")
 
+	if c.ChunkUploadService != nil {
+		c.ChunkUploadService.Stop()
+		log.Println("[Container] Chunk upload sessions cleaned")
+	}
+
 	// Close database connection if exists
 	if c.DB != nil {
 		if err := c.DB.Close(); err != nil {
@@ -327,5 +355,49 @@ func secureFileServer(dir http.Dir) http.Handler {
 			return
 		}
 		fs.ServeHTTP(w, r)
+	})
+}
+
+const apiInfoJSON = `{"service":"s3-upload-api","version":"1.0","endpoints":["/api/v1/upload","/api/v1/upload/init","/api/v1/upload/chunk","/api/v1/upload/complete","/api/v1/upload/abort","/api/v1/upload-transaction","/api/v1/health","/api/v1/metrics","/api/v1/wp-upload"]}`
+
+// spaFileServer serves a Vite/React build with index.html fallback.
+// If the dist directory is missing, returns API info JSON (dev-friendly).
+func spaFileServer(distDir string) http.Handler {
+	absDist, err := filepath.Abs(distDir)
+	if err != nil {
+		absDist = filepath.Clean(distDir)
+	}
+	indexPath := filepath.Join(absDist, "index.html")
+	if _, err := os.Stat(indexPath); err != nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(apiInfoJSON))
+		})
+	}
+
+	fileServer := http.FileServer(http.Dir(absDist))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.ServeFile(w, r, indexPath)
+			return
+		}
+
+		rel := filepath.Clean(strings.TrimPrefix(r.URL.Path, "/"))
+		if rel == "." || strings.HasPrefix(rel, "..") {
+			http.ServeFile(w, r, indexPath)
+			return
+		}
+		full := filepath.Join(absDist, rel)
+		absFull, err := filepath.Abs(full)
+		if err != nil || (!strings.HasPrefix(absFull, absDist+string(os.PathSeparator)) && absFull != absDist) {
+			http.ServeFile(w, r, indexPath)
+			return
+		}
+		if info, err := os.Stat(absFull); err == nil && !info.IsDir() {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+		http.ServeFile(w, r, indexPath)
 	})
 }

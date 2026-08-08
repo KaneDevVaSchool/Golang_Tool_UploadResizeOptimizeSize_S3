@@ -52,8 +52,9 @@ type AWSConfig struct {
 }
 
 type UploadConfig struct {
-	MaxSize       int64
-	UploadTimeout time.Duration // timeout for S3 upload operations
+	MaxSize         int64         // max size per request / chunk (default 20MB)
+	AbsoluteMaxSize int64         // max total file size via chunked upload
+	UploadTimeout   time.Duration // timeout for S3 upload operations
 }
 
 type DirectoriesConfig struct {

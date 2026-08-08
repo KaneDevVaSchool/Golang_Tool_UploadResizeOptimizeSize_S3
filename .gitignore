@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+bin/
 
 # Test binary
 *.test
@@ -24,7 +25,12 @@ go.work
 
 # Uploads directory
 uploads/
+wp-uploads/
 *.tmp
+
+# Web UI
+web/node_modules/
+web/dist/
 
 # IDE
 .vscode/

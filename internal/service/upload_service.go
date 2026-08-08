@@ -91,8 +91,12 @@ func (s *uploadService) UploadImage(ctx context.Context, filename string, file i
 	// ? Dùng maxSize+1 để phát hiện file vượt limit, nhưng validate chặt chẽ
 	limitedReader := io.LimitReader(file, maxSize+1)
 
-	// ! Timeout 30s cho file copy để tránh treo
-	copyCtx, copyCancel := context.WithTimeout(uploadCtx, 30*time.Second)
+	// Scale copy timeout with size (~2s/MB, min 60s, max 5m) for 20MB+ uploads
+	copyTimeout := 60*time.Second + time.Duration(fileSize/(1024*1024))*2*time.Second
+	if copyTimeout > 5*time.Minute {
+		copyTimeout = 5 * time.Minute
+	}
+	copyCtx, copyCancel := context.WithTimeout(uploadCtx, copyTimeout)
 	defer copyCancel()
 
 	// ? io.Copy không hỗ trợ context cancellation, nên đóng file để interrupt

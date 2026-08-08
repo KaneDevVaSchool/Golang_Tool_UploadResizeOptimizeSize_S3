@@ -22,20 +22,30 @@ import (
 
 type APIHandler struct {
 	BaseHandler
-	uploadService service.UploadService
-	s3Repository  repository.S3Repository
-	maxUploadSize int64
-	db            *database.DB
+	uploadService   service.UploadService
+	chunkService    service.ChunkUploadService
+	s3Repository    repository.S3Repository
+	maxUploadSize   int64
+	absoluteMaxSize int64
+	db              *database.DB
 }
 
 // NewAPIHandler tạo API handler mới
 // db có thể nil nếu database không được bật
-func NewAPIHandler(uploadService service.UploadService, s3Repository repository.S3Repository, maxUploadSize int64, db *database.DB) *APIHandler {
+func NewAPIHandler(
+	uploadService service.UploadService,
+	chunkService service.ChunkUploadService,
+	s3Repository repository.S3Repository,
+	maxUploadSize, absoluteMaxSize int64,
+	db *database.DB,
+) *APIHandler {
 	return &APIHandler{
-		uploadService: uploadService,
-		s3Repository:  s3Repository,
-		maxUploadSize: maxUploadSize,
-		db:            db,
+		uploadService:   uploadService,
+		chunkService:    chunkService,
+		s3Repository:    s3Repository,
+		maxUploadSize:   maxUploadSize,
+		absoluteMaxSize: absoluteMaxSize,
+		db:              db,
 	}
 }
 
@@ -259,10 +269,13 @@ func (h *APIHandler) HandleUploadWithTransaction(w http.ResponseWriter, r *http.
 func (h *APIHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	health := map[string]interface{}{
-		"status":             "ok",
-		"service":            "s3-upload-api",
-		"max_size":           h.maxUploadSize,
-		"max_size_formatted": utils.FormatFileSize(h.maxUploadSize),
+		"status":                      "ok",
+		"service":                     "s3-upload-api",
+		"max_size":                    h.maxUploadSize,
+		"max_size_formatted":          utils.FormatFileSize(h.maxUploadSize),
+		"absolute_max_size":           h.absoluteMaxSize,
+		"absolute_max_size_formatted": utils.FormatFileSize(h.absoluteMaxSize),
+		"chunk_upload":                h.chunkService != nil,
 	}
 
 	if requestID := middleware.GetRequestID(r.Context()); requestID != "" {
