@@ -63,6 +63,8 @@ type chunkUploadService struct {
 	useACL             bool
 	usePresignedURL    bool
 	presignedURLExpiry int
+	endpoint           string
+	forcePathStyle     bool
 
 	mu       sync.Mutex
 	sessions map[string]*ChunkSession
@@ -76,6 +78,8 @@ func NewChunkUploadService(
 	uploadTimeout time.Duration,
 	useACL, usePresignedURL bool,
 	presignedURLExpiry int,
+	endpoint string,
+	forcePathStyle bool,
 ) ChunkUploadService {
 	if chunkSize <= 0 {
 		chunkSize = 20 << 20
@@ -94,6 +98,8 @@ func NewChunkUploadService(
 		useACL:             useACL,
 		usePresignedURL:    usePresignedURL,
 		presignedURLExpiry: presignedURLExpiry,
+		endpoint:           endpoint,
+		forcePathStyle:     forcePathStyle,
 		sessions:           make(map[string]*ChunkSession),
 		stopCh:             make(chan struct{}),
 	}
@@ -349,7 +355,7 @@ func (s *chunkUploadService) Complete(ctx context.Context, uploadID string) (*mo
 		}
 		url = presignedURL
 	} else {
-		url = fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.bucketName, s.region, key)
+		url = utils.BuildS3ObjectURL(s.bucketName, s.region, key, s.endpoint, s.forcePathStyle)
 	}
 
 	success = true

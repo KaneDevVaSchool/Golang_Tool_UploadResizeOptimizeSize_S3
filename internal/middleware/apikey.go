@@ -15,6 +15,12 @@ func APIKeyAuth(apiKey string) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Health probes must work without credentials (load balancer / k8s).
+			if r.URL.Path == "/api/v1/health" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// ! Chỉ check X-API-Key header (không bao giờ accept từ query parameters)
 			providedKey := r.Header.Get("X-API-Key")
 			if providedKey == "" {

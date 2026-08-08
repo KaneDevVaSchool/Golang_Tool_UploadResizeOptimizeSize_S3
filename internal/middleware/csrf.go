@@ -106,7 +106,9 @@ func (c *CSRFProtection) CSRFMiddleware(next http.Handler) http.Handler {
 				var err error
 				token, err = generateToken()
 				if err != nil {
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusInternalServerError)
+					_, _ = w.Write([]byte(`{"success":false,"error":{"code":"CSRF_INIT_FAILED","message":"Unable to initialize security token."}}`))
 					return
 				}
 				c.setCSRFCookie(w, token)
@@ -121,7 +123,9 @@ func (c *CSRFProtection) CSRFMiddleware(next http.Handler) http.Handler {
 
 		// ! Với state-changing methods, phải validate CSRF token
 		if !c.validateCSRF(r) {
-			http.Error(w, "Invalid CSRF token", http.StatusForbidden)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"success":false,"error":{"code":"INVALID_CSRF","message":"Invalid CSRF token. Refresh the page and try again."}}`))
 			return
 		}
 

@@ -134,6 +134,8 @@ func (h *APIHandler) handleUploadError(w http.ResponseWriter, err error) {
 		statusCode = http.StatusBadRequest
 		errorCode = "INVALID_FILE_TYPE"
 		errorMessage = "File type not supported."
+	} else {
+		statusCode, errorCode, errorMessage = mapS3UploadError(err)
 	}
 
 	log.Printf("[API] Upload error: %v (code: %s, status: %d)", err, errorCode, statusCode)
@@ -221,6 +223,10 @@ func (h *APIHandler) HandleUploadWithTransaction(w http.ResponseWriter, r *http.
 		h.SendError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Upload service with transaction support is not available")
 		return
 	}
+	if h.db == nil {
+		h.SendError(w, http.StatusServiceUnavailable, "DATABASE_DISABLED", "Database is not enabled. Set DATABASE_ENABLED=true and DATABASE_URL.")
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
@@ -268,14 +274,15 @@ func (h *APIHandler) HandleUploadWithTransaction(w http.ResponseWriter, r *http.
 
 func (h *APIHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	ready := true
 	health := map[string]interface{}{
-		"status":                      "ok",
-		"service":                     "s3-upload-api",
-		"max_size":                    h.maxUploadSize,
-		"max_size_formatted":          utils.FormatFileSize(h.maxUploadSize),
-		"absolute_max_size":           h.absoluteMaxSize,
+		"status":                     "ok",
+		"service":                    "s3-upload-api",
+		"max_size":                   h.maxUploadSize,
+		"max_size_formatted":         utils.FormatFileSize(h.maxUploadSize),
+		"absolute_max_size":          h.absoluteMaxSize,
 		"absolute_max_size_formatted": utils.FormatFileSize(h.absoluteMaxSize),
-		"chunk_upload":                h.chunkService != nil,
+		"chunk_upload":               h.chunkService != nil,
 	}
 
 	if requestID := middleware.GetRequestID(r.Context()); requestID != "" {
@@ -290,6 +297,7 @@ func (h *APIHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		dbCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
 		if err := h.db.PingContext(dbCtx); err != nil {
+			ready = false
 			checks["database"] = map[string]interface{}{
 				"status": "error",
 				"error":  "Database connectivity check failed",
@@ -310,6 +318,7 @@ func (h *APIHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		connectivityCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 		if err := h.s3Repository.CheckConnectivity(connectivityCtx); err != nil {
+			ready = false
 			checks["s3_service"] = map[string]interface{}{
 				"status": "error",
 				"error":  "S3 connectivity check failed",
@@ -321,9 +330,23 @@ func (h *APIHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if h.uploadService != nil {
 		checks["s3_service"] = "initialized"
+	} else {
+		ready = false
+		checks["s3_service"] = map[string]interface{}{
+			"status": "error",
+			"error":  "S3 upload service is not initialized",
+		}
 	}
 
 	health["checks"] = checks
+	if !ready {
+		health["status"] = "unavailable"
+		h.SendJSON(w, http.StatusServiceUnavailable, APIResponse{Success: false, Data: health, Error: &APIError{
+			Code:    "NOT_READY",
+			Message: "One or more dependencies are unavailable",
+		}})
+		return
+	}
 	h.SendSuccess(w, health)
 }
 

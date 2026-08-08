@@ -18,6 +18,7 @@ import (
 	"s3-upload-tool/internal/repository"
 	"s3-upload-tool/internal/service"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -64,21 +65,26 @@ func NewContainer() (*Container, error) {
 		}
 	}
 
-	// * Cấu hình HTTP client cho high concurrency
+	// HTTP client for AWS SDK: no client-level Timeout (multipart uploads can exceed 60s).
+	// Per-call context timeouts (UPLOAD_TIMEOUT_SECONDS) bound individual operations.
 	httpClient := &http.Client{
-		Timeout: 60 * time.Second,
 		Transport: &http.Transport{
-			MaxIdleConns:        500,
-			MaxIdleConnsPerHost: 100,
-			IdleConnTimeout:     90 * time.Second,
-			DisableKeepAlives:   false,
-			DisableCompression:  false,
+			MaxIdleConns:          500,
+			MaxIdleConnsPerHost:   100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 60 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			DisableKeepAlives:     false,
+			DisableCompression:    false,
 		},
 	}
 
 	// ! Timeout 30s để tránh hang khi khởi tạo AWS
 	initCtx, initCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer initCancel()
+
+	warnPlaceholderAWSCredentials()
 
 	// * AWS credentials được load theo thứ tự:
 	// 1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
@@ -93,8 +99,18 @@ func NewContainer() (*Container, error) {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
+	if resolved := resolveBucketRegion(initCtx, awsCfg, cfg.AWS.BucketName, cfg.AWS.Endpoint); resolved != "" && resolved != cfg.AWS.Region {
+		log.Printf("[Container] S3 bucket region is %s (configured AWS_REGION=%s) — using bucket region", resolved, cfg.AWS.Region)
+		cfg.AWS.Region = resolved
+		awsCfg.Region = resolved
+	}
+
 	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		o.UsePathStyle = false
+		o.UsePathStyle = cfg.AWS.ForcePathStyle
+		if cfg.AWS.Endpoint != "" {
+			o.BaseEndpoint = aws.String(cfg.AWS.Endpoint)
+			o.UsePathStyle = true
+		}
 	})
 
 	// * Multipart lên S3: part 8MB, concurrency 4 — tối ưu cho file ~20MB+
@@ -150,6 +166,8 @@ func NewContainer() (*Container, error) {
 		cfg.AWS.UseACL,
 		cfg.AWS.UsePresignedURL,
 		cfg.AWS.PresignedURLExpiry,
+		cfg.AWS.Endpoint,
+		cfg.AWS.ForcePathStyle || cfg.AWS.Endpoint != "",
 	)
 	if err != nil {
 		return nil, err
@@ -166,6 +184,8 @@ func NewContainer() (*Container, error) {
 		cfg.AWS.UseACL,
 		cfg.AWS.UsePresignedURL,
 		cfg.AWS.PresignedURLExpiry,
+		cfg.AWS.Endpoint,
+		cfg.AWS.ForcePathStyle || cfg.AWS.Endpoint != "",
 	)
 
 	apiHandler := handlers.NewAPIHandler(
@@ -356,6 +376,40 @@ func secureFileServer(dir http.Dir) http.Handler {
 		}
 		fs.ServeHTTP(w, r)
 	})
+}
+
+func warnPlaceholderAWSCredentials() {
+	key := strings.ToLower(strings.TrimSpace(os.Getenv("AWS_ACCESS_KEY_ID")))
+	secret := strings.ToLower(strings.TrimSpace(os.Getenv("AWS_SECRET_ACCESS_KEY")))
+	if key == "" || secret == "" {
+		return
+	}
+	if strings.Contains(key, "your_access") || strings.Contains(secret, "your_secret") ||
+		key == "changeme" || secret == "changeme" {
+		log.Println("[Container] WARNING: placeholder AWS credentials detected in .env — S3 uploads will fail until real keys are set")
+	}
+}
+
+// resolveBucketRegion asks S3 for the bucket location (via us-east-1) when no custom endpoint is set.
+func resolveBucketRegion(ctx context.Context, awsCfg aws.Config, bucket, endpoint string) string {
+	if bucket == "" || endpoint != "" {
+		return ""
+	}
+	locator := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		o.Region = "us-east-1"
+	})
+	out, err := locator.GetBucketLocation(ctx, &s3.GetBucketLocationInput{
+		Bucket: aws.String(bucket),
+	})
+	if err != nil {
+		log.Printf("[Container] Could not resolve bucket region for %s: %v", bucket, err)
+		return ""
+	}
+	region := string(out.LocationConstraint)
+	if region == "" {
+		return "us-east-1"
+	}
+	return region
 }
 
 const apiInfoJSON = `{"service":"s3-upload-api","version":"1.0","endpoints":["/api/v1/upload","/api/v1/upload/init","/api/v1/upload/chunk","/api/v1/upload/complete","/api/v1/upload/abort","/api/v1/upload-transaction","/api/v1/health","/api/v1/metrics","/api/v1/wp-upload"]}`

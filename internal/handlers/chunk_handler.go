@@ -210,9 +210,10 @@ func (h *APIHandler) handleChunkError(w http.ResponseWriter, err error) {
 		h.SendError(w, http.StatusTooManyRequests, "TOO_MANY_SESSIONS", "Too many concurrent uploads. Try again shortly.")
 		return
 	}
-	if errors.Is(err, service.ErrUploadToS3) {
+	if errors.Is(err, service.ErrUploadToS3) || strings.Contains(strings.ToLower(err.Error()), "s3") {
 		log.Printf("[API] Chunk S3 error: %v", err)
-		h.SendError(w, http.StatusInternalServerError, "UPLOAD_FAILED", "Unable to upload file. Please try again later.")
+		status, code, message := mapS3UploadError(err)
+		h.SendError(w, status, code, message)
 		return
 	}
 

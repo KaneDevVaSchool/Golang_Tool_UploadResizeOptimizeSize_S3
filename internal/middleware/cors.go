@@ -63,18 +63,23 @@ func (c *CORS) handlePreflight(w http.ResponseWriter, r *http.Request, origin st
 }
 
 func (c *CORS) setCORSHeaders(w http.ResponseWriter, origin string) {
-	if c.isOriginAllowed(origin) {
-		if origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-		} else if len(c.allowedOrigins) == 1 && c.allowedOrigins[0] == "*" {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-		}
-
-		w.Header().Set("Access-Control-Allow-Methods", strings.Join(c.allowedMethods, ", "))
-		w.Header().Set("Access-Control-Allow-Headers", strings.Join(c.allowedHeaders, ", "))
-		w.Header().Set("Access-Control-Max-Age", fmt.Sprintf("%d", c.maxAge))
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
+	if !c.isOriginAllowed(origin) {
+		return
 	}
+
+	allowAll := len(c.allowedOrigins) == 1 && c.allowedOrigins[0] == "*"
+	if allowAll {
+		// Browsers forbid Access-Control-Allow-Credentials with "*".
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+	} else if origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Add("Vary", "Origin")
+	}
+
+	w.Header().Set("Access-Control-Allow-Methods", strings.Join(c.allowedMethods, ", "))
+	w.Header().Set("Access-Control-Allow-Headers", strings.Join(c.allowedHeaders, ", "))
+	w.Header().Set("Access-Control-Max-Age", fmt.Sprintf("%d", c.maxAge))
 }
 
 func (c *CORS) isOriginAllowed(origin string) bool {

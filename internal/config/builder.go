@@ -47,6 +47,10 @@ func (b *ConfigBuilder) WithServer(port string, readTimeout, writeTimeout, idleT
 }
 
 func (b *ConfigBuilder) WithAWS(region, bucketName string, useACL bool, usePresignedURL bool, presignedURLExpiry int) *ConfigBuilder {
+	return b.WithAWSFull(region, bucketName, "", false, useACL, usePresignedURL, presignedURLExpiry)
+}
+
+func (b *ConfigBuilder) WithAWSFull(region, bucketName, endpoint string, forcePathStyle, useACL, usePresignedURL bool, presignedURLExpiry int) *ConfigBuilder {
 	if region == "" {
 		region = "us-east-1"
 	}
@@ -57,6 +61,8 @@ func (b *ConfigBuilder) WithAWS(region, bucketName string, useACL bool, usePresi
 		// Credentials removed - AWS SDK uses credential chain
 		Region:             region,
 		BucketName:         bucketName,
+		Endpoint:           endpoint,
+		ForcePathStyle:     forcePathStyle,
 		UseACL:             useACL,
 		UsePresignedURL:    usePresignedURL,
 		PresignedURLExpiry: presignedURLExpiry,
@@ -235,6 +241,9 @@ func (b *ConfigBuilder) Build() (*Config, error) {
 	if b.config.AWS.BucketName == "" {
 		return nil, ErrMissingBucketName
 	}
+	if b.config.API.RequireAPIKey && strings.TrimSpace(b.config.API.APIKey) == "" {
+		return nil, fmt.Errorf("API_KEY is required when API_REQUIRE_KEY=true")
+	}
 	return b.config, nil
 }
 
@@ -333,7 +342,7 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 	readTimeout := time.Duration(parseInt(getEnv("SERVER_READ_TIMEOUT_SECONDS", "180"), 180)) * time.Second
 	writeTimeout := time.Duration(parseInt(getEnv("SERVER_WRITE_TIMEOUT_SECONDS", "180"), 180)) * time.Second
 	idleTimeout := time.Duration(parseInt(getEnv("SERVER_IDLE_TIMEOUT_SECONDS", "120"), 120)) * time.Second
-	shutdownTimeout := time.Duration(parseInt(getEnv("SERVER_SHUTDOWN_TIMEOUT_SECONDS", "5"), 5)) * time.Second
+	shutdownTimeout := time.Duration(parseInt(getEnv("SERVER_SHUTDOWN_TIMEOUT_SECONDS", "30"), 30)) * time.Second
 
 	// Upload timeout (S3 put / multipart)
 	uploadTimeout := time.Duration(parseInt(getEnv("UPLOAD_TIMEOUT_SECONDS", "300"), 300)) * time.Second
@@ -350,6 +359,7 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 	acquireTimeout := time.Duration(parseInt(getEnv("CONCURRENCY_ACQUIRE_TIMEOUT_SECONDS", "30"), 30)) * time.Second
 
 	// API configuration
+	appEnv := strings.ToLower(strings.TrimSpace(getEnv("APP_ENV", "development")))
 	apiEnabled := getEnv("API_ENABLED", "true") == "true"
 	apiKey := getEnv("API_KEY", "")
 	requireAPIKey := getEnv("API_REQUIRE_KEY", "false") == "true"
@@ -359,6 +369,18 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 		corsOrigins = strings.Split(corsOriginsStr, ",")
 		for i := range corsOrigins {
 			corsOrigins[i] = strings.TrimSpace(corsOrigins[i])
+		}
+	}
+
+	if appEnv == "production" {
+		if !requireAPIKey || strings.TrimSpace(apiKey) == "" {
+			return nil, fmt.Errorf("production requires API_REQUIRE_KEY=true and a non-empty API_KEY")
+		}
+		if len(corsOrigins) == 0 || (len(corsOrigins) == 1 && corsOrigins[0] == "*") {
+			return nil, fmt.Errorf("production requires an explicit CORS_ORIGINS allowlist (not *)")
+		}
+		if getEnv("CSRF_SECURE_COOKIE", "") == "" {
+			csrfSecureCookie = true
 		}
 	}
 
@@ -423,11 +445,16 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 	dbMaxIdle := parseInt(getEnv("DATABASE_MAX_IDLE", "5"), 5)
 	dbMaxLifetime := parseInt(getEnv("DATABASE_MAX_LIFETIME", "300"), 300)
 
+	forcePathStyle := getEnv("S3_FORCE_PATH_STYLE", "false") == "true"
+	s3Endpoint := getEnv("S3_ENDPOINT", "")
+
 	return NewConfigBuilder().
 		WithServer(getEnv("PORT", "8080"), readTimeout, writeTimeout, idleTimeout, shutdownTimeout).
-		WithAWS(
+		WithAWSFull(
 			getEnv("AWS_REGION", "us-east-1"),
 			getEnv("S3_BUCKET_NAME", ""),
+			s3Endpoint,
+			forcePathStyle,
 			useACL,
 			usePresignedURL,
 			presignedURLExpiry,

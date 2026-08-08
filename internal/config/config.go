@@ -46,6 +46,8 @@ type AWSConfig struct {
 	// AWS SDK will use credential chain: environment variables, IAM roles, credentials file, EC2 metadata
 	Region             string
 	BucketName         string
+	Endpoint           string // optional custom endpoint (MinIO / LocalStack)
+	ForcePathStyle     bool
 	UseACL             bool
 	UsePresignedURL    bool
 	PresignedURLExpiry int // minutes

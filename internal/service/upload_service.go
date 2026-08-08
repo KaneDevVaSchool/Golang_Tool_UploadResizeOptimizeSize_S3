@@ -26,6 +26,8 @@ type uploadService struct {
 	db                 *database.DB
 	bucketName         string
 	region             string
+	endpoint           string
+	forcePathStyle     bool
 	uploadDir          string
 	maxSize            int64
 	uploadTimeout      time.Duration
@@ -34,13 +36,15 @@ type uploadService struct {
 	presignedURLExpiry int
 }
 
-func NewUploadService(s3Repo repository.S3Repository, uploadRepo repository.UploadRepository, db *database.DB, bucketName, region, uploadDir string, maxSize int64, uploadTimeout time.Duration, useACL bool, usePresignedURL bool, presignedURLExpiry int) UploadService {
+func NewUploadService(s3Repo repository.S3Repository, uploadRepo repository.UploadRepository, db *database.DB, bucketName, region, uploadDir string, maxSize int64, uploadTimeout time.Duration, useACL bool, usePresignedURL bool, presignedURLExpiry int, endpoint string, forcePathStyle bool) UploadService {
 	return &uploadService{
 		s3Repo:             s3Repo,
 		uploadRepo:         uploadRepo,
 		db:                 db,
 		bucketName:         bucketName,
 		region:             region,
+		endpoint:           endpoint,
+		forcePathStyle:     forcePathStyle,
 		uploadDir:          uploadDir,
 		maxSize:            maxSize,
 		uploadTimeout:      uploadTimeout,
@@ -48,6 +52,10 @@ func NewUploadService(s3Repo repository.S3Repository, uploadRepo repository.Uplo
 		usePresignedURL:    usePresignedURL,
 		presignedURLExpiry: presignedURLExpiry,
 	}
+}
+
+func (s *uploadService) objectURL(key string) string {
+	return utils.BuildS3ObjectURL(s.bucketName, s.region, key, s.endpoint, s.forcePathStyle)
 }
 
 func (s *uploadService) UploadImage(ctx context.Context, filename string, file io.Reader, fileSize int64, maxSize int64) (*models.UploadResponse, error) {
@@ -195,7 +203,7 @@ func (s *uploadService) UploadImage(ctx context.Context, filename string, file i
 		url = presignedURL
 		log.Printf("[UploadService] Upload thành công! Pre-signed URL: %s", url)
 	} else {
-		url = fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.bucketName, s.region, key)
+		url = s.objectURL(key)
 		log.Printf("[UploadService] Upload thành công! URL: %s", url)
 	}
 
@@ -207,6 +215,9 @@ func (s *uploadService) UploadImage(ctx context.Context, filename string, file i
 
 // UploadImageWithTransaction upload image với database transaction support
 func (s *uploadService) UploadImageWithTransaction(ctx context.Context, filename string, file io.Reader, fileSize int64, maxSize int64) (resp *models.UploadResponse, record *models.UploadRecord, err error) {
+	if s.db == nil || s.uploadRepo == nil {
+		return nil, nil, fmt.Errorf("database is not enabled")
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -313,7 +324,7 @@ func (s *uploadService) UploadImageWithTransaction(ctx context.Context, filename
 		}
 		url = presignedURL
 	} else {
-		url = fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.bucketName, s.region, key)
+		url = s.objectURL(key)
 	}
 
 	if err = s.uploadRepo.UpdateUploadStatus(ctx, tx, record.ID, models.UploadStatusCompleted, key, url, nil); err != nil {

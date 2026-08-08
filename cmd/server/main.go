@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"s3-upload-tool/internal/container"
 )
@@ -18,11 +19,13 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:         ":" + ctn.Config.Server.Port,
-		Handler:      ctn.GetServerHandler(),
-		ReadTimeout:  ctn.Config.Server.ReadTimeout,
-		WriteTimeout: ctn.Config.Server.WriteTimeout,
-		IdleTimeout:  ctn.Config.Server.IdleTimeout,
+		Addr:              ":" + ctn.Config.Server.Port,
+		Handler:           ctn.GetServerHandler(),
+		ReadTimeout:       ctn.Config.Server.ReadTimeout,
+		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      ctn.Config.Server.WriteTimeout,
+		IdleTimeout:       ctn.Config.Server.IdleTimeout,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	serverCtx, serverCancel := context.WithCancel(context.Background())
@@ -42,14 +45,15 @@ func main() {
 
 	log.Println("Shutting down server...")
 
-	ctn.Shutdown()
-
+	// Drain in-flight HTTP requests before tearing down S3 sessions / DB.
 	ctx, cancel := context.WithTimeout(context.Background(), ctn.Config.Server.ShutdownTimeout)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		log.Printf("Server forced to shutdown: %v", err)
 	}
+
+	ctn.Shutdown()
 
 	<-serverCtx.Done()
 	log.Println("Server exited")

@@ -1,121 +1,167 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useState } from "react";
 import {
   formatBytes,
-  type S3UploadData,
+  isWPResult,
+  resultName,
+  resultSize,
+  resultUrl,
   type UploadMode,
-  type WPUploadData,
+  type UploadResult,
 } from "../lib/api";
+
+export type ResultItem = {
+  id: string;
+  fileName: string;
+  previewUrl: string | null;
+  result: UploadResult | null;
+  error?: string;
+};
 
 type ResultPanelProps = {
   mode: UploadMode;
-  previewUrl: string | null;
-  file: File | null;
-  result: S3UploadData | WPUploadData | null;
+  items: ResultItem[];
   onReset: () => void;
+  onRetryFailed?: () => void;
 };
 
-function isWP(data: S3UploadData | WPUploadData): data is WPUploadData {
-  return "file" in data && "sizes" in data;
-}
+export function ResultPanel({ mode, items, onReset, onRetryFailed }: ResultPanelProps) {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
+  const okCount = items.filter((i) => i.result).length;
+  const failCount = items.length - okCount;
+  const urls = items.filter((i) => i.result).map((i) => resultUrl(i.result!));
 
-export function ResultPanel({ mode, previewUrl, file, result, onReset }: ResultPanelProps) {
-  const [copied, setCopied] = useState(false);
-
-  if (!result || !file) return null;
-
-  const url = isWP(result) ? result.file.url : result.url;
-  const name = isWP(result) ? result.file.name : result.name;
-  const size = isWP(result) ? result.file.size : result.size;
-
-  async function copyUrl() {
+  async function copyUrl(id: string, url: string) {
     try {
       await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId(null), 1600);
     } catch {
-      setCopied(false);
+      setCopiedId(null);
+    }
+  }
+
+  async function copyAll() {
+    if (!urls.length) return;
+    try {
+      await navigator.clipboard.writeText(urls.join("\n"));
+      setCopiedAll(true);
+      window.setTimeout(() => setCopiedAll(false), 1600);
+    } catch {
+      setCopiedAll(false);
     }
   }
 
   return (
-    <AnimatePresence>
-      <motion.section
-        className="result"
-        initial={{ opacity: 0, y: 28 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 12 }}
-        transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <div className="result-panel">
-          <motion.div
-            className="preview"
-            initial={{ opacity: 0, scale: 0.97 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.1, duration: 0.5 }}
-          >
-            {previewUrl ? (
-              <img src={previewUrl} alt={name} />
-            ) : (
-              <p>Upload complete — preview unavailable for this type.</p>
-            )}
-          </motion.div>
-
-          <div className="meta">
-            <h3>{mode === "wp" ? "Resized & ready" : "Landed on S3"}</h3>
-            <div className="meta-row">
-              <label>File</label>
-              <code>{name}</code>
-            </div>
-            <div className="meta-row">
-              <label>Size</label>
-              <code>{formatBytes(size)}</code>
-            </div>
-            {!isWP(result) && (
-              <div className="meta-row">
-                <label>Key</label>
-                <code>{result.key}</code>
-              </div>
-            )}
-            <div className="meta-row">
-              <label>URL</label>
-              <a href={url} target="_blank" rel="noreferrer">
-                {url}
-              </a>
-            </div>
-            <div className="meta-actions">
-              <button type="button" className="btn btn-primary" onClick={copyUrl}>
-                {copied ? "Copied" : "Copy URL"}
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={onReset}>
-                Upload another
-              </button>
-            </div>
-
-            {isWP(result) && result.sizes?.length > 0 && (
-              <div className="sizes">
-                {result.sizes.map((s, i) => (
-                  <motion.a
-                    key={`${s.name}-${s.url}`}
-                    className="size-item"
-                    href={s.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 + i * 0.05 }}
-                  >
-                    <strong>{s.name}</strong>
-                    <span>
-                      {s.width}×{s.height || "auto"}
-                    </span>
-                  </motion.a>
-                ))}
-              </div>
-            )}
+    <motion.section
+      className="result-inline"
+      initial={{ opacity: 0, y: 16, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -12 }}
+      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="result-header">
+        <div className="meta-head">
+          <motion.img
+            className="mascot-mini"
+            src="/images/vas-mascot-wave.png"
+            alt=""
+            aria-hidden
+            animate={{ y: [0, -6, 0], rotate: [-3, 3, -3] }}
+            transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <div>
+            <h3>
+              {failCount === 0
+                ? mode === "wp"
+                  ? `Đã thu nhỏ ${okCount} ảnh!`
+                  : `Đã lưu ${okCount} ảnh!`
+                : `Xong ${okCount}/${items.length} ảnh`}
+            </h3>
+            <p className="result-sub">
+              {failCount > 0 ? `${failCount} ảnh lỗi — thử gửi lại bên dưới.` : "Chép đường dẫn khi cần dùng."}
+            </p>
           </div>
         </div>
-      </motion.section>
-    </AnimatePresence>
+        <div className="result-header-actions">
+          {urls.length > 1 && (
+            <button type="button" className="btn btn-primary" onClick={copyAll}>
+              {copiedAll ? "Đã chép hết" : "Chép tất cả"}
+            </button>
+          )}
+          {failCount > 0 && onRetryFailed && (
+            <button type="button" className="btn btn-primary" onClick={onRetryFailed}>
+              Gửi lại ảnh lỗi
+            </button>
+          )}
+          <button type="button" className="btn btn-ghost" onClick={onReset}>
+            Gửi ảnh khác
+          </button>
+        </div>
+      </div>
+
+      <div className="result-list">
+        {items.map((item, i) => {
+          const url = item.result ? resultUrl(item.result) : null;
+          return (
+            <motion.article
+              key={item.id}
+              className="result-card"
+              data-ok={item.result ? "true" : "false"}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.06 + i * 0.05, duration: 0.35 }}
+            >
+              <div className="result-card-media">
+                {item.previewUrl ? (
+                  <img src={item.previewUrl} alt={item.fileName} />
+                ) : (
+                  <span>{item.fileName.slice(0, 1)}</span>
+                )}
+              </div>
+              <div className="result-card-body">
+                <strong title={item.result ? resultName(item.result) : item.fileName}>
+                  {item.result ? resultName(item.result) : item.fileName}
+                </strong>
+                {item.result ? (
+                  <>
+                    <span>{formatBytes(resultSize(item.result))}</span>
+                    <a href={url!} target="_blank" rel="noreferrer">
+                      {url}
+                    </a>
+                    {isWPResult(item.result) && item.result.sizes?.length > 0 && (
+                      <div className="sizes">
+                        {item.result.sizes.map((s) => (
+                          <a
+                            key={`${s.name}-${s.url}`}
+                            className="size-item"
+                            href={s.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <strong>{s.name}</strong>
+                            <span>
+                              {s.width}×{s.height || "tự động"}
+                            </span>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    <div className="meta-actions">
+                      <button type="button" className="btn btn-primary" onClick={() => copyUrl(item.id, url!)}>
+                        {copiedId === item.id ? "Đã chép" : "Chép đường dẫn"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <span className="result-error">{item.error || "Gửi không thành công"}</span>
+                )}
+              </div>
+            </motion.article>
+          );
+        })}
+      </div>
+    </motion.section>
   );
 }
