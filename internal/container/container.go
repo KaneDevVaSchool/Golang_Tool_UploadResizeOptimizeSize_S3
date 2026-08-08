@@ -153,6 +153,10 @@ func NewContainer() (*Container, error) {
 		return nil, err
 	}
 
+	if cfg.AWS.BasePath != "" {
+		log.Printf("[Container] S3 base path: %s/", cfg.AWS.BasePath)
+	}
+
 	serviceFactory := service.NewServiceFactory(repoFactory, db)
 	uploadService, err := serviceFactory.CreateService(
 		service.ServiceTypeUpload,
@@ -168,6 +172,7 @@ func NewContainer() (*Container, error) {
 		cfg.AWS.PresignedURLExpiry,
 		cfg.AWS.Endpoint,
 		cfg.AWS.ForcePathStyle || cfg.AWS.Endpoint != "",
+		cfg.AWS.BasePath,
 	)
 	if err != nil {
 		return nil, err
@@ -186,6 +191,7 @@ func NewContainer() (*Container, error) {
 		cfg.AWS.PresignedURLExpiry,
 		cfg.AWS.Endpoint,
 		cfg.AWS.ForcePathStyle || cfg.AWS.Endpoint != "",
+		cfg.AWS.BasePath,
 	)
 
 	apiHandler := handlers.NewAPIHandler(

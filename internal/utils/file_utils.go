@@ -202,9 +202,10 @@ func GetContentType(filename string) string {
 	return "application/octet-stream"
 }
 
-// GenerateS3Key tạo S3 key duy nhất với timestamp và random component
-// * Files được tổ chức theo category: images/, documents/, videos/, audio/, archives/, files/
-func GenerateS3Key(filename string) string {
+// GenerateS3Key tạo S3 key duy nhất với timestamp và random component.
+// basePath (nếu có) được gắn phía trước, ví dụ: vaschools-uploads/images/...
+// Files được tổ chức theo category: images/, documents/, videos/, audio/, archives/, files/
+func GenerateS3Key(filename string, basePath string) string {
 	timestamp := time.Now().Format("20060102-150405")
 	ext := filepath.Ext(filename)
 	name := strings.TrimSuffix(filename, ext)
@@ -212,13 +213,20 @@ func GenerateS3Key(filename string) string {
 
 	category := GetFileCategory(filename)
 
+	var key string
 	// * Random component để tránh collision trong concurrent scenarios
 	randomBytes := make([]byte, 8)
 	if _, err := rand.Read(randomBytes); err == nil {
 		randomStr := base64.URLEncoding.EncodeToString(randomBytes)[:12]
-		return fmt.Sprintf("%s/%s-%s-%s%s", category, name, timestamp, randomStr, ext)
+		key = fmt.Sprintf("%s/%s-%s-%s%s", category, name, timestamp, randomStr, ext)
+	} else {
+		// ! Fallback nếu random generation fail
+		key = fmt.Sprintf("%s/%s-%s-%d%s", category, name, timestamp, time.Now().UnixNano(), ext)
 	}
 
-	// ! Fallback nếu random generation fail
-	return fmt.Sprintf("%s/%s-%s-%d%s", category, name, timestamp, time.Now().UnixNano(), ext)
+	basePath = strings.Trim(strings.TrimSpace(basePath), "/")
+	if basePath == "" {
+		return key
+	}
+	return basePath + "/" + key
 }

@@ -64,12 +64,18 @@ func (b *ConfigBuilder) WithAWSFull(region, bucketName, endpoint string, forcePa
 		// Credentials removed - AWS SDK uses credential chain
 		Region:             region,
 		BucketName:         bucketName,
+		BasePath:           b.config.AWS.BasePath,
 		Endpoint:           endpoint,
 		ForcePathStyle:     forcePathStyle,
 		UseACL:             useACL,
 		UsePresignedURL:    usePresignedURL,
 		PresignedURLExpiry: presignedURLExpiry,
 	}
+	return b
+}
+
+func (b *ConfigBuilder) WithS3BasePath(basePath string) *ConfigBuilder {
+	b.config.AWS.BasePath = strings.Trim(strings.TrimSpace(basePath), "/")
 	return b
 }
 
@@ -467,6 +473,7 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 			usePresignedURL,
 			presignedURLExpiry,
 		).
+		WithS3BasePath(getEnv("S3_BASE_PATH", "")).
 		WithUpload(
 			int64(parseInt(getEnv("UPLOAD_MAX_SIZE_MB", "20"), 20))<<20,
 			int64(parseInt(getEnv("UPLOAD_ABSOLUTE_MAX_MB", "200"), 200))<<20,

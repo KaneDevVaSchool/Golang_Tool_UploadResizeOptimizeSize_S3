@@ -46,6 +46,7 @@ type AWSConfig struct {
 	// AWS SDK will use credential chain: environment variables, IAM roles, credentials file, EC2 metadata
 	Region             string
 	BucketName         string
+	BasePath           string // optional key prefix, e.g. vaschools-uploads
 	Endpoint           string // optional custom endpoint (MinIO / LocalStack)
 	ForcePathStyle     bool
 	UseACL             bool

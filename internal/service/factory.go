@@ -35,6 +35,7 @@ func (f *ServiceFactory) CreateUploadService(
 	presignedURLExpiry int,
 	endpoint string,
 	forcePathStyle bool,
+	basePath string,
 ) UploadService {
 	return NewUploadService(
 		s3Repo, uploadRepo, f.db,
@@ -42,6 +43,7 @@ func (f *ServiceFactory) CreateUploadService(
 		maxSize, uploadTimeout,
 		useACL, usePresignedURL, presignedURLExpiry,
 		endpoint, forcePathStyle,
+		basePath,
 	)
 }
 
@@ -56,6 +58,7 @@ func (f *ServiceFactory) CreateService(
 	presignedURLExpiry int,
 	endpoint string,
 	forcePathStyle bool,
+	basePath string,
 ) (UploadService, error) {
 	switch serviceType {
 	case ServiceTypeUpload:
@@ -65,6 +68,7 @@ func (f *ServiceFactory) CreateService(
 			maxSize, uploadTimeout,
 			useACL, usePresignedURL, presignedURLExpiry,
 			endpoint, forcePathStyle,
+			basePath,
 		), nil
 	default:
 		return nil, ErrUnsupportedServiceType

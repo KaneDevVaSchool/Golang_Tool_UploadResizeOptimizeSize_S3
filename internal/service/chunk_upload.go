@@ -55,6 +55,7 @@ type ChunkUploadService interface {
 type chunkUploadService struct {
 	s3Repo             repository.S3Repository
 	bucketName         string
+	basePath           string
 	region             string
 	uploadDir          string
 	chunkSize          int64
@@ -80,6 +81,7 @@ func NewChunkUploadService(
 	presignedURLExpiry int,
 	endpoint string,
 	forcePathStyle bool,
+	basePath string,
 ) ChunkUploadService {
 	if chunkSize <= 0 {
 		chunkSize = 20 << 20
@@ -90,6 +92,7 @@ func NewChunkUploadService(
 	s := &chunkUploadService{
 		s3Repo:             s3Repo,
 		bucketName:         bucketName,
+		basePath:           basePath,
 		region:             region,
 		uploadDir:          uploadDir,
 		chunkSize:          chunkSize,
@@ -337,7 +340,7 @@ func (s *chunkUploadService) Complete(ctx context.Context, uploadID string) (*mo
 		defer cancel()
 	}
 
-	key := utils.GenerateS3Key(filename)
+	key := utils.GenerateS3Key(filename, s.basePath)
 	contentType := utils.GetContentType(filename)
 	if _, err := s.s3Repo.Upload(uploadCtx, s.bucketName, key, assembled, contentType, s.useACL); err != nil {
 		return nil, 0, "", fmt.Errorf("%w: %v", ErrUploadToS3, err)

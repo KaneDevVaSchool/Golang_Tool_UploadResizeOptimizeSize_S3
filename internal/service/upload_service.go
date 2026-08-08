@@ -25,6 +25,7 @@ type uploadService struct {
 	uploadRepo         repository.UploadRepository
 	db                 *database.DB
 	bucketName         string
+	basePath           string
 	region             string
 	endpoint           string
 	forcePathStyle     bool
@@ -36,12 +37,13 @@ type uploadService struct {
 	presignedURLExpiry int
 }
 
-func NewUploadService(s3Repo repository.S3Repository, uploadRepo repository.UploadRepository, db *database.DB, bucketName, region, uploadDir string, maxSize int64, uploadTimeout time.Duration, useACL bool, usePresignedURL bool, presignedURLExpiry int, endpoint string, forcePathStyle bool) UploadService {
+func NewUploadService(s3Repo repository.S3Repository, uploadRepo repository.UploadRepository, db *database.DB, bucketName, region, uploadDir string, maxSize int64, uploadTimeout time.Duration, useACL bool, usePresignedURL bool, presignedURLExpiry int, endpoint string, forcePathStyle bool, basePath string) UploadService {
 	return &uploadService{
 		s3Repo:             s3Repo,
 		uploadRepo:         uploadRepo,
 		db:                 db,
 		bucketName:         bucketName,
+		basePath:           basePath,
 		region:             region,
 		endpoint:           endpoint,
 		forcePathStyle:     forcePathStyle,
@@ -177,7 +179,7 @@ func (s *uploadService) UploadImage(ctx context.Context, filename string, file i
 		return nil, fmt.Errorf("failed to seek temp file: %w", ErrSaveFile)
 	}
 
-	key := utils.GenerateS3Key(filename)
+	key := utils.GenerateS3Key(filename, s.basePath)
 	contentType := utils.GetContentType(filename)
 	log.Printf("[UploadService] S3 Key: %s, Content-Type: %s", key, contentType)
 
@@ -265,7 +267,7 @@ func (s *uploadService) UploadImageWithTransaction(ctx context.Context, filename
 
 	log.Printf("[UploadService] Starting upload with transaction: record_id=%d, filename=%s", record.ID, filename)
 
-	key := utils.GenerateS3Key(filename)
+	key := utils.GenerateS3Key(filename, s.basePath)
 	contentType := utils.GetContentType(filename)
 
 	tempFile, err := os.CreateTemp(s.uploadDir, "upload-*"+filepath.Ext(filename))
