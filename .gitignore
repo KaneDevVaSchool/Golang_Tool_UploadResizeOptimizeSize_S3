@@ -35,6 +35,9 @@ storage/logs/*.log
 # Web UI
 web/node_modules/
 web/dist/
+web/shot*.cjs
+web/tmp-verify*/
+web/tmp-verify*.cjs
 
 # IDE
 .vscode/

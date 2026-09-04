@@ -1,7 +1,218 @@
 /* Styles cho khu vực public (/trien-lam) - hero, cổng chọn khối, gallery,
    phòng triển lãm, billboard, và các component tương tác ẩn danh
    (ReactionPicker, CommentBox) dùng lại được ở cả lightbox lẫn card. Dùng
-   token --vas-* từ tokens.css. */
+   token --vas-* từ tokens.css.
+
+   Theme "khu vườn nghệ thuật": toàn khu vực /trien-lam được nâng cấp với
+   không khí rừng cây - hoa lá sinh động - gradient chuyển màu mềm mại, lá
+   hoa bay lượn nền (thuần CSS, emoji + keyframes, không ảnh/JS), glow động,
+   hover/transition phong phú hơn ở mọi thẻ tương tác. Toàn bộ hiệu ứng tôn
+   trọng prefers-reduced-motion. */
+
+/* ---------------------------------------------------------------------- */
+/* Keyframes dùng chung toàn khu vườn                                      */
+/* ---------------------------------------------------------------------- */
+@keyframes forest-drift {
+  0% {
+    transform: translate3d(0, -8vh, 0) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate3d(3vw, 48vh, 0) rotate(180deg);
+  }
+  92% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate3d(-2vw, 108vh, 0) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes forest-sway {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+
+@keyframes forest-pulse-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes forest-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes forest-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes forest-bounce-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Ken-burns chậm cho lớp sao xa - scale lớn hơn khung để mép không hở khi
+   pointer-parallax dịch ảnh. */
+@keyframes edu-stars-kenburns {
+  0%,
+  100% {
+    transform: scale(1.08) translate3d(0, 0, 0);
+  }
+  50% {
+    transform: scale(1.16) translate3d(-2.4%, 1.2%, 0);
+  }
+}
+@keyframes edu-stars-twinkle {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+/* Sóng xa / gần trôi ngang lệch pha để tạo cảm giác nước nhiều tầng. */
+@keyframes edu-wave-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-7%, 4%, 0);
+  }
+}
+@keyframes edu-wave-drift-near {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(6%, -3%, 0);
+  }
+}
+@keyframes edu-shooting-star {
+  0%,
+  14% {
+    opacity: 0;
+    transform: rotate(22deg) translate3d(0, 0, 0);
+  }
+  20% {
+    opacity: 0.95;
+  }
+  36% {
+    opacity: 0;
+    transform: rotate(22deg) translate3d(24rem, 9rem, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(22deg) translate3d(24rem, 9rem, 0);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Lớp trang trí nền: lá + hoa bay lượn, cố định toàn viewport             */
+/* ---------------------------------------------------------------------- */
+.forest-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.forest-leaf {
+  position: absolute;
+  top: -10%;
+  left: var(--x, 10%);
+  font-size: var(--size, 1.6rem);
+  filter: drop-shadow(0 4px 10px rgba(36, 20, 23, 0.12));
+  animation: forest-drift var(--dur, 22s) linear infinite;
+  animation-delay: var(--delay, 0s);
+  will-change: transform, opacity;
+}
+.forest-leaf--1 {
+  --x: 6%;
+  --size: 1.4rem;
+  --dur: 19s;
+  --delay: 0s;
+}
+.forest-leaf--2 {
+  --x: 18%;
+  --size: 1.1rem;
+  --dur: 26s;
+  --delay: 3s;
+}
+.forest-leaf--3 {
+  --x: 32%;
+  --size: 1.7rem;
+  --dur: 23s;
+  --delay: 7s;
+}
+.forest-leaf--4 {
+  --x: 48%;
+  --size: 1.3rem;
+  --dur: 20s;
+  --delay: 1.5s;
+}
+.forest-leaf--5 {
+  --x: 62%;
+  --size: 1.5rem;
+  --dur: 28s;
+  --delay: 9s;
+}
+.forest-leaf--6 {
+  --x: 76%;
+  --size: 1.2rem;
+  --dur: 21s;
+  --delay: 4.5s;
+}
+.forest-leaf--7 {
+  --x: 88%;
+  --size: 1.6rem;
+  --dur: 25s;
+  --delay: 12s;
+}
+.forest-leaf--8 {
+  --x: 96%;
+  --size: 1.35rem;
+  --dur: 30s;
+  --delay: 6s;
+}
 
 /* ---------------------------------------------------------------------- */
 /* Reaction picker                                                         */
@@ -23,10 +234,16 @@
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.2s ease;
 }
 .reaction-picker-trigger:hover {
-  border-color: var(--vas-tri-thuc);
+  border-color: var(--vas-nhan-ai);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: var(--vas-shadow-sm);
+}
+.reaction-picker-trigger:active {
+  transform: translateY(0) scale(0.97);
 }
 .reaction-picker-trigger--active {
   border-color: var(--vas-tri-thuc);
@@ -36,6 +253,11 @@
 .reaction-picker-emoji {
   font-size: 1.05rem;
   line-height: 1;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+.reaction-picker-trigger:hover .reaction-picker-emoji {
+  transform: scale(1.2) rotate(-8deg);
 }
 
 .reaction-picker-menu {
@@ -49,6 +271,8 @@
   border-radius: 999px;
   box-shadow: var(--vas-shadow-lg);
   z-index: 20;
+  animation: forest-pop-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: bottom left;
 }
 
 .reaction-picker-option {
@@ -61,9 +285,11 @@
   font-size: 1.4rem;
   cursor: pointer;
   border-radius: 50%;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease;
 }
 .reaction-picker-option:hover {
   background: var(--vas-surface-muted);
+  transform: scale(1.35) translateY(-3px);
 }
 
 .reaction-burst {
@@ -97,6 +323,13 @@
   font-size: 0.85rem;
   background: var(--vas-surface);
   color: var(--vas-text);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.comment-name-input:focus,
+.comment-content-input:focus {
+  outline: none;
+  border-color: var(--vas-nhan-ai);
+  box-shadow: 0 0 0 3px var(--vas-tri-thuc-100);
 }
 
 .comment-content-row {
@@ -116,6 +349,7 @@
   font-family: inherit;
   background: var(--vas-surface);
   color: var(--vas-text);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .comment-submit-btn {
   flex-shrink: 0;
@@ -125,9 +359,18 @@
   height: 2.6rem;
   border: none;
   border-radius: var(--vas-radius-sm);
-  background: var(--vas-tri-thuc);
+  background: linear-gradient(135deg, var(--vas-tri-thuc), var(--vas-tri-thuc-700));
   color: #fff;
   cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, filter 0.2s ease;
+}
+.comment-submit-btn:hover:not(:disabled) {
+  transform: scale(1.08) rotate(-4deg);
+  box-shadow: var(--vas-shadow-md);
+  filter: brightness(1.08);
+}
+.comment-submit-btn:active:not(:disabled) {
+  transform: scale(0.95);
 }
 .comment-submit-btn:disabled {
   opacity: 0.6;
@@ -152,18 +395,20 @@
 .comment-item {
   display: flex;
   gap: 0.6rem;
+  animation: forest-pop-in 0.3s ease both;
 }
 .comment-item-avatar {
   flex-shrink: 0;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
-  background: var(--vas-khai-phong);
+  background: linear-gradient(135deg, var(--vas-khai-phong), var(--vas-nhan-ai));
   color: #fff;
   display: grid;
   place-items: center;
   font-size: 0.85rem;
   font-weight: 700;
+  box-shadow: var(--vas-shadow-sm);
 }
 .comment-item-body {
   min-width: 0;
@@ -186,10 +431,393 @@
 /* Public page shell                                                       */
 /* ---------------------------------------------------------------------- */
 .public-gallery-page {
+  position: relative;
   font-family: var(--vas-font);
   color: var(--vas-text);
-  background: var(--vas-surface);
+  background: linear-gradient(160deg, #f3fbf6 0%, #fffdf7 35%, #fff6f8 70%, #f4faf8 100%);
+  background-size: 200% 200%;
+  animation: forest-shimmer 26s ease-in-out infinite;
   overflow-x: hidden;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.public-page-main {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Navbar                                                                  */
+/* ---------------------------------------------------------------------- */
+/* --vas-navbar-h: chiều cao thực của thanh navbar full-width (trạng thái
+   chưa cuộn), dùng để bù padding-top cho nội dung bên dưới vì navbar là
+   fixed, không chiếm chỗ trong dòng chảy layout. */
+:root {
+  --vas-navbar-h: 4.5rem;
+}
+
+/* Navbar dạng thanh full-width dính sát mép trên (sticky), nền kính mờ
+   trắng xuyên suốt để chữ luôn tối và đọc được trên mọi nền phía sau. */
+.public-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+}
+.public-navbar-inner {
+  position: relative;
+  width: 100%;
+  padding: 0.85rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  background: rgba(255, 255, 255, 0.86);
+  border-bottom: 1px solid rgba(23, 80, 181, 0.08);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  transition: background 0.3s ease, box-shadow 0.3s ease, padding 0.3s ease;
+}
+/* Viền gradient thương hiệu mảnh dưới đáy thanh - luôn hiện, làm điểm
+   nhấn màu cố định thay vì phụ thuộc trạng thái cuộn. */
+.public-navbar-inner::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--vas-nhan-ai), var(--vas-trach-nhiem), var(--vas-tri-thuc), var(--vas-khai-phong));
+  background-size: 300% 100%;
+  animation: forest-shimmer 6s linear infinite;
+}
+.public-navbar--scrolled .public-navbar-inner {
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(36, 20, 23, 0.1);
+}
+
+.public-navbar-brand {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.public-navbar-brand-mark {
+  height: 2.4rem;
+  width: auto;
+  object-fit: contain;
+  transition: height 0.3s ease, transform 0.3s ease;
+}
+.public-navbar--scrolled .public-navbar-brand-mark {
+  height: 2.1rem;
+}
+.public-navbar-brand:hover .public-navbar-brand-mark {
+  transform: scale(1.04);
+}
+
+.public-navbar-links {
+  display: none;
+  align-items: center;
+  gap: 0.2rem;
+}
+@media (min-width: 860px) {
+  .public-navbar-links {
+    display: flex;
+  }
+}
+
+.public-navbar-link {
+  position: relative;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--vas-text-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.public-navbar-link::after {
+  content: "";
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0.25rem;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--vas-tri-thuc), var(--vas-khai-phong));
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.25s ease;
+}
+.public-navbar-link:hover {
+  color: var(--vas-text);
+}
+.public-navbar-link:hover::after {
+  transform: scaleX(0.6);
+}
+.public-navbar-link--active {
+  color: var(--vas-tri-thuc);
+}
+.public-navbar-link--active::after {
+  transform: scaleX(1);
+}
+
+.public-navbar-toggle {
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--vas-border);
+  background: var(--vas-surface);
+  color: var(--vas-text);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease, background 0.2s ease,
+    color 0.3s ease;
+}
+.public-navbar-toggle:hover {
+  border-color: var(--vas-nhan-ai);
+  transform: rotate(90deg);
+}
+@media (min-width: 860px) {
+  .public-navbar-toggle {
+    display: none;
+  }
+}
+
+/* Dropdown mobile: thả ngay sát đáy thanh full-width, cùng ngôn ngữ kính
+   mờ, không bo góc trên để liền mạch với navbar phía trên nó. */
+.public-navbar-mobile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid rgba(23, 80, 181, 0.08);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 12px 32px rgba(36, 20, 23, 0.14);
+}
+@media (min-width: 860px) {
+  .public-navbar-mobile {
+    display: none;
+  }
+}
+
+.public-navbar-mobile-link {
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--vas-radius-sm);
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--vas-text-muted);
+  text-decoration: none;
+  transition: background 0.2s ease, color 0.2s ease, padding-left 0.2s ease;
+}
+.public-navbar-mobile-link:hover {
+  background: var(--vas-surface-muted);
+  padding-left: 1.15rem;
+}
+.public-navbar-mobile-link--active {
+  color: var(--vas-tri-thuc);
+  background: var(--vas-tri-thuc-100);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Footer                                                                  */
+/* ---------------------------------------------------------------------- */
+.public-footer {
+  position: relative;
+  z-index: 2;
+  padding: 2rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  text-align: center;
+  border-top: 1px solid var(--vas-border);
+  background: linear-gradient(180deg, transparent, rgba(0, 144, 130, 0.05));
+}
+.public-footer p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--vas-text-muted);
+}
+.public-footer-leaf {
+  display: inline-block;
+  font-size: 1.1rem;
+  animation: forest-sway 3s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+.public-footer-leaf--right {
+  animation-delay: 1.2s;
+  transform: scaleX(-1);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Page heading (trang con, thay cho section-heading khi có <h1>)          */
+/* ---------------------------------------------------------------------- */
+.public-page-section {
+  position: relative;
+  /* Padding trên chỉ để tách khỏi .page-hero phía trước - việc bù chỗ cho
+     navbar fixed giờ là trách nhiệm của .page-hero (đứng đầu mỗi trang
+     con), không còn của section nội dung nữa. */
+  padding-top: 3.5rem;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Page hero - header dùng chung cho mọi trang con (PageHero.tsx)          */
+/* ---------------------------------------------------------------------- */
+/* "Mini-hero" full-bleed đứng đầu mỗi trang con - tiếp nối trực tiếp
+   ngôn ngữ thị giác của Hero ở trang chủ (cùng nền pastel/gradient, cùng
+   layer lá trang trí) thay vì heading đứng trơn trên nền trắng. Padding
+   trên bù --vas-navbar-h vì navbar là fixed. */
+.page-hero {
+  position: relative;
+  overflow: hidden;
+  padding: calc(var(--vas-navbar-h) + 3rem) 1.5rem 3.5rem;
+  text-align: center;
+}
+.page-hero--light {
+  background: radial-gradient(ellipse 80% 70% at 50% 0%, #fdf3e2 0%, #f4fbf7 55%, #fff 100%);
+  background-size: 160% 160%;
+  animation: forest-shimmer 18s ease-in-out infinite;
+}
+.page-hero--dark {
+  background: linear-gradient(160deg, #1a0208 0%, #3a0016 55%, #1a0208 100%);
+  background-size: 180% 180%;
+  animation: forest-shimmer 20s ease-in-out infinite;
+}
+.page-hero--dark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 20% 20%, rgba(196, 156, 87, 0.14), transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(0, 144, 130, 0.12), transparent 40%);
+  pointer-events: none;
+}
+.page-hero-decor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.page-hero-leaf {
+  position: absolute;
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  opacity: 0.3;
+  filter: drop-shadow(0 8px 16px rgba(36, 20, 23, 0.1));
+  animation: forest-sway 5s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+.page-hero--dark .page-hero-leaf {
+  opacity: 0.16;
+}
+.page-hero-leaf--1 {
+  top: -0.5rem;
+  left: -0.5rem;
+  transform: scaleX(-1) rotate(-8deg);
+}
+.page-hero-leaf--2 {
+  bottom: -0.8rem;
+  right: -0.5rem;
+  animation-delay: 1.5s;
+  rotate: -8deg;
+}
+
+.page-heading {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.7rem;
+  max-width: 40rem;
+  margin: 0 auto;
+}
+.page-heading h1 {
+  margin: 0;
+  font-family: var(--vas-display);
+  font-size: clamp(1.9rem, 4vw, 2.8rem);
+  color: var(--vas-text);
+  position: relative;
+  display: inline-block;
+}
+.page-heading h1::after,
+.section-heading h2::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -0.5rem;
+  width: 3.2rem;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--vas-nhan-ai), var(--vas-trach-nhiem), var(--vas-tri-thuc));
+  transform: translateX(-50%);
+  animation: forest-shimmer 4s ease-in-out infinite;
+  background-size: 200% 100%;
+}
+.page-heading-sub {
+  margin: 0;
+  max-width: 34rem;
+  font-size: 0.95rem;
+  color: var(--vas-text-muted);
+  line-height: 1.6;
+}
+/* Biến thể chữ trắng - áp dụng theo variant của .page-hero cha (dark),
+   không cần modifier class riêng trên .page-heading nữa vì PageHero.tsx
+   đã quyết định variant qua props. */
+.page-hero--dark .page-heading h1,
+.page-hero--dark .section-kicker {
+  color: #fff;
+}
+.page-hero--dark .section-kicker {
+  background: rgba(255, 255, 255, 0.12);
+}
+.page-hero--dark .page-heading-sub {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Level tabs (Phòng triển lãm - chọn cấp học)                             */
+/* ---------------------------------------------------------------------- */
+.level-tabs {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 2.5rem;
+}
+.level-tab {
+  padding: 0.65rem 1.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--vas-border);
+  background: var(--vas-surface);
+  color: var(--vas-text-muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.25s ease, border-color 0.25s ease,
+    color 0.25s ease, box-shadow 0.25s ease;
+}
+.level-tab:hover {
+  transform: translateY(-3px);
+  border-color: var(--vas-nhan-ai);
+  box-shadow: var(--vas-shadow-sm);
+}
+.level-tab--active {
+  background: linear-gradient(135deg, var(--vas-tri-thuc), var(--vas-tri-thuc-700));
+  border-color: var(--vas-tri-thuc);
+  color: #fff;
+  box-shadow: var(--vas-shadow-md);
+  transform: translateY(-2px);
 }
 
 .section-heading {
@@ -197,24 +825,42 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 0.4rem;
+  gap: 0.7rem;
   margin-bottom: 2.5rem;
 }
 .section-heading--light h2,
 .section-heading--light .section-kicker {
   color: #fff;
 }
+/* Kicker dạng pill nổi, dùng chung cho Section 2 (trang chủ) lẫn mọi
+   page-heading của trang con - cùng 1 "con dấu" thị giác để cả hệ thống
+   đọc như một bộ thay vì mỗi trang một kiểu nhãn khác nhau. */
 .section-kicker {
-  font-size: 0.78rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.9rem 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: var(--vas-tri-thuc-100);
+  font-size: 0.76rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--vas-tri-thuc);
+  box-shadow: var(--vas-shadow-sm);
+}
+.section-kicker::before {
+  content: "🌱";
+  font-size: 0.9rem;
+  animation: forest-sway 2.4s ease-in-out infinite;
+  transform-origin: bottom center;
 }
 .section-heading h2 {
+  position: relative;
+  display: inline-block;
   margin: 0;
   font-family: var(--vas-display);
-  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+  font-size: clamp(1.7rem, 3.5vw, 2.5rem);
   color: var(--vas-text);
 }
 
@@ -227,42 +873,476 @@
 /* ---------------------------------------------------------------------- */
 .hero-section {
   position: relative;
-  min-height: 100vh;
+  /* Navbar là fixed (không chiếm chỗ trong dòng chảy layout) nên Hero chạy
+     full viewport; padding-top riêng của section thừa đủ để nội dung
+     không bị thanh navbar kính mờ phía trên che mất. */
+  min-height: min(46rem, 100vh);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: radial-gradient(ellipse 80% 60% at 50% 0%, #fdf3e2 0%, #fff 55%);
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, #fdf3e2 0%, #f4fbf7 55%, #fff 100%);
+  background-size: 160% 160%;
+  animation: forest-shimmer 18s ease-in-out infinite;
   padding: 5rem 1.5rem 4rem;
   text-align: center;
 }
 
-.hero-bg-glow {
+/* ---------------------------------------------------------------------- */
+/* Hero - lớp đồi parallax (xa -> gần)                                     */
+/* ---------------------------------------------------------------------- */
+/* Wrapper chung: neo đáy Hero, các lớp con xếp chồng lên nhau (grid 1
+   ô), mỗi lớp nhận translateY riêng (set inline từ React theo scrollY) -
+   will-change báo trước cho trình duyệt để tránh giật khi cuộn nhanh. Ảnh
+   hill dùng nguyên PNG từ mẫu tham chiếu (tông xanh lá/ngọc bích gốc),
+   không đổi màu. */
+.hero-parallax-hills {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 60%;
+  min-height: 12rem;
+  display: grid;
+  pointer-events: none;
+  overflow: hidden;
+}
+.hero-parallax-layer {
+  grid-area: 1 / 1;
+  position: absolute;
+  inset: auto 0 -2px 0;
+  height: 100%;
+  will-change: transform;
+}
+.hero-hill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: bottom;
+  /* Mờ dần ở mép trên thay vì cắt cứng theo hình chữ nhật của <img> - hoà
+     đỉnh đồi vào nền trời pastel của .hero-section phía sau thay vì tạo
+     một đường ngang rõ rệt giữa 2 vùng. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 34%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 34%);
+}
+/* hill1 (far) trải toàn chiều rộng đều; hill3 (mid) và hill4 (near) trong
+   ảnh gốc chỉ vẽ 1 bên - object-position lệch trái/phải để phần đồi có
+   hình dáng rõ luôn nằm trong khung nhìn, phần còn lại crop mượt ra mép. */
+.hero-hill--far {
+  opacity: 0.55;
+}
+.hero-hill--mid {
+  object-position: right bottom;
+  opacity: 0.75;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 42%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 42%);
+}
+.hero-hill--near {
+  object-position: left bottom;
+  opacity: 0.92;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 50%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 50%);
+}
+
+/* Giá đỡ parallax cho hoa lá/rồng/mascot/cây cỏ: phủ toàn Hero, chỉ dịch
+   chuyển theo scroll (translateY set inline từ React); phần tử con bên
+   trong giữ nguyên position/animation riêng của nó (sway CSS, scale
+   framer, …) nên không có xung đột thuộc tính transform giữa 2 tầng. */
+.hero-decor-layer {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 15% 20%, rgba(0, 144, 130, 0.12), transparent 45%),
-    radial-gradient(circle at 85% 15%, rgba(154, 0, 54, 0.1), transparent 45%),
-    radial-gradient(circle at 50% 90%, rgba(23, 80, 181, 0.08), transparent 50%);
   pointer-events: none;
+  will-change: transform;
 }
 
-.hero-dragon {
+/* Cây cọ đơn - neo giữa-phải trên gờ đồi (không trùng vị trí mascot ở góc
+   trái lẫn rồng ở góc phải xa). */
+.hero-parallax-tree {
   position: absolute;
-  right: -5%;
-  bottom: -5%;
-  width: min(48vw, 34rem);
-  pointer-events: none;
-  filter: grayscale(0.2);
+  left: 46%;
+  bottom: 32%;
+  width: min(11vw, 6rem);
+  height: auto;
+  object-fit: contain;
+  object-position: bottom;
+  filter: drop-shadow(0 6px 14px rgba(36, 20, 23, 0.15));
+}
+/* Dải cỏ/dương xỉ - viền đáy toàn chiều rộng, lớp tiền cảnh gần nhất -
+   brightness/contrast nhẹ để nổi rõ trên nền đồi "near" đã khá đậm màu,
+   tránh bị chìm lẫn vào nhau. */
+.hero-parallax-plant {
+  position: absolute;
+  inset: auto 0 0 0;
+  width: 100%;
+  height: auto;
+  max-height: 16%;
+  object-fit: cover;
+  object-position: bottom;
+  filter: brightness(1.6) saturate(1.3) drop-shadow(0 -2px 6px rgba(0, 0, 0, 0.15));
+}
+/* Lá dương xỉ lớn - rơi vào góc trên phải khung Hero. */
+.hero-parallax-leaf {
+  position: absolute;
+  right: -1%;
+  top: -1%;
+  width: min(20vw, 11rem);
+  height: auto;
+  object-fit: contain;
+  object-position: top right;
+  filter: drop-shadow(0 6px 14px rgba(36, 20, 23, 0.12));
+}
+@media (max-width: 640px) {
+  .hero-parallax-tree,
+  .hero-parallax-leaf {
+    display: none;
+  }
 }
 
-.hero-mascot {
+/* ---------------------------------------------------------------------- */
+/* Hero - thú rừng chạy ngang qua gờ đồi tiền cảnh                         */
+/* ---------------------------------------------------------------------- */
+/* Mỗi con chạy 1 vòng translateX từ ngoài khung trái -> phải rồi lặp lại
+   (không quay đầu chạy ngược - đơn giản và tự nhiên hơn cho dáng chạy
+   in-place của SVG tĩnh). "hop" là animation thứ 2 trên cùng phần tử, tạo
+   dáng nảy nhẹ lên xuống trong lúc di chuyển ngang - tách riêng khỏi
+   đường chạy ngang vì khác biên độ/chu kỳ với từng con. object-position
+   giữ nguyên hướng gốc của SVG (đầu quay phải) nên chạy trái -> phải là
+   chiều tự nhiên, không cần lật ảnh. */
+@keyframes hero-critter-run {
+  0% {
+    transform: translate3d(-14vw, 0, 0);
+  }
+  100% {
+    transform: translate3d(114vw, 0, 0);
+  }
+}
+@keyframes hero-critter-hop {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8%;
+  }
+}
+.hero-critter {
   position: absolute;
-  left: 4%;
   bottom: 6%;
-  width: min(22vw, 12rem);
+  left: 0;
+  width: var(--critter-w, 3rem);
+  height: auto;
+  object-fit: contain;
   pointer-events: none;
+  filter: drop-shadow(0 4px 8px rgba(36, 20, 23, 0.18));
+  animation: hero-critter-run var(--run-dur, 14s) linear infinite, hero-critter-hop var(--hop-dur, 0.4s) ease-in-out infinite;
+  animation-delay: var(--run-delay, 0s), var(--hop-delay, 0s);
+}
+.hero-critter--squirrel {
+  --critter-w: 2.1rem;
+  --run-dur: 12s;
+  --run-delay: -2s;
+  --hop-dur: 0.32s;
+  bottom: 9%;
+}
+.hero-critter--rabbit {
+  --critter-w: 2.6rem;
+  --run-dur: 15s;
+  --run-delay: -8s;
+  --hop-dur: 0.38s;
+  bottom: 5%;
+}
+.hero-critter--elephant {
+  --critter-w: 4.4rem;
+  --run-dur: 24s;
+  --run-delay: -15s;
+  --hop-dur: 0.9s;
+  bottom: 3%;
+  opacity: 0.9;
+}
+@media (max-width: 640px) {
+  .hero-critter {
+    display: none;
+  }
+}
+
+/* Vòm lá + hoa trang trí quanh viền Hero - thuần CSS, đứng dưới nội dung */
+.hero-section::before,
+.hero-section::after {
+  content: "🌿";
+  position: absolute;
+  font-size: clamp(3rem, 8vw, 5.5rem);
+  opacity: 0.35;
+  pointer-events: none;
+  filter: drop-shadow(0 8px 16px rgba(36, 20, 23, 0.1));
+  animation: forest-sway 5s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+.hero-section::before {
+  top: -1rem;
+  left: -1rem;
+  transform: scaleX(-1) rotate(-8deg);
+}
+.hero-section::after {
+  bottom: -1rem;
+  right: -1rem;
+  animation-delay: 1.5s;
+  rotate: -8deg;
+}
+
+.hero-flora {
+  position: absolute;
+  font-size: 1.5rem;
+  opacity: 0.55;
+  pointer-events: none;
+  animation: forest-sway 4s ease-in-out infinite, forest-bounce-soft 5s ease-in-out infinite;
+  filter: drop-shadow(0 4px 8px rgba(36, 20, 23, 0.1));
+}
+.hero-flora--1 {
+  top: 14%;
+  left: 8%;
+  font-size: 1.8rem;
+  animation-delay: 0.3s;
+}
+.hero-flora--2 {
+  top: 22%;
+  right: 10%;
+  animation-delay: 1.1s;
+}
+.hero-flora--3 {
+  bottom: 18%;
+  left: 14%;
+  font-size: 1.3rem;
+  animation-delay: 2s;
+}
+@media (max-width: 640px) {
+  .hero-flora {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Hero - bướm bay quỹ đạo số 8                                            */
+/* ---------------------------------------------------------------------- */
+/* offset-path vẽ đường bay hình số 8 nằm ngang (lemniscate xấp xỉ bằng 2
+   cubic-bezier nối nhau); offset-distance chạy 0% -> 100% lặp vô hạn kéo
+   emoji đi theo đường đó. rotate: 0deg giữ emoji luôn đứng thẳng (không tự
+   xoay theo tiếp tuyến path) để cánh bướm luôn nhìn "đúng chiều". Cánh vỗ
+   mô phỏng bằng scaleX dao động nhẹ trên cùng phần tử qua animation thứ 2. */
+@keyframes hero-butterfly-fly-1 {
+  0% {
+    offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+@keyframes hero-butterfly-flap {
+  0%,
+  100% {
+    transform: scaleX(1);
+  }
+  50% {
+    transform: scaleX(0.72);
+  }
+}
+.hero-butterfly {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 1.6rem;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 6px rgba(36, 20, 23, 0.15));
+  offset-rotate: 0deg;
+  animation: hero-butterfly-fly-1 var(--dur, 16s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+.hero-butterfly::before {
+  content: "";
+  display: block;
+  animation: hero-butterfly-flap 0.45s ease-in-out infinite;
+}
+.hero-butterfly--1 {
+  --dur: 17s;
+  --delay: 0s;
+  offset-path: path("M 60 420 C 220 260, 380 260, 520 420 C 660 580, 820 580, 960 420");
+}
+.hero-butterfly--2 {
+  --dur: 21s;
+  --delay: -6s;
+  font-size: 1.25rem;
+  opacity: 0.8;
+  offset-path: path("M 900 200 C 760 340, 620 340, 500 200 C 380 60, 240 60, 120 200");
+}
+@media (max-width: 768px) {
+  .hero-butterfly {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Hero - đàn chim bay ngang qua trời (sprite sheet vỗ cánh thật)          */
+/* ---------------------------------------------------------------------- */
+/* Kỹ thuật kinh điển "CSS-only flying birds": .hero-bird là 1 khung hình
+   cố định kích thước --bird-w x --bird-h cắt ra từ sprite sheet 10 khung
+   (bird-cells.svg, mỗi khung tỉ lệ ~0.72:1); "fly-cycle" chạy
+   background-position qua steps(10) để chuyển khung tức thời (không nội
+   suy mượt giữa các khung) - đúng cách phim hoạt hình sprite hoạt động,
+   tạo cảm giác vỗ cánh thật thay vì emoji tĩnh. .hero-bird-container bọc
+   ngoài lo đường bay (translate/scale theo % viewport, quỹ đạo lên xuống
+   nhẹ) - tách 2 animation vì chúng chạy trên 2 thuộc tính khác nhau
+   (background-position vs transform) với chu kỳ lặp hoàn toàn khác nhau. */
+@keyframes hero-bird-fly-cycle {
+  100% {
+    background-position: calc(var(--bird-w) * -9) 0;
+  }
+}
+.hero-bird {
+  background-image: url("/images/parallax/bird-cells.svg");
+  background-size: auto 100%;
+  width: var(--bird-w);
+  height: var(--bird-h);
+  will-change: background-position;
+  animation: hero-bird-fly-cycle var(--flap-dur, 1s) steps(9) infinite;
+  animation-delay: var(--flap-delay, 0s);
+  /* Tint bằng thương hiệu VAS thay vì màu đen mặc định của sprite gốc -
+     invert+sepia+saturate+hue-rotate là công thức chuẩn để nhuộm 1 hình
+     đơn sắc bằng CSS filter (không cần ảnh riêng cho từng màu). */
+  filter: invert(15%) sepia(80%) saturate(1800%) hue-rotate(325deg) brightness(0.85) contrast(0.95);
+}
+.hero-bird-container {
+  position: absolute;
+  top: var(--start-top, 20%);
+  left: -8%;
+  transform: scale(0) translateX(-10vw);
+  will-change: transform;
+  pointer-events: none;
+  animation-name: hero-bird-fly-path;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-duration: var(--fly-dur, 20s);
+  animation-delay: var(--fly-delay, 0s);
+}
+@keyframes hero-bird-fly-path {
+  0% {
+    transform: translate3d(-10vw, 0, 0) scale(0.32);
+  }
+  12% {
+    transform: translate3d(8vw, 2.5vh, 0) scale(0.44);
+  }
+  28% {
+    transform: translate3d(30vw, -1vh, 0) scale(0.56);
+  }
+  44% {
+    transform: translate3d(52vw, 3vh, 0) scale(0.62);
+  }
+  60% {
+    transform: translate3d(74vw, 0.5vh, 0) scale(0.58);
+  }
+  76% {
+    transform: translate3d(96vw, 2vh, 0) scale(0.5);
+  }
+  92%,
+  100% {
+    transform: translate3d(114vw, 1vh, 0) scale(0.4);
+  }
+}
+/* 3 con chim, mỗi con: kích thước khung sprite riêng (--bird-w/--bird-h,
+   giữ đúng tỉ lệ 367.1:510 của sprite gốc), tốc độ vỗ cánh riêng
+   (--flap-dur), độ cao xuất phát và tốc độ/độ trễ bay riêng để trông như
+   một đàn tự nhiên thay vì 3 bản sao đồng bộ. */
+.hero-bird-container--1 {
+  --start-top: 18%;
+  --fly-dur: 19s;
+  --fly-delay: -3s;
+}
+.hero-bird-container--1 .hero-bird {
+  --bird-w: 5.4rem;
+  --bird-h: 7.5rem;
+  --flap-dur: 0.85s;
+  --flap-delay: -0.2s;
+}
+.hero-bird-container--2 {
+  --start-top: 30%;
+  --fly-dur: 23s;
+  --fly-delay: -11s;
+}
+.hero-bird-container--2 .hero-bird {
+  --bird-w: 4.4rem;
+  --bird-h: 6.1rem;
+  --flap-dur: 0.72s;
+  --flap-delay: -0.5s;
+  opacity: 0.85;
+}
+.hero-bird-container--3 {
+  --start-top: 12%;
+  --fly-dur: 26s;
+  --fly-delay: -18s;
+}
+.hero-bird-container--3 .hero-bird {
+  --bird-w: 3.6rem;
+  --bird-h: 5rem;
+  --flap-dur: 0.95s;
+  --flap-delay: -0.7s;
+  opacity: 0.7;
+}
+@media (max-width: 640px) {
+  .hero-bird-container {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Hero - hoa rơi                                                          */
+/* ---------------------------------------------------------------------- */
+@keyframes hero-petal-fall {
+  0% {
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: translate3d(var(--drift, 3vw), 70vh, 0) rotate(320deg);
+    opacity: 0;
+  }
+}
+.hero-petal {
+  position: absolute;
+  top: 0;
+  font-size: 1.1rem;
+  pointer-events: none;
+  animation: hero-petal-fall var(--dur, 12s) ease-in infinite;
+  animation-delay: var(--delay, 0s);
+  filter: drop-shadow(0 3px 6px rgba(36, 20, 23, 0.12));
+}
+.hero-petal--1 {
+  left: 20%;
+  --dur: 11s;
+  --delay: -2s;
+  --drift: 4vw;
+}
+.hero-petal--2 {
+  left: 55%;
+  font-size: 0.9rem;
+  --dur: 14s;
+  --delay: 3s;
+  --drift: -3vw;
+}
+.hero-petal--3 {
+  left: 78%;
+  font-size: 1rem;
+  --dur: 13s;
+  --delay: -7s;
+  --drift: 2vw;
+}
+@media (max-width: 640px) {
+  .hero-petal {
+    display: none;
+  }
 }
 
 .hero-content {
@@ -295,7 +1375,12 @@
   font-family: var(--vas-display);
   font-size: clamp(2rem, 5.5vw, 3.6rem);
   line-height: 1.1;
-  color: var(--vas-text);
+  background: linear-gradient(100deg, var(--vas-tri-thuc) 20%, var(--vas-trach-nhiem) 45%, var(--vas-nhan-ai) 65%, var(--vas-tri-thuc) 85%);
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: forest-shimmer 8s ease-in-out infinite;
 }
 
 .hero-subtitle {
@@ -325,6 +1410,8 @@
   gap: 0.75rem;
 }
 .hero-region-btn {
+  position: relative;
+  overflow: hidden;
   padding: 0.75rem 1.75rem;
   border-radius: 999px;
   border: none;
@@ -334,65 +1421,400 @@
   font-size: 0.92rem;
   cursor: pointer;
   box-shadow: 0 10px 24px rgba(154, 0, 54, 0.22);
+  transition: box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1), filter 0.35s ease;
+}
+.hero-region-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.35) 50%, transparent 70%);
+  background-size: 220% 100%;
+  background-position: 120% 0;
+  transition: background-position 0.6s ease;
+}
+.hero-region-btn:hover {
+  box-shadow: 0 14px 32px rgba(154, 0, 54, 0.32);
+  filter: brightness(1.05);
+}
+.hero-region-btn:hover::before {
+  background-position: -20% 0;
 }
 
 .hero-scroll-hint {
   position: absolute;
   bottom: 1.5rem;
   font-size: 1.4rem;
-  color: var(--vas-text-muted);
-}
-
-@media (max-width: 640px) {
-  .hero-dragon,
-  .hero-mascot {
-    opacity: 0.5;
-  }
+  color: var(--vas-tri-thuc);
+  /* --scroll-hint-fade ghi bởi HeroSection (rAF, theo scroll) - nhân với
+     0.6 (độ mờ nghỉ gốc) ở đây thay vì set opacity trực tiếp từ JS, vì
+     node này còn nhận transform từ animate={{ y: [...] }} riêng của
+     Framer Motion mỗi frame - tách 2 nguồn ghi style ra 2 thuộc tính khác
+     nhau (transform vs opacity) để không tranh chấp thứ tự ghi. */
+  opacity: calc(0.6 * var(--scroll-hint-fade, 1));
+  text-shadow: 0 0 12px rgba(154, 0, 54, 0.35);
 }
 
 /* ---------------------------------------------------------------------- */
 /* Section 2 - Cổng chọn khối                                              */
 /* ---------------------------------------------------------------------- */
+/* Wrapper full-width mang nền riêng (không chỉ .edu-gate-section căn giữa
+   nội dung) - để dải sóng nối tiếp đường chân trời của Hero và gradient
+   pastel có thể trải hết chiều rộng viewport, đúng vai trò "phụ trợ cho
+   parallax": Hero cuộn qua, khu vườn tiếp tục ngay dưới chân đồi thay vì
+   cắt sang một khối trắng trơn. */
+.edu-gate-wrap {
+  position: relative;
+  overflow: hidden;
+  /* Sân khấu tách tông: vườn teal bên trái (Tiểu học) → hoàng hôn navy
+     bên phải (Trung học). Không còn nền kem/trắng làm card sáng bị hoà. */
+  background:
+    radial-gradient(ellipse 70% 85% at 6% 82%, rgba(63, 174, 134, 0.78) 0%, transparent 58%),
+    radial-gradient(ellipse 78% 90% at 98% 70%, rgba(8, 15, 36, 0.92) 0%, transparent 58%),
+    linear-gradient(118deg, #3fae86 0%, #5a9a8c 34%, #3d5678 66%, #10192e 100%);
+}
+.edu-gate-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: url("/images/stars.jpg") right center / min(72%, 58rem) auto no-repeat;
+  mix-blend-mode: screen;
+  opacity: 0.42;
+  -webkit-mask-image: linear-gradient(90deg, transparent 36%, black 74%);
+  mask-image: linear-gradient(90deg, transparent 36%, black 74%);
+}
+.edu-gate-wrap::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  width: 58%;
+  height: 32%;
+  pointer-events: none;
+  background: url("/images/wave.png") center bottom / cover no-repeat;
+  opacity: 0.5;
+  filter: brightness(0.58) saturate(1.1);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 42%);
+  mask-image: linear-gradient(90deg, transparent 0%, black 42%);
+}
+.edu-gate-wrap .section-heading h2 {
+  color: #fff;
+  text-shadow: 0 2px 18px rgba(8, 15, 36, 0.35);
+}
+.edu-gate-wrap .section-kicker {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+}
+/* Dải đồi SVG thật (HillDivider.tsx) thay cho dải ::before/::after cũ
+   (radial-gradient + chuỗi emoji) - 2 lớp path núi nối chân trời Hero
+   xuống section, tông màu chuyển xanh lá (trái, khớp .edu-card--primary) →
+   navy (phải, khớp .edu-card--secondary). */
+.hill-divider {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 1;
+  height: 11rem;
+  overflow: hidden;
+  pointer-events: none;
+}
+.hill-divider-far,
+.hill-divider-near {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.hill-divider-far path {
+  fill: url(#hill-divider-gradient-far);
+  opacity: 0.5;
+}
+.hill-divider-near path {
+  fill: url(#hill-divider-gradient-near);
+  opacity: 0.85;
+}
+.hill-divider-trees {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2.6rem;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 8%;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.hill-divider-tree {
+  width: clamp(1.1rem, 2.4vw, 1.7rem);
+  height: auto;
+}
+.hill-divider-tree-trunk {
+  fill: #6b4a2f;
+}
+.hill-divider-tree-leaf {
+  fill: var(--vas-nhan-ai);
+}
+.hill-divider-tree--3 .hill-divider-tree-leaf,
+.hill-divider-tree--4 .hill-divider-tree-leaf {
+  fill: #1e293b;
+}
+@media (max-width: 640px) {
+  .hill-divider-tree--2,
+  .hill-divider-tree--3 {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hill-divider-tree {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 .edu-gate-section {
-  padding: 5rem 1.5rem;
+  position: relative;
+  z-index: 1;
+  padding: 7.25rem 1.5rem 4.5rem;
   max-width: 84rem;
   margin: 0 auto;
 }
 
-.edu-gate-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  min-height: 28rem;
+/* Stack chồng lệch "card deck" - .edu-gate-stage là sân khấu cao cố định
+   (chiều cao 1 card), 2 card đặt position:absolute chồng lên nhau: card
+   "front" (đang chọn) nằm trái, gần full width; card "back" nhô ra bên phải,
+   đè lên khoảng 1/3 bên phải của card front, thu nhỏ + mờ nhẹ để tạo chiều
+   sâu. Click/kéo card back đẩy nó lên làm front (swap), animate bằng
+   Framer Motion layout spring - không dùng flex/track trượt ngang nữa. */
+.edu-gate-carousel {
+  position: relative;
+  /* Cụm 2 card chồng lệch tràn ra ngoài .edu-gate-stage ~6% mỗi bên (xem
+     EducationLevelGate.tsx) - thu hẹp khung so với .edu-gate-section và
+     căn giữa để phần tràn đó không chạm mép viewport / gây scroll ngang. */
+  max-width: 76rem;
+  margin: 0 auto;
 }
-@media (min-width: 900px) {
-  .edu-gate-cards {
-    flex-direction: row;
+.edu-gate-stage {
+  position: relative;
+  height: clamp(24rem, 46vw, 32rem);
+}
+.edu-gate-slot {
+  position: absolute;
+  top: 0;
+  width: 66%;
+  height: 100%;
+}
+.edu-gate-slot--back {
+  cursor: pointer;
+}
+/* Mobile - back không còn ẩn hẳn: front chiếm gần trọn màn hình, back chỉ hé
+   1 dải mỏng bên phải (tỉ lệ do STACK_LAYOUT.mobile trong
+   EducationLevelGate.tsx quyết định qua style.left/scale/opacity inline) -
+   đủ để mắt nhận ra "còn thẻ khác" và tự vuốt qua, không cần dot/mũi tên chỉ
+   dẫn. Card back không đẩy nội dung (peeking tắt ở mobile) nên phần chữ bị
+   dải hẹp này che là chủ ý, không phải lỗi hiển thị.
+   Chiều cao đổi từ height cố định sang min-height: ở màn rất hẹp, nội dung
+   card (kicker/tiêu đề/mô tả) wrap nhiều dòng hơn và có thể cao hơn giá trị
+   clamp - height cứng + overflow:hidden trên .edu-card sẽ cắt mất CTA
+   "Khám phá ngay" phía dưới. min-height cho stage/slot/card giãn theo nội
+   dung thực tế, tránh cắt chữ. */
+@media (max-width: 768px) {
+  .edu-gate-stage {
+    height: auto;
+    min-height: clamp(20rem, 88vw, 26rem);
+  }
+  .edu-gate-slot {
+    width: 88%;
+    height: auto;
+    min-height: 100%;
+  }
+}
+
+.edu-gate-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(8, 17, 40, 0.45);
+  color: #fff;
+  backdrop-filter: blur(10px);
+  box-shadow: var(--vas-shadow-md);
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.25s ease, opacity 0.25s ease;
+}
+.edu-gate-arrow:hover {
+  background: rgba(8, 17, 40, 0.68);
+  transform: translateY(-50%) scale(1.08);
+}
+.edu-gate-arrow:active {
+  transform: translateY(-50%) scale(0.96);
+}
+.edu-gate-arrow--prev {
+  left: clamp(-0.25rem, -2vw, 0.75rem);
+  transform: translateY(-50%);
+}
+.edu-gate-arrow--prev:hover {
+  transform: translateY(-50%) translateX(-2px) scale(1.08);
+}
+.edu-gate-arrow--next {
+  right: clamp(-1.5rem, -3vw, -0.25rem);
+  transform: translateY(-50%);
+}
+.edu-gate-arrow--next:hover {
+  transform: translateY(-50%) translateX(2px) scale(1.08);
+}
+@media (max-width: 768px) {
+  .edu-gate-arrow {
+    display: none;
+  }
+}
+
+/* Pill-tab thay cho 2 thanh dot trơn - mỗi pill mang tên khối + 1 chấm màu
+   khớp theme card tương ứng (xanh lá Tiểu học / xanh dương Trung học), để
+   biết ngay đang bấm gì thay vì đoán qua 2 vạch vô danh. Pill không active
+   chỉ còn viền mờ trên nền kính (glass); pill active sáng hẳn lên bằng nền
+   trắng bán trong + glow màu khối, kèm chấm nảy nhẹ (scale) để đồng bộ với
+   spring transition của card phía trên. */
+.edu-gate-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+/* Ẩn ở mobile - dải "peek" hẹp của card back (xem .edu-gate-slot ở trên) đã
+   tự gợi ý vuốt/kéo, nên bỏ luôn chấm chỉ dẫn để đỡ rối màn hình nhỏ. */
+@media (max-width: 768px) {
+  .edu-gate-dots {
+    display: none;
+  }
+}
+.edu-gate-dot {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 1.1rem 0.55rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.edu-gate-dot:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-1px);
+}
+.edu-gate-dot-mark {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+}
+.edu-gate-dot-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.75);
+  transition: color 0.3s ease;
+}
+.edu-gate-dot--primary {
+  color: #7ed9c4;
+}
+.edu-gate-dot--secondary {
+  color: #7dd3fc;
+}
+.edu-gate-dot--active {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.95);
+}
+.edu-gate-dot--active .edu-gate-dot-label {
+  color: #0f172a;
+}
+.edu-gate-dot--active .edu-gate-dot-mark {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 25%, transparent);
+}
+.edu-gate-dot--primary.edu-gate-dot--active {
+  box-shadow: 0 4px 18px rgba(126, 217, 196, 0.35);
+}
+.edu-gate-dot--secondary.edu-gate-dot--active {
+  box-shadow: 0 4px 18px rgba(125, 211, 252, 0.35);
+}
+@media (max-width: 480px) {
+  .edu-gate-dot-label {
+    font-size: 0.76rem;
   }
 }
 
 .edu-card {
   position: relative;
-  flex: 1;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
-  border: none;
+  border: 2px solid transparent;
   border-radius: var(--vas-radius-lg);
-  padding: clamp(1.5rem, 3vw, 2.5rem);
+  padding: clamp(2rem, 5vw, 4rem);
   text-align: left;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 22rem;
+  min-height: clamp(24rem, 46vw, 32rem);
   box-shadow: var(--vas-shadow-md);
+  transition: box-shadow 0.35s ease, border-color 0.35s ease;
+  background-size: 200% 200%;
+}
+/* Mobile - height:100% ép card bằng đúng chiều cao .edu-gate-stage; nếu nội
+   dung (kicker/tiêu đề/mô tả) wrap dài hơn mức đó, overflow:hidden phía trên
+   sẽ cắt mất CTA "Khám phá ngay" ở đáy card thay vì đẩy nó xuống. Cho card
+   tự cao theo nội dung (height:auto + min-height) và giảm padding/khoảng
+   cách để dành chỗ cho CTA luôn hiển thị trọn vẹn. */
+@media (max-width: 768px) {
+  .edu-card {
+    height: auto;
+    min-height: 100%;
+    padding: 1.5rem;
+  }
+}
+.edu-card:hover {
+  box-shadow: var(--vas-shadow-lg);
+}
+.edu-card--secondary:hover {
+  box-shadow: 0 20px 44px rgba(14, 165, 233, 0.22), var(--vas-shadow-lg);
 }
 
 .edu-card--primary {
-  background: linear-gradient(135deg, #e8f8f5 0%, #fff9eb 50%, #fde8ee 100%);
+  background-image: linear-gradient(145deg, #7ed9c4 0%, #d5e98a 48%, #f0b27a 100%);
+  border-color: rgba(15, 122, 109, 0.28);
+  animation: forest-shimmer 10s ease-in-out infinite;
+}
+.edu-card--primary .edu-card-hill {
+  opacity: 0.72;
+}
+.edu-card--primary:hover {
+  border-color: var(--vas-nhan-ai);
 }
 .edu-card--secondary {
-  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #172554 100%);
+  isolation: isolate;
+  background-image: linear-gradient(165deg, #020617 0%, #0b1224 48%, #0c2744 100%);
   color: #fff;
+  min-height: 24rem;
+  transform-style: preserve-3d;
+}
+.edu-card--secondary:hover {
+  border-color: #7dd3fc;
 }
 
 .edu-card-decor {
@@ -401,9 +1823,167 @@
   pointer-events: none;
   overflow: hidden;
 }
+
+/* Đồi nền - cùng bộ ảnh silhouette với Hero (parallax/hill*.png), neo đáy
+   card, hơi tràn ra ngoài (110% width + inset âm) để mép đồi không bao
+   giờ hở viền bo góc khi card co giãn theo viewport. Mờ dần lên đỉnh bằng
+   mask thay vì cắt cứng, giống .hero-hill, để hoà vào gradient nền card. */
+.edu-card-hill {
+  position: absolute;
+  inset: auto -5% -5% -5%;
+  width: 110%;
+  height: 55%;
+  object-fit: cover;
+  object-position: bottom;
+  opacity: 0.5;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 45%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 45%);
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s ease;
+}
+.edu-card:hover .edu-card-hill {
+  transform: translateY(-2%) scale(1.04);
+  opacity: 0.65;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Card Trung học - diorama đêm (stars / wave / island)                    */
+/* Mỗi lớp là 1 wrapper absolute; img bên trong tự animate idle, wrapper   */
+/* nhận translate từ pointer-parallax (framer). z-index: sao 0 → sóng xa 1 */
+/* → đảo 2 → sóng gần 3 → vignette 4, nội dung card z-index 5.            */
+/* ---------------------------------------------------------------------- */
+.edu-card-layer {
+  position: absolute;
+  pointer-events: none;
+  will-change: transform;
+}
+.edu-card-layer--stars {
+  inset: -14%;
+  z-index: 0;
+}
+.edu-card-stars {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  animation: edu-stars-kenburns 22s ease-in-out infinite;
+}
+.edu-card-stars--twinkle {
+  mix-blend-mode: screen;
+  animation: edu-stars-kenburns 28s ease-in-out infinite reverse, edu-stars-twinkle 4.4s ease-in-out infinite;
+}
+.edu-card-layer--wave-far {
+  inset: auto -22% 4% -22%;
+  height: 44%;
+  z-index: 1;
+}
+.edu-card-layer--wave-near {
+  inset: auto -28% -14% -28%;
+  height: 30%;
+  z-index: 3;
+}
+.edu-card-wave {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: bottom center;
+  display: block;
+}
+.edu-card-wave--far {
+  filter: brightness(0.48) saturate(1.25);
+  opacity: 0.92;
+  animation: edu-wave-drift 11s ease-in-out infinite;
+}
+.edu-card-wave--near {
+  filter: brightness(0.92) saturate(1.05);
+  animation: edu-wave-drift-near 7.5s ease-in-out infinite;
+}
+.edu-card-layer--island {
+  inset: auto auto 2% auto;
+  right: -6%;
+  width: clamp(10.5rem, 56%, 18rem);
+  z-index: 2;
+}
+.edu-card-island {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 10px 16px rgba(2, 6, 23, 0.45));
+  transform-origin: 50% 85%;
+}
+.edu-card--secondary:hover .edu-card-island {
+  filter: drop-shadow(0 16px 22px rgba(2, 6, 23, 0.55));
+}
+.edu-card-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background:
+    linear-gradient(90deg, rgba(2, 6, 23, 0.72) 0%, rgba(2, 6, 23, 0.38) 42%, transparent 72%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.18) 0%, transparent 28%, rgba(2, 6, 23, 0.45) 100%);
+}
+.edu-card-shooting-star {
+  position: absolute;
+  top: 16%;
+  left: 4%;
+  z-index: 1;
+  width: 5.5rem;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, #f8fafc 45%, transparent);
+  box-shadow: 0 0 8px 1px rgba(186, 230, 253, 0.55);
+  opacity: 0;
+  animation: edu-shooting-star 8s ease-in-out 1.4s infinite;
+}
+.edu-card--secondary .edu-card-star {
+  z-index: 1;
+}
+@media (max-width: 899px) {
+  .edu-card-layer--island {
+    width: clamp(8.5rem, 42vw, 13rem);
+    right: -8%;
+    opacity: 0.92;
+  }
+}
+
+/* Cây cọ + lá dương xỉ (Tiểu học) - cùng ảnh HeroTree/HeroLeaf, neo góc
+   trên-phải/dưới-trái của card như những phần tử tiền cảnh rời rạc. */
+.edu-card-art {
+  position: absolute;
+  height: auto;
+  filter: drop-shadow(0 4px 10px rgba(36, 20, 23, 0.12));
+}
+.edu-card-art--tree {
+  top: 8%;
+  right: 8%;
+  width: clamp(3rem, 9vw, 4.5rem);
+}
+.edu-card-art--leaf {
+  bottom: -4%;
+  left: -3%;
+  width: clamp(4rem, 11vw, 5.5rem);
+  transform: scaleX(-1);
+  opacity: 0.85;
+}
+
+/* Sao lấp lánh (Trung học) - chấm tròn nhỏ rải trên nền navy, gợi bầu trời
+   đêm cho tinh thần "xưởng nghệ thuật hiện đại" tương phản khu vườn ban
+   ngày bên cạnh. */
+.edu-card-star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #e0e7ff;
+  box-shadow: 0 0 4px 1px rgba(224, 231, 255, 0.8);
+}
+
 .edu-card-float {
   position: absolute;
   font-size: 1.8rem;
+  filter: drop-shadow(0 4px 8px rgba(36, 20, 23, 0.15));
+  transition: transform 0.4s ease;
 }
 .edu-card-float--1 {
   top: 12%;
@@ -413,13 +1993,57 @@
   bottom: 30%;
   left: 10%;
 }
+.edu-card:hover .edu-card-float {
+  transform: scale(1.15);
+}
+
+/* Thêm chồi lá mọc lên từ đáy card khi hover - chỉ Tiểu học ("khu vườn
+   sống"). Trung học dùng diorama đêm nên không gắn emoji cây. */
+.edu-card--primary .edu-card-decor::before {
+  content: "🌱";
+  position: absolute;
+  left: 50%;
+  bottom: -1.5rem;
+  font-size: 2.2rem;
+  opacity: 0;
+  transform: translate(-50%, 0.5rem) scale(0.7);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.edu-card--primary:hover .edu-card-decor::before {
+  opacity: 0.5;
+  transform: translate(-50%, -0.5rem) scale(1);
+}
 
 .edu-card-content {
   position: relative;
-  z-index: 1;
+  z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  max-width: min(30rem, 62%);
+  transition: margin-left 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (max-width: 899px) {
+  .edu-card-content {
+    max-width: 100%;
+  }
+}
+
+/* Card "back" trong stack chồng lệch (EducationLevelGate) - đẩy nội dung
+   sang phải bằng đúng phần card bị đè bởi card "front" phía trước, để
+   kicker/tiêu đề/mô tả luôn nằm trong vùng nhìn thấy được thay vì bị cắt
+   ở mép trái. Tỉ lệ % khớp với overlap giữa .edu-gate-slot--front/--back
+   (xem EducationLevelGate.tsx). CTA cũng dịch theo để không "lạc" khỏi
+   phần còn lại của nội dung. */
+.edu-card--peeking .edu-card-content,
+.edu-card--peeking .edu-card-cta {
+  margin-left: 32%;
+}
+@media (max-width: 899px) {
+  .edu-card--peeking .edu-card-content,
+  .edu-card--peeking .edu-card-cta {
+    margin-left: 0;
+  }
 }
 
 .edu-card-kicker {
@@ -435,6 +2059,10 @@
   background: rgba(255, 255, 255, 0.85);
   color: #0f7a6d;
   box-shadow: var(--vas-shadow-sm);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.edu-card:hover .edu-card-kicker {
+  transform: translateY(-2px);
 }
 .edu-card--secondary .edu-card-kicker {
   background: rgba(255, 255, 255, 0.12);
@@ -482,6 +2110,11 @@
   border-radius: var(--vas-radius-sm);
   background: rgba(16, 122, 109, 0.12);
   color: #0f7a6d;
+  transition: transform 0.25s ease, background 0.25s ease;
+}
+.edu-card:hover .edu-card-stat-pill {
+  transform: scale(1.05);
+  background: rgba(16, 122, 109, 0.2);
 }
 .edu-card--secondary .edu-card-stat-pill {
   background: rgba(129, 140, 248, 0.2);
@@ -496,7 +2129,7 @@
 
 .edu-card-cta {
   position: relative;
-  z-index: 1;
+  z-index: 5;
   margin-top: 2rem;
   display: inline-flex;
   align-items: center;
@@ -509,24 +2142,41 @@
   background: #fff;
   color: #0f7a6d;
   box-shadow: var(--vas-shadow-md);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease,
+    margin-left 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.edu-card:hover .edu-card-cta {
+  transform: translateY(-3px);
+  box-shadow: var(--vas-shadow-lg);
 }
 .edu-card--secondary .edu-card-cta {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(8, 17, 40, 0.58);
   color: #fff;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(125, 211, 252, 0.35);
 }
 .edu-card-cta-arrow {
-  transition: transform 0.2s ease;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .edu-card:hover .edu-card-cta-arrow {
-  transform: translateX(4px);
+  transform: translateX(6px);
+}
+/* Mobile - margin-top:2rem giữa nội dung và CTA tốn nhiều không gian dọc
+   hơn mức cần thiết trên màn hẹp; thu lại để CTA chắc chắn còn chỗ hiển thị
+   trong card (xem .edu-card min-height:100% ở trên). */
+@media (max-width: 768px) {
+  .edu-card-cta {
+    margin-top: 1.25rem;
+    padding: 0.7rem 1.25rem;
+    font-size: 0.9rem;
+  }
 }
 
 /* ---------------------------------------------------------------------- */
 /* Section 3 - Tác phẩm tiêu biểu                                          */
 /* ---------------------------------------------------------------------- */
 .featured-gallery-section {
-  padding: 5rem 1.5rem;
+  padding: 0 1.5rem 5rem;
   max-width: 84rem;
   margin: 0 auto;
 }
@@ -547,11 +2197,19 @@
   font-weight: 600;
   font-size: 0.85rem;
   cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.25s ease, border-color 0.25s ease,
+    color 0.25s ease, box-shadow 0.25s ease;
+}
+.region-tab:hover {
+  transform: translateY(-2px);
+  border-color: var(--vas-nhan-ai);
+  box-shadow: var(--vas-shadow-sm);
 }
 .region-tab--active {
-  background: var(--vas-tri-thuc);
+  background: linear-gradient(135deg, var(--vas-tri-thuc), var(--vas-tri-thuc-700));
   border-color: var(--vas-tri-thuc);
   color: #fff;
+  box-shadow: var(--vas-shadow-sm);
 }
 
 .featured-gallery-grid {
@@ -564,21 +2222,29 @@
   position: relative;
   overflow: hidden;
   border-radius: var(--vas-radius-md);
-  border: none;
+  border: 2px solid transparent;
   padding: 0;
   cursor: pointer;
   aspect-ratio: 4 / 3;
   background: var(--vas-surface-muted);
+  box-shadow: var(--vas-shadow-sm);
+  transition: box-shadow 0.35s ease, border-color 0.35s ease, transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.featured-gallery-item:hover {
+  box-shadow: var(--vas-shadow-lg);
+  border-color: var(--vas-trach-nhiem);
+  transform: translateY(-4px);
 }
 .featured-gallery-item img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.4s ease;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), filter 0.4s ease;
 }
 .featured-gallery-item:hover img {
-  transform: scale(1.08);
+  transform: scale(1.1) rotate(-0.5deg);
+  filter: saturate(1.15) brightness(1.03);
 }
 .featured-gallery-overlay {
   position: absolute;
@@ -613,11 +2279,95 @@
 /* Section 4 - Phòng triển lãm theo khối                                   */
 /* ---------------------------------------------------------------------- */
 .grade-explorer-section {
-  padding: 5rem 1.5rem;
+  position: relative;
+  padding: 2.5rem 1.5rem 5rem;
   max-width: 84rem;
   margin: 0 auto;
-  background: var(--vas-surface-muted);
+  background: linear-gradient(160deg, var(--vas-surface-muted) 0%, #eef8f2 100%);
   border-radius: var(--vas-radius-lg);
+  overflow: hidden;
+}
+.grade-explorer-section::before {
+  content: "🌳";
+  position: absolute;
+  top: -1.5rem;
+  right: -1rem;
+  font-size: clamp(4rem, 9vw, 7rem);
+  opacity: 0.12;
+  pointer-events: none;
+  animation: forest-sway 6s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+/* Biến thể "đêm hiện đại" khi tab Khối Trung học đang active - cùng ngôn
+   ngữ hình ảnh với .edu-card--secondary (nền navy, đồi hill2.png hoà bằng
+   mix-blend-mode: screen, sao lấp lánh) để cả trang /trien-lam/ đổi "thế
+   giới" theo cấp học đang xem thay vì chỉ 2 card ở cổng vào đổi màu. */
+.grade-explorer-section--secondary {
+  background-image: linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #172554 100%);
+  background-size: 200% 200%;
+  animation: forest-shimmer 10s ease-in-out infinite;
+  color: #fff;
+}
+.grade-explorer-section--secondary::before {
+  content: "";
+}
+
+.grade-explorer-decor {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.grade-explorer-hill {
+  position: absolute;
+  inset: auto -5% -5% -5%;
+  width: 110%;
+  height: 65%;
+  object-fit: cover;
+  object-position: bottom;
+  opacity: 0.4;
+  mix-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 45%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 45%);
+}
+.grade-explorer-star {
+  z-index: 0;
+}
+
+.grade-explorer-section--secondary .level-tabs,
+.grade-explorer-section--secondary .grade-node-grid,
+.grade-explorer-section--secondary .grade-artworks-wrap {
+  position: relative;
+  z-index: 1;
+}
+.grade-explorer-section--secondary .level-tab {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.75);
+}
+.grade-explorer-section--secondary .level-tab:hover {
+  border-color: #7dd3fc;
+}
+.grade-explorer-section--secondary .level-tab--active {
+  background: linear-gradient(135deg, #4f46e5, #4338ca);
+  border-color: #7dd3fc;
+  color: #fff;
+}
+.grade-explorer-section--secondary .grade-node {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.grade-explorer-section--secondary .grade-node:hover {
+  border-color: #7dd3fc;
+}
+.grade-explorer-section--secondary .grade-node--active {
+  background: linear-gradient(135deg, #4f46e5, #4338ca);
+  border-color: #7dd3fc;
+}
+.grade-explorer-section--secondary .admin-empty-note {
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .grade-node-grid {
@@ -641,11 +2391,20 @@
   font-size: 0.9rem;
   cursor: pointer;
   box-shadow: var(--vas-shadow-sm);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.25s ease, background 0.25s ease,
+    color 0.25s ease, box-shadow 0.25s ease;
+}
+.grade-node:hover {
+  transform: translateY(-4px) scale(1.06);
+  border-color: var(--vas-nhan-ai);
+  box-shadow: var(--vas-shadow-md);
 }
 .grade-node--active {
   border-color: var(--vas-tri-thuc);
-  background: var(--vas-tri-thuc);
+  background: linear-gradient(135deg, var(--vas-tri-thuc), var(--vas-tri-thuc-700));
   color: #fff;
+  transform: scale(1.08);
+  box-shadow: var(--vas-shadow-md);
 }
 
 .grade-artworks-wrap {
@@ -656,8 +2415,32 @@
 /* Section 5 - Billboard vinh danh                                         */
 /* ---------------------------------------------------------------------- */
 .billboard-section {
-  padding: 5rem 1.5rem 6rem;
+  position: relative;
+  overflow: hidden;
+  padding: 2.5rem 1.5rem 6rem;
   background: linear-gradient(160deg, #1a0208 0%, #3a0016 55%, #1a0208 100%);
+  background-size: 180% 180%;
+  animation: forest-shimmer 20s ease-in-out infinite;
+}
+.billboard-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 20% 20%, rgba(196, 156, 87, 0.12), transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(0, 144, 130, 0.1), transparent 40%),
+    radial-gradient(circle at 50% 85%, rgba(23, 80, 181, 0.08), transparent 45%);
+  pointer-events: none;
+}
+.billboard-section::after {
+  content: "✨ 🍃 ✨ 🌿 ✨";
+  position: absolute;
+  inset: auto 0 -0.5rem 0;
+  text-align: center;
+  font-size: 1.2rem;
+  letter-spacing: 2rem;
+  opacity: 0.18;
+  pointer-events: none;
+  animation: forest-pulse-glow 4s ease-in-out infinite;
 }
 
 .billboard-grid {
@@ -674,6 +2457,10 @@
   align-items: center;
   text-align: center;
   gap: 0.4rem;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.billboard-card:hover {
+  transform: translateY(-6px);
 }
 
 .billboard-frame {
@@ -683,12 +2470,20 @@
   background: var(--billboard-color, var(--vas-trach-nhiem));
   padding: 4px;
   filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.45));
+  transition: filter 0.35s ease;
+}
+.billboard-card:hover .billboard-frame {
+  filter: drop-shadow(0 14px 30px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 18px var(--billboard-color, var(--vas-trach-nhiem)));
 }
 .billboard-frame img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.billboard-card:hover .billboard-frame img {
+  transform: scale(1.08);
 }
 
 .billboard-award-badge {
@@ -699,6 +2494,11 @@
   font-weight: 800;
   color: #1a0208;
   text-shadow: none;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.billboard-card:hover .billboard-award-badge {
+  transform: scale(1.08) translateY(-1px);
 }
 
 .billboard-title {
@@ -745,6 +2545,8 @@
   overflow: hidden;
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
+  box-shadow: var(--vas-shadow-lg);
+  animation: forest-pop-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .public-lightbox-close {
@@ -761,6 +2563,11 @@
   display: grid;
   place-items: center;
   cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease;
+}
+.public-lightbox-close:hover {
+  background: var(--vas-tri-thuc);
+  transform: rotate(90deg) scale(1.08);
 }
 
 .public-lightbox-nav {
@@ -777,6 +2584,17 @@
   display: grid;
   place-items: center;
   cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease;
+}
+.public-lightbox-nav:hover {
+  background: var(--vas-tri-thuc);
+  transform: translateY(-50%) scale(1.12);
+}
+.public-lightbox-nav--prev:hover {
+  transform: translateY(-50%) scale(1.12) translateX(-2px);
+}
+.public-lightbox-nav--next:hover {
+  transform: translateY(-50%) scale(1.12) translateX(2px);
 }
 .public-lightbox-nav--prev {
   left: 0.75rem;
@@ -878,5 +2696,71 @@
   .featured-gallery-grid,
   .billboard-grid {
     grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  }
+}
+
+/* Ẩn lớp lá/hoa bay trên màn hình rất nhỏ để tránh rối mắt khi ít không gian */
+@media (max-width: 480px) {
+  .forest-leaf {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Tôn trọng prefers-reduced-motion: tắt toàn bộ animation trang trí,       */
+/* giữ lại transition ngắn cần thiết cho phản hồi tương tác.                */
+/* ---------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .forest-ambient {
+    display: none;
+  }
+  .public-gallery-page,
+  .hero-section,
+  .hero-title,
+  .hero-section::before,
+  .hero-section::after,
+  .hero-flora,
+  .hero-butterfly,
+  .hero-butterfly::before,
+  .hero-bird,
+  .hero-bird-container,
+  .hero-critter,
+  .hero-petal,
+  .edu-card--primary,
+  .edu-card--secondary,
+  .edu-card-hill,
+  .edu-card-stars,
+  .edu-card-stars--twinkle,
+  .edu-card-wave,
+  .edu-card-island,
+  .edu-card-shooting-star,
+  .grade-explorer-section--secondary,
+  .billboard-section,
+  .billboard-section::after,
+  .public-navbar-inner::after,
+  .public-navbar-link--active::after,
+  .section-kicker::before,
+  .page-heading h1::after,
+  .grade-explorer-section::before,
+  .public-footer-leaf {
+    animation: none !important;
+  }
+  .hero-bird-container {
+    /* Reset trạng thái ban đầu scale(0) của animation bay - nếu không giữ
+       animation:none sẽ khiến 3 con chim đứng yên vô hình (scale 0) thay
+       vì hiện ở vị trí tĩnh hợp lý. */
+    transform: scale(0.5) translateX(20vw);
+  }
+  .hero-critter {
+    /* Tương tự - animation chạy bắt đầu ở translate3d(-14vw,...) ngoài
+       khung hình; giữ animation: none thôi sẽ khiến 3 con thú "biến mất"
+       ở mép trái thay vì đứng yên tại một vị trí hợp lý trong khung. */
+    transform: translate3d(20vw, 0, 0);
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
