@@ -32,7 +32,7 @@ func NewUploadRepository(db *database.DB) (UploadRepository, error) {
 	getByIDStmt, err := db.Prepare(`
 		SELECT id, filename, original_name, file_size, content_type, s3_key, s3_url, status, error, created_at, updated_at
 		FROM uploads
-		WHERE id = $1
+		WHERE id = ?
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare getByID statement: %w", err)
@@ -41,9 +41,9 @@ func NewUploadRepository(db *database.DB) (UploadRepository, error) {
 	getByStatusStmt, err := db.Prepare(`
 		SELECT id, filename, original_name, file_size, content_type, s3_key, s3_url, status, error, created_at, updated_at
 		FROM uploads
-		WHERE status = $1
+		WHERE status = ?
 		ORDER BY created_at DESC
-		LIMIT $2
+		LIMIT ?
 	`)
 	if err != nil {
 		getByIDStmt.Close()
@@ -80,8 +80,7 @@ func (r *uploadRepository) Close() error {
 func (r *uploadRepository) CreateUpload(ctx context.Context, tx *database.Tx, record *models.UploadRecord) (*models.UploadRecord, error) {
 	query := `
 		INSERT INTO uploads (filename, original_name, file_size, content_type, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, created_at, updated_at
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
 	now := time.Now()
@@ -89,9 +88,10 @@ func (r *uploadRepository) CreateUpload(ctx context.Context, tx *database.Tx, re
 	record.UpdatedAt = now
 	record.Status = string(models.UploadStatusPending)
 
-	var id int64
-	var createdAt, updatedAt time.Time
-	err := tx.QueryRowContext(ctx, query,
+	// MySQL không hỗ trợ RETURNING - dùng Exec + LastInsertId() thay vì
+	// QueryRowContext().Scan() như bản Postgres cũ. created_at/updated_at
+	// đã được set ở Go phía trên nên không cần đọc lại từ DB.
+	result, err := tx.ExecContext(ctx, query,
 		record.Filename,
 		record.OriginalName,
 		record.FileSize,
@@ -99,15 +99,17 @@ func (r *uploadRepository) CreateUpload(ctx context.Context, tx *database.Tx, re
 		record.Status,
 		record.CreatedAt,
 		record.UpdatedAt,
-	).Scan(&id, &createdAt, &updatedAt)
-
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create upload record: %w", err)
 	}
 
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last insert id: %w", err)
+	}
+
 	record.ID = id
-	record.CreatedAt = createdAt
-	record.UpdatedAt = updatedAt
 
 	return record, nil
 }
@@ -116,8 +118,8 @@ func (r *uploadRepository) CreateUpload(ctx context.Context, tx *database.Tx, re
 func (r *uploadRepository) UpdateUploadStatus(ctx context.Context, tx *database.Tx, id int64, status models.UploadStatus, s3Key, s3URL string, uploadErr error) error {
 	query := `
 		UPDATE uploads
-		SET status = $1, s3_key = $2, s3_url = $3, error = $4, updated_at = $5
-		WHERE id = $6
+		SET status = ?, s3_key = ?, s3_url = ?, error = ?, updated_at = ?
+		WHERE id = ?
 	`
 
 	var errMsg *string

@@ -16,6 +16,10 @@ type S3Repository interface {
 	Upload(ctx context.Context, bucket, key string, body io.Reader, contentType string, useACL bool) (string, error)
 	GeneratePresignedURL(ctx context.Context, bucket, key string, expiry time.Duration) (string, error)
 	CheckConnectivity(ctx context.Context) error
+	// Delete xoá 1 object khỏi S3 - dùng khi admin xoá hẳn 1 tác phẩm.
+	// Không tự động gọi khi xoá artwork record (mặc định chỉ xoá DB row,
+	// xem artwork_service.go) - chỉ expose để service tự quyết định gọi.
+	Delete(ctx context.Context, bucket, key string) error
 }
 
 type s3Repository struct {
@@ -67,6 +71,18 @@ func (r *s3Repository) GeneratePresignedURL(ctx context.Context, bucket, key str
 	}
 
 	return request.URL, nil
+}
+
+// Delete xoá 1 object khỏi S3 bucket.
+func (r *s3Repository) Delete(ctx context.Context, bucket, key string) error {
+	_, err := r.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete S3 object bucket %s, key %s: %w", bucket, key, err)
+	}
+	return nil
 }
 
 // CheckConnectivity tests S3 connectivity by performing a HeadBucket operation
