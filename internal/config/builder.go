@@ -119,7 +119,7 @@ func (b *ConfigBuilder) WithDirectories(uploadDir, wpUploadsDir string) *ConfigB
 	return b
 }
 
-func (b *ConfigBuilder) WithDatabase(enabled bool, driver, dataSource string, maxOpen, maxIdle, maxLifetime int) *ConfigBuilder {
+func (b *ConfigBuilder) WithDatabase(enabled bool, driver, dataSource string, maxOpen, maxIdle, maxLifetime int, autoMigrate bool) *ConfigBuilder {
 	if maxOpen == 0 {
 		maxOpen = 25
 	}
@@ -136,6 +136,30 @@ func (b *ConfigBuilder) WithDatabase(enabled bool, driver, dataSource string, ma
 		MaxOpen:     maxOpen,
 		MaxIdle:     maxIdle,
 		MaxLifetime: maxLifetime,
+		AutoMigrate: autoMigrate,
+	}
+	return b
+}
+
+// WithAuth cấu hình Google OAuth + session admin. Không validate creds ở
+// đây - thiếu Client ID/Secret vẫn cho server khởi động bình thường,
+// BuildFromEnv() chỉ log cảnh báo để không chặn các tính năng khác.
+func (b *ConfigBuilder) WithAuth(clientID, clientSecret, redirectURL, sessionSecret, cookieName string, sessionTTL time.Duration, secureCookie bool, allowedEmailDomains []string) *ConfigBuilder {
+	if cookieName == "" {
+		cookieName = "vas_admin_session"
+	}
+	if sessionTTL == 0 {
+		sessionTTL = 168 * time.Hour // 7 ngày
+	}
+	b.config.Auth = AuthConfig{
+		GoogleClientID:      clientID,
+		GoogleClientSecret:  clientSecret,
+		GoogleRedirectURL:   redirectURL,
+		SessionSecret:       sessionSecret,
+		SessionCookieName:   cookieName,
+		SessionTTL:          sessionTTL,
+		SecureCookie:        secureCookie,
+		AllowedEmailDomains: allowedEmailDomains,
 	}
 	return b
 }
@@ -453,11 +477,38 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 
 	// Database configuration
 	dbEnabled := getEnv("DATABASE_ENABLED", "false") == "true"
-	dbDriver := getEnv("DATABASE_DRIVER", "postgres")
+	dbDriver := getEnv("DATABASE_DRIVER", "mysql")
 	dbDataSource := getEnv("DATABASE_URL", "")
 	dbMaxOpen := parseInt(getEnv("DATABASE_MAX_OPEN", "25"), 25)
 	dbMaxIdle := parseInt(getEnv("DATABASE_MAX_IDLE", "5"), 5)
 	dbMaxLifetime := parseInt(getEnv("DATABASE_MAX_LIFETIME", "300"), 300)
+	dbAutoMigrate := getEnv("DATABASE_AUTO_MIGRATE", "true") == "true"
+
+	// Google OAuth + admin session configuration
+	googleClientID := getEnv("GOOGLE_CLIENT_ID", "")
+	googleClientSecret := getEnv("GOOGLE_CLIENT_SECRET", "")
+	googleRedirectURL := getEnv("GOOGLE_REDIRECT_URL", "")
+	sessionSecret := getEnv("SESSION_SECRET", "")
+	sessionTTLHours := parseInt(getEnv("SESSION_TTL_HOURS", "168"), 168)
+	if sessionTTLHours < 1 {
+		sessionTTLHours = 168
+	}
+	var allowedEmailDomains []string
+	if raw := getEnv("ADMIN_ALLOWED_EMAIL_DOMAIN", ""); raw != "" {
+		for _, d := range strings.Split(raw, ",") {
+			d = strings.ToLower(strings.TrimSpace(d))
+			if d != "" {
+				allowedEmailDomains = append(allowedEmailDomains, d)
+			}
+		}
+	}
+	// Cookie session dùng chung quy ước "secure theo production" với CSRF
+	// cookie hiện có - đã tính csrfSecureCookie ở trên nên tái dùng luôn.
+	authSecureCookie := csrfSecureCookie
+
+	if googleClientID == "" || googleClientSecret == "" {
+		log.Println("⚠ GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET chưa cấu hình - /auth/google/* sẽ trả lỗi 503 cho tới khi được điền vào .env")
+	}
 
 	forcePathStyle := getEnv("S3_FORCE_PATH_STYLE", "false") == "true"
 	s3Endpoint := getEnv("S3_ENDPOINT", "")
@@ -479,13 +530,14 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 			int64(parseInt(getEnv("UPLOAD_ABSOLUTE_MAX_MB", "200"), 200))<<20,
 			uploadTimeout,
 		).
-		WithDatabase(dbEnabled, dbDriver, dbDataSource, dbMaxOpen, dbMaxIdle, dbMaxLifetime).
+		WithDatabase(dbEnabled, dbDriver, dbDataSource, dbMaxOpen, dbMaxIdle, dbMaxLifetime, dbAutoMigrate).
 		WithDirectories("./uploads", wpUploadsDir).
 		WithRateLimit(rateLimitEnabled, rateLimitRequests, rateLimitWindow, rateLimitCleanup).
 		WithCSRF(csrfEnabled, csrfSecureCookie).
 		WithConcurrency(concurrencyEnabled, maxConcurrent, acquireTimeout).
 		WithAPI(apiEnabled, apiKey, corsOrigins, requireAPIKey).
 		WithWordPress(wpEnabled, wpBaseURL, wpImageSizes, wpOptimization).
+		WithAuth(googleClientID, googleClientSecret, googleRedirectURL, sessionSecret, "", time.Duration(sessionTTLHours)*time.Hour, authSecureCookie, allowedEmailDomains).
 		Build()
 }
 

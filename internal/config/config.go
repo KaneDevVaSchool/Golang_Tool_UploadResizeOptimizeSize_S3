@@ -13,6 +13,7 @@ type Config struct {
 	Concurrency ConcurrencyConfig
 	API         APIConfig
 	WordPress   WordPressConfig
+	Auth        AuthConfig
 }
 
 type ServerConfig struct {
@@ -98,7 +99,22 @@ type DatabaseConfig struct {
 	DataSource  string
 	MaxOpen     int
 	MaxIdle     int
-	MaxLifetime int // seconds
+	MaxLifetime int  // seconds
+	AutoMigrate bool // chạy internal/database/migrations/*.sql tự động lúc khởi động
+}
+
+// AuthConfig cấu hình đăng nhập admin qua Google OAuth + session cookie.
+// GoogleClientID/Secret có thể rỗng lúc khởi động (server vẫn chạy được,
+// chỉ /auth/google/* trả 503) - user tạo Google Cloud Console credentials sau.
+type AuthConfig struct {
+	GoogleClientID      string
+	GoogleClientSecret  string
+	GoogleRedirectURL   string
+	SessionSecret       string
+	SessionCookieName   string
+	SessionTTL          time.Duration
+	SecureCookie        bool     // theo APP_ENV=production, giống CSRFConfig.SecureCookie
+	AllowedEmailDomains []string // optional, vd ["vaschools.edu.vn","hcm.vaschools.edu.vn"] - rỗng nghĩa là không giới hạn
 }
 
 func Load() (*Config, error) {
