@@ -1,0 +1,140 @@
+/* Design tokens dùng riêng cho admin panel + trang public mới (20 năm VAS).
+   UploadTool cũ tiếp tục dùng biến --red-deep etc. trong index.css - không
+   đụng vào để tránh phá vỡ giao diện đang chạy. 2 bộ token độc lập, không
+   xung đột vì tên biến khác nhau hoàn toàn (--vas-* vs --red-*). */
+:root {
+  /* 5 màu giá trị cốt lõi VAS */
+  --vas-nhan-ai: #009082; /* NHÂN ÁI - teal */
+  --vas-ban-linh: #725139; /* BẢN LĨNH - brown */
+  --vas-tri-thuc: #9a0036; /* TRI THỨC - deep red/maroon (= --red-deep hiện có) */
+  --vas-trach-nhiem: #c49c57; /* TRÁCH NHIỆM - gold */
+  --vas-khai-phong: #1750b5; /* KHAI PHÓNG - blue */
+
+  /* Sắc độ mở rộng của --vas-tri-thuc, dùng cho sidebar/nền tối */
+  --vas-tri-thuc-900: #7a002b;
+  --vas-tri-thuc-700: #b3003f;
+  --vas-tri-thuc-100: #fbe6ec;
+
+  /* Neutrals cho admin (nền sáng, không giống UploadTool nền tối) */
+  --vas-surface: #ffffff;
+  --vas-surface-muted: #f7f5f4;
+  --vas-border: #ece5e2;
+  --vas-text: #241417;
+  --vas-text-muted: #6b5a5d;
+
+  --vas-success: #1a9c5c;
+  --vas-warning: #d98c00;
+  --vas-danger: #c0173f;
+  --vas-info: #2563eb;
+
+  --vas-radius-sm: 0.6rem;
+  --vas-radius-md: 1rem;
+  --vas-radius-lg: 1.5rem;
+  --vas-shadow-sm: 0 2px 8px rgba(36, 20, 23, 0.06);
+  --vas-shadow-md: 0 8px 24px rgba(36, 20, 23, 0.1);
+  --vas-shadow-lg: 0 20px 48px rgba(36, 20, 23, 0.16);
+
+  --vas-sidebar-expanded: 15.5rem;
+  --vas-sidebar-rail: 4.5rem;
+  --vas-sidebar-drawer: 17rem;
+
+  --vas-font: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --vas-display: "Fraunces", "Be Vietnam Pro", Georgia, serif;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Toast host - dùng chung UploadTool + admin + public                     */
+/* ---------------------------------------------------------------------- */
+.toast-host {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(360px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.toast-item {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.85rem 2.2rem 0.85rem 0.9rem;
+  border-radius: var(--vas-radius-sm, 0.6rem);
+  background: #ffffff;
+  color: #241417;
+  box-shadow: 0 12px 32px rgba(20, 10, 12, 0.18);
+  pointer-events: auto;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.toast-success .toast-icon {
+  background: var(--vas-success, #1a9c5c);
+}
+.toast-error .toast-icon {
+  background: var(--vas-danger, #c0173f);
+}
+.toast-info .toast-icon {
+  background: var(--vas-info, #2563eb);
+}
+.toast-warning .toast-icon {
+  background: var(--vas-warning, #d98c00);
+}
+
+.toast-message {
+  margin: 0;
+  flex: 1;
+}
+
+.toast-close {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  border: none;
+  background: transparent;
+  color: #9a8a8d;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem;
+}
+.toast-close:hover {
+  color: #241417;
+}
+
+.toast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 100%;
+  background: currentColor;
+  opacity: 0.25;
+  transform-origin: left;
+}
+.toast-success .toast-progress {
+  color: var(--vas-success, #1a9c5c);
+}
+.toast-info .toast-progress {
+  color: var(--vas-info, #2563eb);
+}
+.toast-warning .toast-progress {
+  color: var(--vas-warning, #d98c00);
+}

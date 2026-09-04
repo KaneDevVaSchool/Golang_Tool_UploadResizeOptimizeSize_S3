@@ -10,6 +10,12 @@ export default defineConfig({
         target: "http://localhost:8080",
         changeOrigin: true,
       },
+      // /auth/google/* là browser-redirect flow (OAuth), nằm ngoài /api -
+      // cần proxy riêng để nút đăng nhập hoạt động đúng ở dev mode (:5173).
+      "/auth": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
     },
   },
   build: {

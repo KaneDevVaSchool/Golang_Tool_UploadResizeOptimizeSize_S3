@@ -1,0 +1,882 @@
+/* Styles cho khu vực public (/trien-lam) - hero, cổng chọn khối, gallery,
+   phòng triển lãm, billboard, và các component tương tác ẩn danh
+   (ReactionPicker, CommentBox) dùng lại được ở cả lightbox lẫn card. Dùng
+   token --vas-* từ tokens.css. */
+
+/* ---------------------------------------------------------------------- */
+/* Reaction picker                                                         */
+/* ---------------------------------------------------------------------- */
+.reaction-picker {
+  position: relative;
+  display: inline-flex;
+}
+
+.reaction-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--vas-border);
+  background: var(--vas-surface);
+  color: var(--vas-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.reaction-picker-trigger:hover {
+  border-color: var(--vas-tri-thuc);
+}
+.reaction-picker-trigger--active {
+  border-color: var(--vas-tri-thuc);
+  background: var(--vas-tri-thuc-100);
+  color: var(--vas-tri-thuc);
+}
+.reaction-picker-emoji {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.reaction-picker-menu {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 0;
+  display: flex;
+  gap: 0.3rem;
+  padding: 0.5rem;
+  background: var(--vas-surface);
+  border-radius: 999px;
+  box-shadow: var(--vas-shadow-lg);
+  z-index: 20;
+}
+
+.reaction-picker-option {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: none;
+  background: transparent;
+  font-size: 1.4rem;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.reaction-picker-option:hover {
+  background: var(--vas-surface-muted);
+}
+
+.reaction-burst {
+  position: absolute;
+  top: 0;
+  left: 1rem;
+  font-size: 1.5rem;
+  pointer-events: none;
+  z-index: 15;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Comment box                                                             */
+/* ---------------------------------------------------------------------- */
+.comment-box {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.comment-name-input {
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--vas-radius-sm);
+  border: 1px solid var(--vas-border);
+  font-size: 0.85rem;
+  background: var(--vas-surface);
+  color: var(--vas-text);
+}
+
+.comment-content-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+.comment-content-input {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  min-height: 2.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--vas-radius-sm);
+  border: 1px solid var(--vas-border);
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: var(--vas-surface);
+  color: var(--vas-text);
+}
+.comment-submit-btn {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border: none;
+  border-radius: var(--vas-radius-sm);
+  background: var(--vas-tri-thuc);
+  color: #fff;
+  cursor: pointer;
+}
+.comment-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.comment-empty {
+  color: var(--vas-text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.comment-item {
+  display: flex;
+  gap: 0.6rem;
+}
+.comment-item-avatar {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--vas-khai-phong);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.comment-item-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.comment-item-body strong {
+  font-size: 0.82rem;
+  color: var(--vas-text);
+}
+.comment-item-body p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--vas-text-muted);
+  word-break: break-word;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Public page shell                                                       */
+/* ---------------------------------------------------------------------- */
+.public-gallery-page {
+  font-family: var(--vas-font);
+  color: var(--vas-text);
+  background: var(--vas-surface);
+  overflow-x: hidden;
+}
+
+.section-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.4rem;
+  margin-bottom: 2.5rem;
+}
+.section-heading--light h2,
+.section-heading--light .section-kicker {
+  color: #fff;
+}
+.section-kicker {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vas-tri-thuc);
+}
+.section-heading h2 {
+  margin: 0;
+  font-family: var(--vas-display);
+  font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+  color: var(--vas-text);
+}
+
+.admin-empty-note--light {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Section 1 - Hero                                                        */
+/* ---------------------------------------------------------------------- */
+.hero-section {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, #fdf3e2 0%, #fff 55%);
+  padding: 5rem 1.5rem 4rem;
+  text-align: center;
+}
+
+.hero-bg-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(0, 144, 130, 0.12), transparent 45%),
+    radial-gradient(circle at 85% 15%, rgba(154, 0, 54, 0.1), transparent 45%),
+    radial-gradient(circle at 50% 90%, rgba(23, 80, 181, 0.08), transparent 50%);
+  pointer-events: none;
+}
+
+.hero-dragon {
+  position: absolute;
+  right: -5%;
+  bottom: -5%;
+  width: min(48vw, 34rem);
+  pointer-events: none;
+  filter: grayscale(0.2);
+}
+
+.hero-mascot {
+  position: absolute;
+  left: 4%;
+  bottom: 6%;
+  width: min(22vw, 12rem);
+  pointer-events: none;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  max-width: 46rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.hero-wordmark {
+  height: 3.2rem;
+  width: auto;
+  filter: drop-shadow(0 4px 12px rgba(154, 0, 54, 0.18));
+}
+
+.hero-kicker {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--vas-tri-thuc);
+}
+
+.hero-title {
+  margin: 0;
+  font-family: var(--vas-display);
+  font-size: clamp(2rem, 5.5vw, 3.6rem);
+  line-height: 1.1;
+  color: var(--vas-text);
+}
+
+.hero-subtitle {
+  margin: 0;
+  font-size: clamp(0.92rem, 1.6vw, 1.05rem);
+  color: var(--vas-text-muted);
+  line-height: 1.6;
+  max-width: 38rem;
+}
+
+.hero-region-cta {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+.hero-region-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--vas-text-muted);
+}
+.hero-region-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.hero-region-btn {
+  padding: 0.75rem 1.75rem;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, var(--vas-tri-thuc), var(--vas-tri-thuc-700));
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(154, 0, 54, 0.22);
+}
+
+.hero-scroll-hint {
+  position: absolute;
+  bottom: 1.5rem;
+  font-size: 1.4rem;
+  color: var(--vas-text-muted);
+}
+
+@media (max-width: 640px) {
+  .hero-dragon,
+  .hero-mascot {
+    opacity: 0.5;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Section 2 - Cổng chọn khối                                              */
+/* ---------------------------------------------------------------------- */
+.edu-gate-section {
+  padding: 5rem 1.5rem;
+  max-width: 84rem;
+  margin: 0 auto;
+}
+
+.edu-gate-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  min-height: 28rem;
+}
+@media (min-width: 900px) {
+  .edu-gate-cards {
+    flex-direction: row;
+  }
+}
+
+.edu-card {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  border: none;
+  border-radius: var(--vas-radius-lg);
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 22rem;
+  box-shadow: var(--vas-shadow-md);
+}
+
+.edu-card--primary {
+  background: linear-gradient(135deg, #e8f8f5 0%, #fff9eb 50%, #fde8ee 100%);
+}
+.edu-card--secondary {
+  background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 55%, #172554 100%);
+  color: #fff;
+}
+
+.edu-card-decor {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.edu-card-float {
+  position: absolute;
+  font-size: 1.8rem;
+}
+.edu-card-float--1 {
+  top: 12%;
+  right: 15%;
+}
+.edu-card-float--2 {
+  bottom: 30%;
+  left: 10%;
+}
+
+.edu-card-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.edu-card-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: flex-start;
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: rgba(255, 255, 255, 0.85);
+  color: #0f7a6d;
+  box-shadow: var(--vas-shadow-sm);
+}
+.edu-card--secondary .edu-card-kicker {
+  background: rgba(255, 255, 255, 0.12);
+  color: #7dd3fc;
+}
+
+.edu-card-title {
+  margin: 0.6rem 0 0;
+  font-family: var(--vas-display);
+  font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+  line-height: 1.1;
+}
+
+.edu-card-subtitle {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #0f7a6d;
+}
+.edu-card--secondary .edu-card-subtitle {
+  color: #a5b4fc;
+}
+
+.edu-card-body {
+  margin: 0.5rem 0 0;
+  max-width: 26rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #4b5563;
+}
+.edu-card--secondary .edu-card-body {
+  color: #cbd5e1;
+}
+
+.edu-card-stats {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.edu-card-stat-pill {
+  padding: 0.25rem 0.7rem;
+  border-radius: var(--vas-radius-sm);
+  background: rgba(16, 122, 109, 0.12);
+  color: #0f7a6d;
+}
+.edu-card--secondary .edu-card-stat-pill {
+  background: rgba(129, 140, 248, 0.2);
+  color: #c7d2fe;
+}
+.edu-card-stat-sep {
+  color: #6b7280;
+}
+.edu-card--secondary .edu-card-stat-sep {
+  color: #94a3b8;
+}
+
+.edu-card-cta {
+  position: relative;
+  z-index: 1;
+  margin-top: 2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  align-self: flex-start;
+  padding: 0.85rem 1.5rem;
+  border-radius: var(--vas-radius-md);
+  font-weight: 800;
+  font-size: 0.95rem;
+  background: #fff;
+  color: #0f7a6d;
+  box-shadow: var(--vas-shadow-md);
+}
+.edu-card--secondary .edu-card-cta {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  backdrop-filter: blur(6px);
+}
+.edu-card-cta-arrow {
+  transition: transform 0.2s ease;
+}
+.edu-card:hover .edu-card-cta-arrow {
+  transform: translateX(4px);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Section 3 - Tác phẩm tiêu biểu                                          */
+/* ---------------------------------------------------------------------- */
+.featured-gallery-section {
+  padding: 5rem 1.5rem;
+  max-width: 84rem;
+  margin: 0 auto;
+}
+
+.region-tabs {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 2.5rem;
+}
+.region-tab {
+  padding: 0.55rem 1.3rem;
+  border-radius: 999px;
+  border: 1px solid var(--vas-border);
+  background: var(--vas-surface);
+  color: var(--vas-text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.region-tab--active {
+  background: var(--vas-tri-thuc);
+  border-color: var(--vas-tri-thuc);
+  color: #fff;
+}
+
+.featured-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 1.1rem;
+}
+
+.featured-gallery-item {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--vas-radius-md);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  aspect-ratio: 4 / 3;
+  background: var(--vas-surface-muted);
+}
+.featured-gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.4s ease;
+}
+.featured-gallery-item:hover img {
+  transform: scale(1.08);
+}
+.featured-gallery-overlay {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 0.75rem 0.85rem;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.72) 0%, transparent 100%);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.featured-gallery-item:hover .featured-gallery-overlay,
+.featured-gallery-item:focus-visible .featured-gallery-overlay {
+  opacity: 1;
+  transform: translateY(0);
+}
+.featured-gallery-overlay strong {
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.featured-gallery-overlay span {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Section 4 - Phòng triển lãm theo khối                                   */
+/* ---------------------------------------------------------------------- */
+.grade-explorer-section {
+  padding: 5rem 1.5rem;
+  max-width: 84rem;
+  margin: 0 auto;
+  background: var(--vas-surface-muted);
+  border-radius: var(--vas-radius-lg);
+}
+
+.grade-node-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.85rem;
+  margin-bottom: 2rem;
+}
+
+.grade-node {
+  display: grid;
+  place-items: center;
+  width: 4.2rem;
+  height: 4.2rem;
+  border-radius: 50%;
+  border: 2px solid var(--vas-border);
+  background: var(--vas-surface);
+  color: var(--vas-text);
+  font-weight: 800;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: var(--vas-shadow-sm);
+}
+.grade-node--active {
+  border-color: var(--vas-tri-thuc);
+  background: var(--vas-tri-thuc);
+  color: #fff;
+}
+
+.grade-artworks-wrap {
+  margin-top: 1rem;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Section 5 - Billboard vinh danh                                         */
+/* ---------------------------------------------------------------------- */
+.billboard-section {
+  padding: 5rem 1.5rem 6rem;
+  background: linear-gradient(160deg, #1a0208 0%, #3a0016 55%, #1a0208 100%);
+}
+
+.billboard-grid {
+  max-width: 84rem;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 2rem 1.5rem;
+}
+
+.billboard-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.4rem;
+}
+
+.billboard-frame {
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--billboard-color, var(--vas-trach-nhiem));
+  padding: 4px;
+  filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.45));
+}
+.billboard-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.billboard-award-badge {
+  margin-top: 0.5rem;
+  padding: 0.2rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #1a0208;
+  text-shadow: none;
+}
+
+.billboard-title {
+  color: #fff;
+  font-size: 0.92rem;
+  margin-top: 0.2rem;
+}
+.billboard-student {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.8rem;
+}
+.billboard-school {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.74rem;
+}
+
+/* ---------------------------------------------------------------------- */
+/* PublicLightbox                                                          */
+/* ---------------------------------------------------------------------- */
+.public-lightbox-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.public-lightbox-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: rgba(10, 4, 6, 0.82);
+  cursor: pointer;
+}
+
+.public-lightbox-panel {
+  position: relative;
+  z-index: 1;
+  width: min(76rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  background: var(--vas-surface);
+  border-radius: var(--vas-radius-lg);
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 1fr);
+}
+
+.public-lightbox-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 5;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.public-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 5;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.public-lightbox-nav--prev {
+  left: 0.75rem;
+}
+.public-lightbox-nav--next {
+  right: calc(18rem + 1.5rem);
+}
+
+.public-lightbox-image-wrap {
+  position: relative;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 20rem;
+}
+.public-lightbox-image-wrap img {
+  max-width: 100%;
+  max-height: calc(100vh - 2rem);
+  object-fit: contain;
+}
+.public-lightbox-counter {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 0.78rem;
+}
+
+.public-lightbox-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.public-lightbox-meta {
+  padding: 1.25rem;
+  box-shadow: 0 1px 0 var(--vas-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.public-lightbox-meta h3 {
+  margin: 0;
+  font-family: var(--vas-display);
+  font-size: 1.15rem;
+}
+.public-lightbox-meta p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--vas-text-muted);
+}
+.public-lightbox-meta-sub {
+  font-size: 0.78rem !important;
+}
+.public-lightbox-awards {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin: 0.3rem 0;
+}
+
+.public-lightbox-comments {
+  flex: 1;
+  padding: 1.25rem;
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .public-lightbox-panel {
+    grid-template-columns: 1fr;
+    max-height: calc(100vh - 1rem);
+    overflow-y: auto;
+  }
+  .public-lightbox-image-wrap {
+    min-height: 14rem;
+  }
+  .public-lightbox-nav--next {
+    right: 0.75rem;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Responsive: public page toàn cục                                        */
+/* ---------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .edu-gate-section,
+  .featured-gallery-section,
+  .grade-explorer-section,
+  .billboard-section {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  .featured-gallery-grid,
+  .billboard-grid {
+    grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  }
+}

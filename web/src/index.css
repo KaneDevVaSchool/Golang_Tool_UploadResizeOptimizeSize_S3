@@ -1,3 +1,5 @@
+@import "./styles/tokens.css";
+
 :root {
   --red-deep: #9a0036;
   --red-dark: #b3003f;
