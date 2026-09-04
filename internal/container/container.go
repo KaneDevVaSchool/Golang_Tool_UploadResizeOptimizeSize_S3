@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"s3-upload-tool/internal/auth"
 	"s3-upload-tool/internal/config"
 	"s3-upload-tool/internal/database"
 	"s3-upload-tool/internal/handlers"
@@ -38,6 +39,37 @@ type Container struct {
 	RepoFactory        *repository.RepositoryFactory
 	ServiceFactory     *service.ServiceFactory
 	RateLimiters       []*middleware.RateLimiter
+
+	// Admin auth (Google OAuth + session) - chỉ khởi tạo đầy đủ khi DB bật,
+	// vì session/admin_users đều cần bảng MySQL. AdminAuthHandler vẫn được
+	// tạo dù thiếu Google Client ID/Secret - handler tự trả 503 rõ ràng.
+	AdminUserRepository repository.AdminUserRepository
+	SessionRepository   repository.SessionRepository
+	SessionManager      *auth.SessionManager
+	AdminAuthHandler    *handlers.AdminAuthHandler
+	sessionCleanupStop  chan struct{}
+
+	// Domain: artwork/award/dashboard/meta - chỉ khởi tạo đầy đủ khi DB bật
+	// (cùng điều kiện với admin auth ở trên, vì mọi bảng domain đều ở MySQL).
+	SchoolRepository      repository.SchoolRepository
+	GradeLevelRepository  repository.GradeLevelRepository
+	StudentRepository     repository.StudentRepository
+	ArtworkRepository     repository.ArtworkRepository
+	AwardRepository       repository.AwardRepository
+	ReactionRepository    repository.ReactionRepository
+	CommentRepository     repository.CommentRepository
+	ArtworkViewRepository repository.ArtworkViewRepository
+	DashboardRepository   repository.DashboardRepository
+
+	ArtworkService   service.ArtworkService
+	AwardService     service.AwardService
+	DashboardService service.DashboardService
+
+	ArtworkHandler   *handlers.ArtworkHandler
+	AwardHandler     *handlers.AwardHandler
+	DashboardHandler *handlers.DashboardHandler
+	MetaHandler      *handlers.MetaHandler
+	PublicHandler    *handlers.PublicHandler
 }
 
 // GetDBStats trả về thống kê connection pool nếu DB có sẵn
@@ -136,10 +168,45 @@ func NewContainer() (*Container, error) {
 			return nil, fmt.Errorf("failed to initialize database: %w", err)
 		}
 		log.Println("[Container] Database initialized successfully")
+
+		if cfg.Database.AutoMigrate {
+			migrateCtx, migrateCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			migrateErr := database.RunMigrations(migrateCtx, db, "internal/database/migrations")
+			migrateCancel()
+			if migrateErr != nil {
+				return nil, fmt.Errorf("failed to run database migrations: %w", migrateErr)
+			}
+		}
+
 		uploadRepo, err = repository.NewUploadRepository(db)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create upload repository: %w", err)
 		}
+	}
+
+	// Admin auth (Google OAuth + session) - cần DB để lưu admin_users/admin_sessions.
+	// AdminAuthHandler vẫn được tạo (dùng constructor trực tiếp, không qua
+	// RepoFactory/ServiceFactory - factory đó chỉ dành cho S3/upload strategy)
+	// ngay cả khi Google Client ID/Secret trống, để endpoint /auth/google/*
+	// có thể trả 503 rõ ràng thay vì 404 khi chưa cấu hình.
+	var adminUserRepo repository.AdminUserRepository
+	var sessionRepo repository.SessionRepository
+	var sessionMgr *auth.SessionManager
+	var adminAuthHandler *handlers.AdminAuthHandler
+	if db != nil {
+		adminUserRepo = repository.NewAdminUserRepository(db)
+		sessionRepo = repository.NewSessionRepository(db)
+		sessionMgr = auth.NewSessionManager(sessionRepo, cfg.Auth)
+		oauthConfig := auth.NewGoogleOAuthConfig(cfg.Auth)
+		adminAuthHandler = handlers.NewAdminAuthHandler(
+			oauthConfig,
+			sessionMgr,
+			adminUserRepo,
+			cfg.Auth.AllowedEmailDomains,
+			cfg.Auth.SecureCookie,
+		)
+	} else {
+		log.Println("[Container] Database chưa bật - admin auth (Google OAuth) sẽ không khả dụng cho tới khi DATABASE_ENABLED=true")
 	}
 
 	repoFactory := repository.NewRepositoryFactory()
@@ -203,6 +270,55 @@ func NewContainer() (*Container, error) {
 		db,
 	)
 
+	// Domain: artwork/award/dashboard/meta - cần DB (schools/grade_levels/
+	// students/artworks/awards...). Dùng constructor trực tiếp (không qua
+	// RepoFactory/ServiceFactory - factory đó chỉ dành cho S3/upload
+	// strategy), theo đúng convention đã áp dụng cho admin auth ở trên.
+	var (
+		schoolRepo     repository.SchoolRepository
+		gradeRepo      repository.GradeLevelRepository
+		studentRepo    repository.StudentRepository
+		artworkRepo    repository.ArtworkRepository
+		awardRepo      repository.AwardRepository
+		reactionRepo   repository.ReactionRepository
+		commentRepo    repository.CommentRepository
+		viewRepo       repository.ArtworkViewRepository
+		dashboardRepo  repository.DashboardRepository
+		artworkSvc     service.ArtworkService
+		awardSvc       service.AwardService
+		dashboardSvc   service.DashboardService
+		artworkHandler *handlers.ArtworkHandler
+		awardHandler   *handlers.AwardHandler
+		dashboardHdlr  *handlers.DashboardHandler
+		metaHandler    *handlers.MetaHandler
+		publicHandler  *handlers.PublicHandler
+	)
+	if db != nil {
+		schoolRepo = repository.NewSchoolRepository(db)
+		gradeRepo = repository.NewGradeLevelRepository(db)
+		studentRepo = repository.NewStudentRepository(db)
+		artworkRepo = repository.NewArtworkRepository(db)
+		awardRepo = repository.NewAwardRepository(db)
+		reactionRepo = repository.NewReactionRepository(db)
+		commentRepo = repository.NewCommentRepository(db)
+		viewRepo = repository.NewArtworkViewRepository(db)
+		dashboardRepo = repository.NewDashboardRepository(db)
+
+		artworkSvc = service.NewArtworkService(
+			db, uploadService, artworkRepo, studentRepo, schoolRepo, gradeRepo, awardRepo, reactionRepo, commentRepo,
+		)
+		awardSvc = service.NewAwardService(awardRepo)
+		dashboardSvc = service.NewDashboardService(dashboardRepo)
+
+		artworkHandler = handlers.NewArtworkHandler(artworkSvc, cfg.Upload.MaxSize)
+		awardHandler = handlers.NewAwardHandler(awardSvc)
+		dashboardHdlr = handlers.NewDashboardHandler(dashboardSvc)
+		metaHandler = handlers.NewMetaHandler(schoolRepo, gradeRepo)
+		publicHandler = handlers.NewPublicHandler(artworkSvc, reactionRepo, commentRepo, viewRepo, awardRepo)
+	} else {
+		log.Println("[Container] Database chưa bật - quản lý tác phẩm/giải thưởng/dashboard sẽ không khả dụng cho tới khi DATABASE_ENABLED=true")
+	}
+
 	// WordPress handler with image resize and optimization
 	var wpHandler *handlers.WPHandler
 	if cfg.WordPress.Enabled {
@@ -235,20 +351,74 @@ func NewContainer() (*Container, error) {
 		wpHandler = handlers.NewWPHandler(imageResizeService, cfg.Upload.MaxSize, cfg.Directories.UploadDir)
 	}
 
-	return &Container{
-		Config:             cfg,
-		DB:                 db,
-		S3Client:           s3Client,
-		Uploader:           uploader,
-		S3Repository:       s3Repo,
-		UploadRepository:   uploadRepo,
-		UploadService:      uploadService,
-		ChunkUploadService: chunkService,
-		APIHandler:         apiHandler,
-		WPHandler:          wpHandler,
-		RepoFactory:        repoFactory,
-		ServiceFactory:     serviceFactory,
-	}, nil
+	c := &Container{
+		Config:              cfg,
+		DB:                  db,
+		S3Client:            s3Client,
+		Uploader:            uploader,
+		S3Repository:        s3Repo,
+		UploadRepository:    uploadRepo,
+		UploadService:       uploadService,
+		ChunkUploadService:  chunkService,
+		APIHandler:          apiHandler,
+		WPHandler:           wpHandler,
+		RepoFactory:         repoFactory,
+		ServiceFactory:      serviceFactory,
+		AdminUserRepository: adminUserRepo,
+		SessionRepository:   sessionRepo,
+		SessionManager:      sessionMgr,
+		AdminAuthHandler:    adminAuthHandler,
+
+		SchoolRepository:      schoolRepo,
+		GradeLevelRepository:  gradeRepo,
+		StudentRepository:     studentRepo,
+		ArtworkRepository:     artworkRepo,
+		AwardRepository:       awardRepo,
+		ReactionRepository:    reactionRepo,
+		CommentRepository:     commentRepo,
+		ArtworkViewRepository: viewRepo,
+		DashboardRepository:   dashboardRepo,
+		ArtworkService:        artworkSvc,
+		AwardService:          awardSvc,
+		DashboardService:      dashboardSvc,
+		ArtworkHandler:        artworkHandler,
+		AwardHandler:          awardHandler,
+		DashboardHandler:      dashboardHdlr,
+		MetaHandler:           metaHandler,
+		PublicHandler:         publicHandler,
+	}
+
+	if sessionRepo != nil {
+		c.startSessionCleanup()
+	}
+
+	return c, nil
+}
+
+// startSessionCleanup chạy goroutine nền dọn session hết hạn định kỳ mỗi
+// giờ, theo đúng pattern RateLimiter.cleanup - dừng qua sessionCleanupStop
+// trong Shutdown().
+func (c *Container) startSessionCleanup() {
+	c.sessionCleanupStop = make(chan struct{})
+	ticker := time.NewTicker(1 * time.Hour)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				n, err := c.SessionRepository.DeleteExpired(ctx)
+				cancel()
+				if err != nil {
+					log.Printf("[Container] Failed to clean up expired sessions: %v", err)
+				} else if n > 0 {
+					log.Printf("[Container] Cleaned up %d expired admin session(s)", n)
+				}
+			case <-c.sessionCleanupStop:
+				return
+			}
+		}
+	}()
 }
 
 func (c *Container) GetServerHandler() http.Handler {
@@ -285,6 +455,86 @@ func (c *Container) GetServerHandler() http.Handler {
 		apiMux.HandleFunc("/api/v1/wp-upload", c.WPHandler.HandleWPUpload)
 	}
 
+	// Admin API routes: session-based auth (không dùng API key) - toàn bộ
+	// /api/v1/admin/* đi qua AdminAuthMiddleware. Chỉ mount khi DB bật vì
+	// AdminAuthHandler/SessionManager cần bảng admin_users/admin_sessions.
+	if c.AdminAuthHandler != nil && c.SessionManager != nil {
+		adminAPIMux := http.NewServeMux()
+		adminAPIMux.HandleFunc("/api/v1/admin/auth/me", c.AdminAuthHandler.HandleMe)
+
+		// Quản lý tác phẩm/giải thưởng/dashboard - chỉ có khi DB bật (cùng
+		// điều kiện AdminAuthHandler != nil vì cả hai đều cần MySQL).
+		if c.ArtworkHandler != nil {
+			adminAPIMux.HandleFunc("POST /api/v1/admin/artworks/bulk-upload", c.ArtworkHandler.HandleBulkUpload)
+			adminAPIMux.HandleFunc("POST /api/v1/admin/artworks", c.ArtworkHandler.HandleCreate)
+			adminAPIMux.HandleFunc("GET /api/v1/admin/artworks", c.ArtworkHandler.HandleList)
+			adminAPIMux.HandleFunc("GET /api/v1/admin/artworks/{id}", c.ArtworkHandler.HandleGet)
+			adminAPIMux.HandleFunc("PUT /api/v1/admin/artworks/{id}", c.ArtworkHandler.HandleUpdate)
+			adminAPIMux.HandleFunc("DELETE /api/v1/admin/artworks/{id}", c.ArtworkHandler.HandleDelete)
+			adminAPIMux.HandleFunc("PATCH /api/v1/admin/artworks/{id}/featured", c.ArtworkHandler.HandleSetFeatured)
+		}
+		if c.AwardHandler != nil {
+			adminAPIMux.HandleFunc("GET /api/v1/admin/awards", c.AwardHandler.HandleListAwards(true))
+			adminAPIMux.HandleFunc("POST /api/v1/admin/awards", c.AwardHandler.HandleCreateAward)
+			adminAPIMux.HandleFunc("PUT /api/v1/admin/awards/{id}", c.AwardHandler.HandleUpdateAward)
+			adminAPIMux.HandleFunc("DELETE /api/v1/admin/awards/{id}", c.AwardHandler.HandleDeleteAward)
+		}
+		if c.DashboardHandler != nil {
+			adminAPIMux.HandleFunc("/api/v1/admin/dashboard/stats", c.DashboardHandler.HandleStats)
+		}
+
+		adminAPIHandler := middleware.AdminAuthMiddleware(c.SessionManager)(http.Handler(adminAPIMux))
+		apiMux.Handle("/api/v1/admin/", adminAPIHandler)
+
+		// Logout không bọc AdminAuthMiddleware: nếu session đã hết hạn phía
+		// server thì vẫn phải cho phép request logout đi qua để xoá cookie
+		// phía client sạch sẽ, tránh 401 vô nghĩa khi user chỉ muốn đăng xuất.
+		apiMux.HandleFunc("/api/v1/admin/auth/logout", c.AdminAuthHandler.HandleLogout)
+	}
+
+	// Public read-only routes: không cần session/API key - dùng cho form
+	// admin (chọn trường/khối) lẫn bộ lọc trang public.
+	if c.MetaHandler != nil {
+		apiMux.HandleFunc("/api/v1/schools", c.MetaHandler.HandleListSchools)
+		apiMux.HandleFunc("/api/v1/grade-levels", c.MetaHandler.HandleListGradeLevels)
+	}
+	if c.AwardHandler != nil {
+		apiMux.HandleFunc("/api/v1/awards", c.AwardHandler.HandleListAwards(false))
+	}
+
+	// Public API ẩn danh: reaction/comment/view cho trang "20 năm VAS". Toàn
+	// bộ route (GET lẫn POST/DELETE) đăng ký trên 1 mux duy nhất để tránh
+	// đụng pattern khi 2 mux cùng khớp 1 path; rate limiter NGHIÊM HƠN
+	// (20 req/phút/IP, tách biệt với rate limiter chung toàn API) chỉ áp
+	// dụng cho method state-changing (POST/DELETE) qua điều kiện method
+	// ngay trong middleware, GET không bị giới hạn riêng.
+	if c.PublicHandler != nil {
+		publicMux := http.NewServeMux()
+		publicMux.HandleFunc("GET /api/v1/public/artworks", c.PublicHandler.HandleListArtworks)
+		publicMux.HandleFunc("GET /api/v1/public/artworks/featured", c.PublicHandler.HandleListFeatured)
+		publicMux.HandleFunc("GET /api/v1/public/artworks/{id}", c.PublicHandler.HandleGetArtwork)
+		publicMux.HandleFunc("GET /api/v1/public/artworks/{id}/comments", c.PublicHandler.HandleListComments)
+		publicMux.HandleFunc("GET /api/v1/public/billboard", c.PublicHandler.HandleBillboard)
+		publicMux.HandleFunc("POST /api/v1/public/artworks/{id}/reactions", c.PublicHandler.HandleAddReaction)
+		publicMux.HandleFunc("DELETE /api/v1/public/artworks/{id}/reactions/{type}", c.PublicHandler.HandleRemoveReaction)
+		publicMux.HandleFunc("POST /api/v1/public/artworks/{id}/comments", c.PublicHandler.HandleCreateComment)
+
+		var publicHandlerChain http.Handler = publicMux
+		if c.Config.RateLimit.Enabled {
+			publicRateLimiter := middleware.NewRateLimiter(20, time.Minute, c.Config.RateLimit.CleanupInterval)
+			c.RateLimiters = append(c.RateLimiters, publicRateLimiter)
+			strictLimit := middleware.RateLimitMiddleware(publicRateLimiter)(publicMux)
+			publicHandlerChain = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost || r.Method == http.MethodDelete {
+					strictLimit.ServeHTTP(w, r)
+					return
+				}
+				publicMux.ServeHTTP(w, r)
+			})
+		}
+		apiMux.Handle("/api/v1/public/", publicHandlerChain)
+	}
+
 	// Apply API-specific middleware
 	apiHandler := http.Handler(apiMux)
 
@@ -301,6 +551,13 @@ func (c *Container) GetServerHandler() http.Handler {
 
 	// Mount API routes
 	mux.Handle("/api/", apiHandler)
+
+	// Google OAuth: browser-redirect flow, không phải JSON API - mount
+	// ngoài /api/ để không bị CORS/API-key middleware của apiHandler áp vào.
+	if c.AdminAuthHandler != nil {
+		mux.HandleFunc("/auth/google/login", c.AdminAuthHandler.HandleGoogleLogin)
+		mux.HandleFunc("/auth/google/callback", c.AdminAuthHandler.HandleGoogleCallback)
+	}
 
 	// Serve WordPress uploads directory (with security)
 	if c.Config.WordPress.Enabled {
@@ -359,6 +616,11 @@ func (c *Container) Shutdown() {
 	if c.ChunkUploadService != nil {
 		c.ChunkUploadService.Stop()
 		log.Println("[Container] Chunk upload sessions cleaned")
+	}
+
+	if c.sessionCleanupStop != nil {
+		close(c.sessionCleanupStop)
+		log.Println("[Container] Admin session cleanup stopped")
 	}
 
 	// Close database connection if exists

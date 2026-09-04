@@ -276,13 +276,13 @@ func (h *APIHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ready := true
 	health := map[string]interface{}{
-		"status":                     "ok",
-		"service":                    "s3-upload-api",
-		"max_size":                   h.maxUploadSize,
-		"max_size_formatted":         utils.FormatFileSize(h.maxUploadSize),
-		"absolute_max_size":          h.absoluteMaxSize,
+		"status":                      "ok",
+		"service":                     "s3-upload-api",
+		"max_size":                    h.maxUploadSize,
+		"max_size_formatted":          utils.FormatFileSize(h.maxUploadSize),
+		"absolute_max_size":           h.absoluteMaxSize,
 		"absolute_max_size_formatted": utils.FormatFileSize(h.absoluteMaxSize),
-		"chunk_upload":               h.chunkService != nil,
+		"chunk_upload":                h.chunkService != nil,
 	}
 
 	if requestID := middleware.GetRequestID(r.Context()); requestID != "" {

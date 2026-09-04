@@ -158,7 +158,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := getClientIP(r)
+			ip := GetClientIP(r)
 
 			if !limiter.Allow(ip) {
 				http.Error(w, "Rate limit exceeded. Please try again later.", http.StatusTooManyRequests)
@@ -170,8 +170,9 @@ func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
 	}
 }
 
-// getClientIP trích xuất real client IP từ request
-func getClientIP(r *http.Request) string {
+// GetClientIP trích xuất real client IP từ request - export để các package
+// khác (vd handlers.PublicHandler) dùng chung logic thay vì viết lại.
+func GetClientIP(r *http.Request) string {
 	// * Kiểm tra X-Forwarded-For header (cho proxies/load balancers)
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		// * X-Forwarded-For có thể chứa nhiều IPs, format: "client, proxy1, proxy2"
