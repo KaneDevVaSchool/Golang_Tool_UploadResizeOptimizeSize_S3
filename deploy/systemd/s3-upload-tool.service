@@ -1,0 +1,16 @@
+[Unit]
+Description=S3 Upload Tool (pictures.vaschools.edu.vn)
+After=network.target
+
+[Service]
+Type=simple
+User=appuser
+WorkingDirectory=/opt/s3-upload-tool
+EnvironmentFile=/opt/s3-upload-tool/.env
+ExecStart=/opt/s3-upload-tool/server
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
