@@ -16,8 +16,7 @@ import (
 	"s3-upload-tool/internal/config"
 	"s3-upload-tool/internal/database"
 
-	"github.com/lib/pq"
-	_ "github.com/lib/pq"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 const (
@@ -115,16 +114,16 @@ func main() {
 
 // ensureMigrationsTable tạo bảng theo dõi migrations nếu chưa tồn tại
 func ensureMigrationsTable(ctx context.Context, db *database.DB) error {
-	// ! Sử dụng pq.QuoteIdentifier để tránh SQL injection (defense-in-depth)
-	// Mặc dù migrationsTableName là constant, nhưng vẫn cần quote để an toàn khi refactor
-	tableName := pq.QuoteIdentifier(migrationsTableName)
+	// migrationsTableName là constant cố định (không nhận input động), nên nội suy
+	// trực tiếp vào DDL là an toàn - MySQL driver không có hàm quote identifier
+	// public tương đương pq.QuoteIdentifier, dùng backtick thủ công cho tên bảng cố định.
 	query := fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS %s (
+		CREATE TABLE IF NOT EXISTS `+"`%s`"+` (
 			version VARCHAR(255) PRIMARY KEY,
 			name VARCHAR(255) NOT NULL,
 			applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)
-	`, tableName)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+	`, migrationsTableName)
 
 	_, err := db.ExecContext(ctx, query)
 	return err
@@ -216,8 +215,7 @@ func loadMigrations() ([]Migration, error) {
 
 // getAppliedMigrations trả về danh sách các migration đã apply
 func getAppliedMigrations(ctx context.Context, db *database.DB) (map[string]bool, error) {
-	tableName := pq.QuoteIdentifier(migrationsTableName)
-	query := fmt.Sprintf("SELECT version FROM %s ORDER BY version", tableName)
+	query := fmt.Sprintf("SELECT version FROM `%s` ORDER BY version", migrationsTableName)
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query applied migrations: %w", err)
@@ -305,11 +303,10 @@ func runMigrations(ctx context.Context, db *database.DB, migrations []Migration,
 			return fmt.Errorf("failed to execute migration %s: %w", migration.Version, err)
 		}
 
-		tableName := pq.QuoteIdentifier(migrationsTableName)
 		recordQuery := fmt.Sprintf(`
-			INSERT INTO %s (version, name, applied_at)
-			VALUES ($1, $2, $3)
-		`, tableName)
+			INSERT INTO `+"`%s`"+` (version, name, applied_at)
+			VALUES (?, ?, ?)
+		`, migrationsTableName)
 
 		if _, err := tx.ExecContext(ctx, recordQuery, migration.Version, migration.Name, time.Now()); err != nil {
 			rollbackErr := tx.Rollback()
