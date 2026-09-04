@@ -4,15 +4,15 @@ import "time"
 
 // GetCurrentYear trả về năm hiện tại dạng chuỗi (YYYY)
 func GetCurrentYear() string {
-	return time.Now().Format("2025")
+	return time.Now().Format("2006")
 }
 
 // GetCurrentMonth trả về tháng hiện tại dạng chuỗi (MM)
 func GetCurrentMonth() string {
-	return time.Now().Format("12")
+	return time.Now().Format("01")
 }
 
 // GetCurrentDate trả về ngày hiện tại dạng YYYY-MM-DD
 func GetCurrentDate() string {
-	return time.Now().Format("2025-12-12")
+	return time.Now().Format("2006-01-02")
 }
