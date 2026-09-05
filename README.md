@@ -3,14 +3,20 @@
 HTTP API service (Go) cho hội thi vẽ tranh "20 năm Trường Việt Mỹ": upload ảnh lên Amazon S3,
 quản trị tác phẩm/giải thưởng qua admin panel (đăng nhập Google OAuth), và trang public kỷ niệm
 20 năm thành lập Hệ thống Trường Việt Mỹ (không cần đăng nhập). React UI phục vụ cả 3 khu vực:
-công cụ upload nội bộ (`/`), admin panel (`/admin`), trang public (`/trien-lam`).
+trang public (`/`), admin panel (`/admin`), công cụ upload nội bộ (`/upload`).
 
 ## Documentation
 
-- **[Architecture](./docs/ARCHITECTURE.md)** — kiến trúc, luồng request, middleware chain
-- **[Module Breakdown](./docs/MODULES.md)** — chi tiết từng package: trách nhiệm, phụ thuộc, lưu ý
-- **[API Reference](./docs/API.md)** — tham chiếu endpoint đầy đủ
-- **[Deployment Guide](./docs/DEPLOYMENT.md)** — deploy lên VPS (Docker hoặc systemd)
+📚 **[Toàn bộ tài liệu → docs/](./docs/README.md)** — bắt đầu từ đây.
+
+| Tài liệu | Nội dung |
+|---|---|
+| **[Architecture](./docs/ARCHITECTURE.md)** | Kiến trúc, luồng request, chuỗi middleware, mô hình dữ liệu |
+| **[Detail Design](./docs/detail_design/README.md)** | Thiết kế chi tiết 6 miền: CSDL, upload, tác phẩm, tương tác public, bảo mật, frontend |
+| **[Module Breakdown](./docs/MODULES.md)** | Từng package Go: trách nhiệm, phụ thuộc, lưu ý khi sửa |
+| **[API Reference](./docs/API.md)** | Tham chiếu đầy đủ endpoint: request/response/mã lỗi |
+| **[Deploys](./docs/deploys/README.md)** | Triển khai VPS, cấu hình, vận hành, xử lý sự cố |
+| **[Plan](./docs/plan/README.md)** | Trạng thái hiện tại, lộ trình, rủi ro |
 
 ## Quick Start
 
@@ -58,6 +64,23 @@ mặc định) — không cần chạy `cmd/migrate` thủ công trừ khi muố
 
 `ADMIN_ALLOWED_EMAIL_DOMAIN` giới hạn admin chỉ đăng nhập được bằng email thuộc các domain liệt kê
 (phẩy phân tách nếu nhiều domain); để trống = không giới hạn (chỉ nên dùng khi dev).
+
+#### Whitelist tài khoản đăng nhập
+
+Hệ thống chỉ cho phép **đúng các email trong whitelist** đăng nhập admin. Email ngoài danh sách bị
+từ chối ngay ở bước callback OAuth — không được tự tạo tài khoản admin, kể cả khi cùng domain trường.
+
+Danh sách mặc định (9 tài khoản) khai báo tại `defaultAllowedAdminEmails` trong
+[internal/config/builder.go](internal/config/builder.go). Để đổi mà không sửa code, set `ADMIN_ALLOWED_EMAILS`
+trong `.env` (phẩy phân tách):
+
+```env
+ADMIN_ALLOWED_EMAILS=khoana@hcm.vaschools.edu.vn,toanbq@vaschools.edu.vn
+```
+
+Thứ tự ưu tiên: `ADMIN_ALLOWED_EMAILS` (whitelist email chính xác) **cao hơn**
+`ADMIN_ALLOWED_EMAIL_DOMAIN`. Khi whitelist không rỗng, kiểm tra domain bị bỏ qua hoàn toàn.
+Email cũng phải đã được Google xác thực (`email_verified`) mới đăng nhập được.
 
 ### Web UI
 

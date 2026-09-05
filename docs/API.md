@@ -1,111 +1,149 @@
-# API Reference
+# Tham chiếu API
 
-Base URL mặc định: `http://localhost:8080` (đổi theo `PORT` / domain thật khi deploy).
+Base URL: `https://pictures.vaschools.edu.vn` (dev: `http://localhost:8080`).
 
-Mọi response đều theo format chung:
+Đối chiếu code tại commit `d0ec7c2`. Nguồn sự thật cho danh sách route:
+`internal/container/container.go:416-604`.
+
+## Định dạng phản hồi chung
+
+Mọi endpoint JSON dùng chung một vỏ bọc (`handlers/base_handler.go`):
 
 ```json
-// success
-{ "success": true, "data": { ... } }
+// thành công — luôn HTTP 200
+{ "success": true, "data": { } }
 
-// error
-{ "success": false, "error": { "code": "SOME_CODE", "message": "..." } }
+// lỗi
+{ "success": false, "error": { "code": "MÃ_LỖI", "message": "Mô tả tiếng Việt" } }
 ```
 
-## Xác thực & bảo mật
+Thông báo lỗi viết bằng tiếng Việt, hướng tới người dùng cuối. Mã lỗi (`code`) ổn định,
+dùng để xử lý bằng chương trình.
 
-- **API Key** (nếu `API_REQUIRE_KEY=true`): gửi header `X-API-Key: <key>`. Không bao giờ chấp nhận key qua query string. `/api/v1/health` luôn miễn xác thực (cho load balancer/k8s probe).
-- **CORS**: chỉ origin trong `CORS_ORIGINS` (comma-separated) được phép gọi từ browser.
-- **CSRF**: bật mặc định cho same-origin SPA — nếu gọi API từ domain khác/non-browser client, xem cách lấy CSRF token trong `internal/middleware/csrf.go` hoặc tắt `CSRF_ENABLED` cho pure API use-case.
-- **Rate limit**: mặc định 100 req/phút/IP (`RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_MINUTES`); riêng `/api/v1/metrics` giới hạn cứng 10 req/phút.
-- **Concurrency limit**: tối đa `MAX_CONCURRENT_UPLOADS` upload xử lý đồng thời toàn server; vượt quá sẽ chờ tối đa `CONCURRENCY_ACQUIRE_TIMEOUT_SECONDS` rồi trả lỗi.
+## Xác thực
+
+| Cơ chế | Áp cho | Cách gửi |
+|---|---|---|
+| API key | Toàn bộ `/api/*` khi `API_REQUIRE_KEY=true` | Header `X-API-Key` |
+| Session | `/api/v1/admin/*` | Cookie `vas_admin_session` (tự động) |
+| CSRF | Mọi method ghi khi `CSRF_ENABLED=true` | Header `X-CSRF-Token` khớp cookie `csrf_token` |
+
+Ngoại lệ: `/api/v1/health` **luôn** miễn API key.
+
+⚠️ **Cảnh báo quan trọng.** Bật `API_REQUIRE_KEY=true` (bắt buộc ở production) sẽ áp API key
+lên **cả** `/api/v1/public/*`, khiến trang public không hoạt động với khách ẩn danh. Xem
+[plan/03-risks.md](./plan/03-risks.md) mục R1.
+
+### Lấy CSRF token cho client không phải trình duyệt
+
+```bash
+# 1. Gọi GET bất kỳ để nhận cookie csrf_token
+curl -c cookies.txt http://localhost:8080/api/v1/health
+
+# 2. Trích token và gửi kèm ở request ghi
+TOKEN=$(grep csrf_token cookies.txt | awk '{print $7}')
+curl -b cookies.txt -H "X-CSRF-Token: $TOKEN" -X POST ...
+```
+
+Hoặc đặt `CSRF_ENABLED=false` nếu triển khai thuần API, không có trình duyệt.
+
+## Giới hạn tần suất
+
+| Phạm vi | Giới hạn | Ghi chú |
+|---|---|---|
+| Toàn cục | 100 req/phút/IP | Cấu hình được |
+| `/api/v1/metrics` | 10 req/phút/IP | Cố định trong code |
+| `POST`/`DELETE` ở `/api/v1/public/*` | 20 req/phút/IP | Cố định; `GET` không bị giới hạn riêng |
+
+Vượt giới hạn trả **429**.
 
 ---
+
+# 1. Hệ thống
+
+## `GET /api/v1/health`
+
+Không cần xác thực. Dùng cho giám sát và load balancer.
+
+```json
+{
+  "status": "ok",
+  "service": "s3-upload-api",
+  "max_size": 20971520,
+  "max_size_formatted": "20.0 MB",
+  "absolute_max_size": 209715200,
+  "absolute_max_size_formatted": "200.0 MB",
+  "chunk_upload": true,
+  "request_id": "…",
+  "checks": { "disk": { }, "database": { } }
+}
+```
+
+Trả **503** khi kiểm tra sẵn sàng thất bại (ví dụ mất kết nối DB).
+
+## `GET /api/v1/metrics`
+
+Số request, độ trễ, phân bố mã trạng thái. Giới hạn 10 req/phút.
+
+---
+
+# 2. Upload
 
 ## `POST /api/v1/upload`
 
-Upload trực tiếp một file (≤ `UPLOAD_MAX_SIZE_MB`, mặc định 20MB).
+Upload một file, tối đa `UPLOAD_MAX_SIZE_MB` (mặc định 20MB).
 
-**Request**: `multipart/form-data`, field file (tên field: xem `utils.GetFileFromRequest` — hỗ trợ `file`).
+**Request**: `multipart/form-data`, trường file tên `file`.
 
-**Response 200**:
 ```json
 {
   "success": true,
   "data": {
-    "url": "https://bucket.s3.region.amazonaws.com/key...",
-    "key": "images/2026/09/uuid-photo.jpg",
-    "size": 123456,
-    "name": "photo.jpg"
+    "url": "https://bucket.s3.ap-southeast-1.amazonaws.com/images/tranh-20260906-143022-Ab3xK9mQ2pLr.jpg",
+    "key": "images/tranh-20260906-143022-Ab3xK9mQ2pLr.jpg",
+    "size": 1234567,
+    "name": "tranh.jpg"
   }
 }
 ```
 
-**Lỗi thường gặp**:
-| status | code | ý nghĩa |
+| Mã HTTP | `code` | Ý nghĩa |
 |---|---|---|
-| 400 | `INVALID_FORM` | multipart form không hợp lệ |
-| 400 | `FILE_NOT_FOUND` | thiếu file trong request |
-| 400 | `INVALID_FILE_TYPE` | định dạng không hỗ trợ |
-| 400 | `FILE_TOO_LARGE` | vượt `UPLOAD_MAX_SIZE_MB` |
-| 405 | `METHOD_NOT_ALLOWED` | không phải POST |
-| 5xx | `UPLOAD_FAILED` | lỗi S3 / lỗi hệ thống |
+| 400 | `INVALID_FORM` | Form multipart không hợp lệ |
+| 400 | `FILE_NOT_FOUND` | Thiếu file trong request |
+| 400 | `INVALID_FILE_TYPE` | Đuôi file không được hỗ trợ |
+| 400 | `FILE_TOO_LARGE` | Vượt `UPLOAD_MAX_SIZE_MB` |
+| 405 | `METHOD_NOT_ALLOWED` | Không phải POST |
+| 5xx | `UPLOAD_FAILED` | Lỗi S3 hoặc lỗi hệ thống |
 
----
+Định dạng cho phép: ảnh (jpg, jpeg, png, gif, webp, bmp, svg, ico), tài liệu (pdf, doc,
+docx, xls, xlsx, ppt, pptx, txt, rtf, odt, ods, odp), video (mp4, avi, mov, wmv, flv, webm,
+mkv, m4v, 3gp), âm thanh (mp3, wav, ogg, flac, aac, m4a, wma, opus), nén (zip, rar, 7z,
+tar, gz, bz2, xz).
 
 ## `POST /api/v1/upload-transaction`
 
-Giống `/upload` nhưng ghi nhận vào database (yêu cầu `DATABASE_ENABLED=true`). Trả thêm `record` (trạng thái upload đã lưu).
+Giống `/upload` nhưng ghi thêm bản ghi audit vào bảng `uploads`. Yêu cầu
+`DATABASE_ENABLED=true`. Phản hồi có thêm `record` (trạng thái bản ghi đã lưu).
 
-**Response 200**:
-```json
-{
-  "success": true,
-  "data": {
-    "url": "...",
-    "key": "...",
-    "size": 123456,
-    "name": "photo.jpg",
-    "record": {
-      "id": 42,
-      "filename": "photo.jpg",
-      "original_name": "photo.jpg",
-      "file_size": 123456,
-      "content_type": "image/jpeg",
-      "s3_key": "...",
-      "s3_url": "...",
-      "status": "completed",
-      "created_at": "2026-09-04T10:00:00Z",
-      "updated_at": "2026-09-04T10:00:01Z"
-    }
-  }
-}
-```
+## Upload chia phần
 
-Nếu database chưa bật → `503 DATABASE_DISABLED`.
-
----
-
-## Chunked upload (file lớn, đến `UPLOAD_ABSOLUTE_MAX_MB`, mặc định 200MB)
-
-Quy trình: `init` → `chunk` (lặp lại cho từng phần) → `complete` (hoặc `abort` để huỷ giữa chừng).
+Dùng cho file đến `UPLOAD_ABSOLUTE_MAX_MB` (mặc định 200MB).
 
 ### `POST /api/v1/upload/init`
 
-**Request** (JSON):
 ```json
-{ "filename": "video.mp4", "total_size": 157286400 }
-```
+// request
+{ "filename": "video.mp4", "total_size": 104857600 }
 
-**Response 200**:
-```json
+// response
 {
   "success": true,
   "data": {
-    "upload_id": "b3f1...-uuid",
+    "upload_id": "uuid",
     "chunk_size": 20971520,
-    "total_chunks": 8,
-    "total_size": 157286400,
+    "total_chunks": 5,
+    "total_size": 104857600,
     "filename": "video.mp4"
   }
 }
@@ -113,104 +151,420 @@ Quy trình: `init` → `chunk` (lặp lại cho từng phần) → `complete` (h
 
 ### `POST /api/v1/upload/chunk`
 
-**Request**: `multipart/form-data` với fields:
-- `upload_id` (string, từ bước init)
-- `index` (int, 0-based)
-- `chunk` hoặc `file` (binary phần dữ liệu, kích thước phải khớp `chunk_size` — trừ phần cuối cùng)
+`multipart/form-data` gồm: `upload_id`, `index` (bắt đầu từ 0), `chunk` (dữ liệu nhị phân).
 
-**Response 200**:
-```json
-{ "success": true, "data": { "upload_id": "...", "index": 0, "size": 20971520, "status": "received" } }
-```
+Mỗi phần phải đúng `chunk_size`, riêng phần cuối là phần dư. Gửi các phần theo thứ tự bất
+kỳ.
 
 ### `POST /api/v1/upload/complete`
 
-**Request** (JSON): `{ "upload_id": "..." }`
-
-Ghép toàn bộ chunk theo thứ tự, validate nội dung (magic byte), upload lên S3, trả kết quả giống `/api/v1/upload`:
 ```json
-{ "success": true, "data": { "url": "...", "key": "...", "size": 157286400, "name": "video.mp4" } }
+// request
+{ "upload_id": "uuid" }
 ```
+
+Kiểm tra đủ phần → ghép → **kiểm tra magic byte** → đẩy S3 → dọn phiên. Phản hồi giống
+`/upload`.
 
 ### `POST /api/v1/upload/abort`
 
-**Request** (JSON): `{ "upload_id": "..." }` → xoá session + chunk đã nhận trên disk.
 ```json
-{ "success": true, "data": { "status": "aborted" } }
+{ "upload_id": "uuid" }
 ```
 
-**Lỗi đặc thù chunk upload**:
-| status | code | ý nghĩa |
-|---|---|---|
-| 404 | `SESSION_NOT_FOUND` | upload_id sai / hết hạn (TTL 45 phút) |
-| 409 | `SESSION_BUSY` | session đang trong lúc `complete` |
-| 429 | `TOO_MANY_SESSIONS` | vượt quá 64 session đồng thời toàn server |
-| 400 | `VALIDATION_ERROR` | thiếu field / chunk sai kích thước / thiếu chunk khi complete |
+Huỷ phiên, xoá các phần đã nhận.
 
-⚠️ Session lưu **in-memory** trong tiến trình — sẽ mất nếu restart server giữa chừng, và không chia sẻ được giữa nhiều instance nếu chạy nhiều bản sao sau load balancer (cần sticky session).
-
----
+**Lỗi riêng của nhóm chunked**: phiên không tồn tại hoặc hết hạn (TTL 45 phút), phiên đang
+hoàn tất, quá 64 phiên đồng thời, thiếu phần, kích thước phần không khớp.
 
 ## `POST /api/v1/wp-upload`
 
-Upload ảnh kiểu WordPress: lưu local, tự resize theo `WORDPRESS_IMAGE_SIZES`, tối ưu (JPEG/PNG/WebP nếu `IMAGE_OPTIMIZATION_ENABLED=true`). Chỉ nhận file ảnh, **không upload S3**.
-
-**Request**: `multipart/form-data`, field file ảnh.
-
-**Response 200**:
-```json
-{
-  "success": true,
-  "data": {
-    "file": { "name": "photo.jpg", "type": "image/jpeg", "url": "http://host/wp-content/uploads/2026/09/photo.jpg", "size": 204800 },
-    "sizes": [
-      { "name": "thumbnail", "file": "photo-150x150.jpg", "width": 150, "height": 150, "url": "http://host/wp-content/uploads/2026/09/photo-150x150.jpg" },
-      { "name": "medium", "file": "photo-300x300.jpg", "width": 300, "height": 300, "url": "..." }
-    ]
-  }
-}
-```
-
-Ghi chú: nếu resize thất bại, endpoint vẫn trả `200` với ảnh gốc và `sizes: []` (không fail toàn bộ request).
-
-File phục vụ tĩnh qua `GET /wp-content/uploads/<path>` (không cho list thư mục — truy cập thư mục trả 404).
+Chỉ có khi `WORDPRESS_ENABLED=true`. Resize ra nhiều kích thước, lưu **đĩa local**, phục vụ
+qua `/wp-content/uploads/`. Không liên quan đến S3 và không phục vụ trang public.
 
 ---
 
-## `GET /api/v1/health`
+# 3. Dữ liệu nền (công khai)
 
-Không cần API key. Dùng cho readiness probe / Docker `HEALTHCHECK`.
+Không cần đăng nhập — dùng cho cả form admin lẫn bộ lọc trang public.
 
-**Response 200** (khoẻ mạnh) hoặc **503** (`status: "unavailable"`, nếu DB/S3 lỗi):
+## `GET /api/v1/schools`
+
+Danh sách 5 cơ sở.
+
+```json
+{
+  "success": true,
+  "data": [
+    { "id": 1, "name": "Bình Thới - Tân Bình", "region": "saigon",
+      "display_order": 1, "is_active": true, "created_at": "…", "updated_at": "…" }
+  ]
+}
+```
+
+`region` là một trong `saigon` / `cantho` / `vungtau` — **3 khu vực trưng bày**, không phải
+5 địa điểm vật lý.
+
+## `GET /api/v1/grade-levels`
+
+Danh sách 12 khối. Lọc tuỳ chọn: `?education_level=primary|secondary`.
+
+```json
+{ "id": 1, "education_level": "primary", "grade_number": 1, "label": "Khối 1", "display_order": 1 }
+```
+
+## `GET /api/v1/awards`
+
+Danh sách giải thưởng **đang hoạt động** (bản public chỉ trả `is_active=true`).
+
+---
+
+# 4. API công khai — trang triển lãm
+
+Không cần đăng nhập. Ghi dữ liệu bị giới hạn 20 req/phút/IP và cần CSRF token.
+
+## `GET /api/v1/public/artworks`
+
+Danh sách tác phẩm đã xuất bản. **Luôn ép `is_published=true`** — không thể xem bản nháp
+qua API này.
+
+| Tham số | Kiểu | Mặc định | Ghi chú |
+|---|---|---|---|
+| `search` | string | — | Khớp tên tác phẩm hoặc tên học sinh; **cắt còn 80 ký tự** |
+| `school_id` | int | — | |
+| `grade_level_id` | int | — | |
+| `education_level` | string | — | `primary` / `secondary` |
+| `page` | int | 1 | |
+| `page_size` | int | 24 | **Trần cứng 100** |
+
 ```json
 {
   "success": true,
   "data": {
-    "status": "ok",
-    "service": "s3-upload-api",
-    "max_size": 20971520,
-    "max_size_formatted": "20.00 MB",
-    "absolute_max_size": 209715200,
-    "absolute_max_size_formatted": "200.00 MB",
-    "chunk_upload": true,
-    "request_id": "...",
-    "checks": {
-      "disk": { "status": "ok", "note": "..." },
-      "database": { "status": "ok", "open_connections": 2, "in_use": 0, "idle": 2, "wait_count": 0 },
-      "s3_service": { "status": "ok" }
-    }
+    "items": [ /* ArtworkWithMeta */ ],
+    "total_count": 350,
+    "page": 1,
+    "page_size": 24
   }
 }
 ```
 
-## `GET /api/v1/metrics`
+### Cấu trúc `ArtworkWithMeta`
 
-Số liệu upload (tổng số, thành công/thất bại, latency). Rate-limited nghiêm ngặt (10 req/phút) để tránh lạm dụng.
-
-## `GET /`
-
-- Nếu `web/dist` đã build (React SPA) → serve `index.html` + static assets, fallback về `index.html` cho client-side routing.
-- Nếu chưa build → trả JSON:
 ```json
-{ "service": "s3-upload-api", "version": "1.0", "endpoints": ["/api/v1/upload", "..."] }
+{
+  "id": 42,
+  "title": "Mùa xuân quê em",
+  "student_id": 108,
+  "school_id": 1,
+  "grade_level_id": 3,
+  "image_url": "https://…",          // ← s3_url; s3_key KHÔNG bao giờ được trả về
+  "thumbnail_url": "https://…",      // trỏ thumb_jpg; null với ảnh cũ hoặc ảnh gốc quá nhỏ
+  "variants": {                      // các cỡ sinh lúc upload; có thể vắng mặt
+    "thumb_webp": "https://…", "thumb_jpg": "https://…",
+    "medium_webp": "https://…", "medium_jpg": "https://…",
+    "large_webp": "https://…", "large_jpg": "https://…"
+  },
+  "file_size": 2458000,
+  "width": 1920,
+  "height": 1080,
+  "is_featured": true,
+  "is_published": true,
+  "view_count": 1250,
+  "created_at": "2026-09-01T10:30:00Z",
+  "updated_at": "2026-09-01T10:30:00Z",
+  "student_name": "Nguyễn Văn A",
+  "school_name": "Bình Thới - Tân Bình",
+  "region": "saigon",
+  "grade_label": "Khối 3",
+  "education_level": "primary",
+  "class_name": "3A2",
+  "comment_count": 15,
+  "reaction_counts": { "like": 30, "love": 45 },
+  "awards": [ { "id": 1, "name": "Giải Nhất", "slug": "giai-nhat",
+                "rank_order": 1, "color_hex": "#c49c57" } ]
+}
 ```
+
+⚠️ `s3_url` xuất hiện dưới tên **`image_url`**; `s3_key`, `upload_id`, `created_by` bị ẩn
+khỏi JSON.
+
+## `GET /api/v1/public/artworks/featured`
+
+Tác phẩm tiêu biểu. Tham số tuỳ chọn `region=saigon|cantho|vungtau`.
+
+```json
+{ "success": true, "data": { "items": [ ], "total_count": 12 } }
+```
+
+⚠️ Lấy tối đa 100 bản ghi rồi mới lọc `region` **trong bộ nhớ**. Nếu tổng số tác phẩm tiêu
+biểu vượt 100, một số khu vực có thể thiếu tranh.
+
+## `GET /api/v1/public/artworks/{id}`
+
+Chi tiết một tác phẩm, **kèm ghi nhận lượt xem**.
+
+| Tham số | Ghi chú |
+|---|---|
+| `visitor_token` | Tuỳ chọn; có thì mới tính lượt xem (chống trùng trong 24 giờ) |
+
+Trả **404** nếu không tồn tại **hoặc** chưa xuất bản — không phân biệt hai trường hợp.
+
+## `GET /api/v1/public/billboard`
+
+Bảng vàng: các tác phẩm đạt giải, sắp theo `rank_order` (Nhất trước).
+
+```json
+{ "success": true, "data": [ { /* ArtworkWithMeta */, "award": { } } ] }
+```
+
+⚠️ Trần 100 tác phẩm mỗi giải.
+
+## Cảm xúc
+
+### `POST /api/v1/public/artworks/{id}/reactions`
+
+```json
+{ "reaction_type": "love", "visitor_token": "uuid" }
+```
+
+`reaction_type` ∈ `like` `love` `haha` `wow` `sad` `angry`.
+
+Idempotent — gửi lại cùng loại không tạo bản ghi mới, không báo lỗi.
+
+```json
+{ "success": true, "data": { "reaction_counts": { "like": 30, "love": 46 } } }
+```
+
+### `DELETE /api/v1/public/artworks/{id}/reactions/{type}?visitor_token=…`
+
+Trả về bảng đếm mới nhất, cùng cấu trúc như trên.
+
+| `code` | Ý nghĩa |
+|---|---|
+| `INVALID_REACTION_TYPE` | Loại cảm xúc không hợp lệ |
+| `MISSING_VISITOR_TOKEN` | Thiếu định danh trình duyệt |
+| `REACTION_FAILED` | Lỗi ghi dữ liệu |
+
+## Bình luận
+
+### `GET /api/v1/public/artworks/{id}/comments?visitor_token=…`
+
+Chỉ trả bình luận **chưa bị ẩn**.
+
+```json
+{
+  "success": true,
+  "data": [
+    { "id": 1, "artwork_id": 42, "display_name": "Phụ huynh A",
+      "content": "Bé vẽ đẹp quá!", "created_at": "…", "can_delete": true }
+  ]
+}
+```
+
+`can_delete` = `true` khi `visitor_token` gửi lên trùng với người đã viết bình luận đó.
+
+### `POST /api/v1/public/artworks/{id}/comments`
+
+```json
+{ "display_name": "Phụ huynh A", "content": "Bé vẽ đẹp quá!", "visitor_token": "uuid" }
+```
+
+| Trường | Ràng buộc |
+|---|---|
+| `display_name` | Bắt buộc, ≤ 100 **ký tự** |
+| `content` | Bắt buộc, ≤ 1000 **ký tự** |
+| `visitor_token` | Bắt buộc |
+
+Độ dài đếm theo ký tự Unicode, không phải byte.
+
+| `code` | Ý nghĩa |
+|---|---|
+| `MISSING_DISPLAY_NAME` / `DISPLAY_NAME_TOO_LONG` | Tên hiển thị |
+| `MISSING_CONTENT` / `CONTENT_TOO_LONG` | Nội dung |
+| `MISSING_VISITOR_TOKEN` | Thiếu định danh |
+| `COMMENT_FAILED` | Lỗi ghi dữ liệu |
+
+### `DELETE /api/v1/public/artworks/{id}/comments/{commentID}?visitor_token=…`
+
+Chỉ xoá được bình luận do chính trình duyệt đó tạo.
+
+Trả **404 `COMMENT_NOT_FOUND`** cho **cả** trường hợp không tồn tại lẫn không phải của mình —
+cố ý không phân biệt, để không ai dò được quyền sở hữu bình luận.
+
+---
+
+# 5. API quản trị
+
+Toàn bộ yêu cầu cookie session hợp lệ. Thiếu/hết hạn → **401 `UNAUTHORIZED`**.
+
+## Xác thực
+
+| Endpoint | Ghi chú |
+|---|---|
+| `GET /auth/google/login` | Bắt đầu luồng OAuth (redirect trình duyệt, **ngoài** `/api`) |
+| `GET /auth/google/callback` | Google gọi về; xử lý xong redirect `/admin` |
+| `GET /api/v1/admin/auth/me` | Thông tin admin đang đăng nhập |
+| `POST /api/v1/admin/auth/logout` | **Không** qua middleware auth — luôn xoá được cookie |
+
+`/auth/google/*` trả **503 `OAUTH_NOT_CONFIGURED`** nếu chưa cấu hình Client ID/Secret.
+
+Khi đăng nhập thất bại, người dùng bị chuyển về `/admin/login?error=<mã>` với các mã:
+`invalid_state`, `missing_code`, `exchange_failed`, `userinfo_failed`, `incomplete_profile`,
+`email_not_verified`, `email_not_allowed`, `server_error`.
+
+## Tác phẩm
+
+### `POST /api/v1/admin/artworks/bulk-upload`
+
+Bước ① — đẩy nhiều ảnh lên S3, **chưa tạo bản ghi**.
+
+**Request**: `multipart/form-data`, trường `files` (nhiều file).
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      { "temp_key": "tranh1.jpg", "file_name": "tranh1.jpg",
+        "s3_key": "images/…", "s3_url": "https://…",
+        "file_size": 2458000, "width": 1920, "height": 1080 },
+      { "temp_key": "tranh2.jpg", "file_name": "tranh2.jpg",
+        "error": "file quá lớn: 25.0 MB (giới hạn: 20.0 MB)" }
+    ],
+    "open_errors": ["hỏng.jpg"]
+  }
+}
+```
+
+Lỗi từng file **không** làm hỏng cả lô: item lỗi có trường `error`. `open_errors` liệt kê
+file không mở/không hợp lệ ngay từ đầu.
+
+### `POST /api/v1/admin/artworks`
+
+Bước ② — tạo bản ghi từ ảnh đã có trên S3.
+
+```json
+{
+  "title": "Mùa xuân quê em",
+  "student_name": "Nguyễn Văn A",
+  "school_id": 1,
+  "grade_level_id": 3,
+  "class_name": "3A2",
+  "s3_key": "images/…",
+  "s3_url": "https://…",
+  "file_size": 2458000,
+  "width": 1920,
+  "height": 1080,
+  "award_id": 1
+}
+```
+
+Bắt buộc: `title`, `student_name`, `school_id`, `grade_level_id`, `s3_key`, `s3_url`.
+Thiếu → **400 `VALIDATION_ERROR`** kèm thông báo tiếng Việt cụ thể.
+
+### `GET /api/v1/admin/artworks`
+
+Như bản public nhưng **không** ép `is_published`, và có thêm `is_featured`, `is_published`,
+`award_id` trong bộ lọc.
+
+### `GET /api/v1/admin/artworks/{id}`
+
+### `PUT /api/v1/admin/artworks/{id}`
+
+```json
+{
+  "title": "…", "student_id": 108, "school_id": 1, "grade_level_id": 3,
+  "is_featured": true, "is_published": true, "award_id": 2
+}
+```
+
+Ngữ nghĩa `award_id`: bỏ trường = giữ nguyên · `0` = gỡ hết giải · `>0` = thay bằng giải đó.
+
+⚠️ **Không đổi được ảnh** qua endpoint này.
+
+### `DELETE /api/v1/admin/artworks/{id}`
+
+Xoá bản ghi và các dữ liệu liên quan (cảm xúc/bình luận/lượt xem/giải) theo CASCADE.
+⚠️ **File trên S3 được giữ lại có chủ đích.**
+
+### `PATCH /api/v1/admin/artworks/{id}/featured`
+
+```json
+{ "is_featured": true }
+```
+
+## Giải thưởng
+
+| Method | Đường dẫn |
+|---|---|
+| GET | `/api/v1/admin/awards` (gồm cả giải đã tắt) |
+| POST | `/api/v1/admin/awards` |
+| PUT | `/api/v1/admin/awards/{id}` |
+| DELETE | `/api/v1/admin/awards/{id}` |
+
+```json
+{ "name": "Giải Nhất", "slug": "giai-nhat", "rank_order": 1,
+  "color_hex": "#c49c57", "icon_key": "trophy", "is_active": true }
+```
+
+`slug` là **duy nhất**. `rank_order` quyết định thứ tự trên bảng vàng (nhỏ = hạng cao).
+
+## Bảng điều khiển
+
+### `GET /api/v1/admin/dashboard/stats`
+
+```json
+{
+  "success": true,
+  "data": {
+    "total_artworks": 350,
+    "total_by_region": { "saigon": 200, "cantho": 80, "vungtau": 70 },
+    "total_by_grade": [ { } ],
+    "top_schools": [ { } ],
+    "top_artworks": [ { } ]
+  }
+}
+```
+
+Gộp toàn bộ số liệu vào **một** lần gọi, để frontend không phải gọi nhiều endpoint rời rạc.
+
+---
+
+# 6. Trang không phải JSON
+
+| Đường dẫn | Trả về |
+|---|---|
+| `GET /chia-se/tac-pham/{id}` | HTML có thẻ Open Graph, tự chuyển hướng về SPA |
+| `GET /wp-content/uploads/*` | File tĩnh (đã chặn liệt kê thư mục) |
+| `GET /*` | SPA React; fallback `index.html`. Chưa build `dist` thì trả JSON thông tin API |
+
+---
+
+# 7. Bảng mã lỗi
+
+| `code` | HTTP | Ý nghĩa |
+|---|---|---|
+| `METHOD_NOT_ALLOWED` | 405 | Sai HTTP method |
+| `INVALID_FORM` | 400 | Form multipart hỏng |
+| `FILE_NOT_FOUND` | 400 | Thiếu file |
+| `INVALID_FILE_TYPE` | 400 | Đuôi file không hỗ trợ |
+| `FILE_TOO_LARGE` | 400 | Vượt giới hạn dung lượng |
+| `NO_FILES` / `ALL_FILES_INVALID` | 400 | Bulk upload không có file hợp lệ |
+| `INVALID_BODY` | 400 | JSON không hợp lệ |
+| `VALIDATION_ERROR` | 400 | Thiếu trường bắt buộc |
+| `INVALID_ID` / `INVALID_COMMENT_ID` | 400 | ID không hợp lệ |
+| `INVALID_REACTION_TYPE` | 400 | Loại cảm xúc sai |
+| `MISSING_VISITOR_TOKEN` | 400 | Thiếu định danh trình duyệt |
+| `MISSING_DISPLAY_NAME` / `DISPLAY_NAME_TOO_LONG` | 400 | Tên hiển thị |
+| `MISSING_CONTENT` / `CONTENT_TOO_LONG` | 400 | Nội dung bình luận |
+| `MISSING_API_KEY` | 401 | Thiếu header `X-API-Key` |
+| `UNAUTHORIZED` | 401 | Session không hợp lệ/hết hạn |
+| `INVALID_API_KEY` | 403 | Sai API key |
+| `INVALID_CSRF` | 403 | Token CSRF sai/thiếu |
+| `NOT_FOUND` / `COMMENT_NOT_FOUND` | 404 | Không tìm thấy |
+| — | 429 | Vượt giới hạn tần suất |
+| `CREATE_FAILED` / `UPLOAD_FAILED` / `REACTION_FAILED` / `COMMENT_FAILED` | 5xx | Lỗi xử lý |
+| `INTERNAL_ERROR` | 500 | Lỗi không xác định |
+| `OAUTH_NOT_CONFIGURED` | 503 | Chưa cấu hình Google OAuth |
+| `CSRF_INIT_FAILED` | 500 | Không sinh được token CSRF |
