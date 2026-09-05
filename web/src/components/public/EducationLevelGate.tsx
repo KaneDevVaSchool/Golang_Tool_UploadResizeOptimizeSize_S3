@@ -119,23 +119,41 @@ export function EducationLevelGate({
           <h2>Chọn khối để khám phá</h2>
         </motion.div>
 
-        <div className="edu-gate-carousel">
-          <button
+        <motion.div
+          className="edu-gate-carousel"
+          initial={{ opacity: 0, y: 28, scale: 0.97 }}
+          whileInView={{ opacity: 1, y: 0, scale: 1 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
+        >
+          <motion.button
             type="button"
             className="edu-gate-arrow edu-gate-arrow--prev"
             aria-label="Khối trước"
             onClick={() => goTo(frontIndex - 1)}
+            initial={{ opacity: 0, x: -12 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ duration: 0.5, delay: 0.35 }}
+            whileHover={{ scale: 1.12, x: -2 }}
+            whileTap={{ scale: 0.9 }}
           >
             <ChevronLeft size={22} />
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             type="button"
             className="edu-gate-arrow edu-gate-arrow--next"
             aria-label="Khối tiếp theo"
             onClick={() => goTo(frontIndex + 1)}
+            initial={{ opacity: 0, x: 12 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ duration: 0.5, delay: 0.35 }}
+            whileHover={{ scale: 1.12, x: 2 }}
+            whileTap={{ scale: 0.9 }}
           >
             <ChevronRight size={22} />
-          </button>
+          </motion.button>
 
           <div className="edu-gate-stage">
             {LEVELS.map((level, i) => {
@@ -175,23 +193,45 @@ export function EducationLevelGate({
               );
             })}
           </div>
-        </div>
+        </motion.div>
 
-        <div className="edu-gate-dots" role="tablist" aria-label="Chọn khối">
+        <motion.div
+          className="edu-gate-dots"
+          role="tablist"
+          aria-label="Chọn khối"
+          initial={{ opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+        >
           {LEVELS.map((level, i) => (
-            <button
+            <motion.button
               key={level}
               type="button"
               role="tab"
               aria-selected={i === frontIndex}
               className={`edu-gate-dot edu-gate-dot--${level}${i === frontIndex ? " edu-gate-dot--active" : ""}`}
               onClick={() => goTo(i)}
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.95 }}
             >
+              {/* active-indicator dùng chung 1 layoutId giữa 2 dot - Framer
+                  Motion tự animate nền trắng "trượt" từ dot cũ sang dot mới
+                  khi frontIndex đổi (FLIP animation), thay vì đổi màu tức
+                  thì như trước - cảm giác giống 1 viên bi/tab-indicator di
+                  chuyển hơn là 2 trạng thái rời rạc. */}
+              {i === frontIndex && (
+                <motion.span
+                  className="edu-gate-dot-bg"
+                  layoutId="edu-gate-dot-bg"
+                  transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                />
+              )}
               <span className="edu-gate-dot-mark" aria-hidden />
               <span className="edu-gate-dot-label">{level === "primary" ? "Tiểu học" : "Trung học"}</span>
-            </button>
+            </motion.button>
           ))}
-        </div>
+        </motion.div>
       </section>
     </div>
   );

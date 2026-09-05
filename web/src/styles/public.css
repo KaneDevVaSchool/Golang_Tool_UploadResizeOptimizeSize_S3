@@ -1386,7 +1386,12 @@
 .hero-subtitle {
   margin: 0;
   font-size: clamp(0.92rem, 1.6vw, 1.05rem);
-  color: var(--vas-text-muted);
+  /* Trước dùng --vas-text-muted (#6b5a5d) - quá nhạt trên nền Hero pastel
+     nhiều lớp phía sau, chữ bị chìm khó đọc. Đổi sang --vas-text (đậm nhất
+     trong bảng màu chữ) + font-weight nhẹ để tăng tương phản mà không nặng
+     bằng title. */
+  color: var(--vas-text);
+  font-weight: 500;
   line-height: 1.6;
   max-width: 38rem;
 }
@@ -1400,8 +1405,9 @@
 }
 .hero-region-label {
   font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--vas-text-muted);
+  font-weight: 700;
+  /* Cùng lý do với .hero-subtitle - --vas-text-muted chìm trên nền Hero. */
+  color: var(--vas-text);
 }
 .hero-region-buttons {
   display: flex;
@@ -1591,9 +1597,15 @@
   position: relative;
   /* Cụm 2 card chồng lệch tràn ra ngoài .edu-gate-stage ~6% mỗi bên (xem
      EducationLevelGate.tsx) - thu hẹp khung so với .edu-gate-section và
-     căn giữa để phần tràn đó không chạm mép viewport / gây scroll ngang. */
+     căn giữa để phần tràn đó không chạm mép viewport / gây scroll ngang.
+     padding ngang chừa riêng 1 dải cho .edu-gate-arrow đứng hẳn ra ngoài
+     mép card front (vốn tràn tới -6%/106% của .edu-gate-stage) - trước đây
+     nút neo bằng offset âm nhỏ nên lọt thẳng vào vùng chữ của card, đè lên
+     nội dung; padding + arrow neo tại mép carousel (0/100%, không còn số
+     âm) đảm bảo nút luôn nằm ngoài card ở mọi bề rộng màn hình. */
   max-width: 76rem;
   margin: 0 auto;
+  padding: 0 clamp(3rem, 6vw, 4rem);
 }
 .edu-gate-stage {
   position: relative;
@@ -1631,6 +1643,10 @@
   }
 }
 
+/* transform (hover lift/scale, entrance trượt vào) giờ do Framer Motion
+   set qua whileHover/whileTap/whileInView trong EducationLevelGate.tsx -
+   CSS transition chỉ còn lo background/box-shadow (những thuộc tính Framer
+   không đụng tới) để 2 nguồn animate không tranh chấp cùng property. */
 .edu-gate-arrow {
   position: absolute;
   top: 50%;
@@ -1640,6 +1656,7 @@
   justify-content: center;
   width: 3rem;
   height: 3rem;
+  margin-top: -1.5rem;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.4);
   background: rgba(8, 17, 40, 0.45);
@@ -1647,28 +1664,16 @@
   backdrop-filter: blur(10px);
   box-shadow: var(--vas-shadow-md);
   cursor: pointer;
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.25s ease, opacity 0.25s ease;
+  transition: background 0.25s ease, box-shadow 0.25s ease;
 }
 .edu-gate-arrow:hover {
   background: rgba(8, 17, 40, 0.68);
-  transform: translateY(-50%) scale(1.08);
-}
-.edu-gate-arrow:active {
-  transform: translateY(-50%) scale(0.96);
 }
 .edu-gate-arrow--prev {
-  left: clamp(-0.25rem, -2vw, 0.75rem);
-  transform: translateY(-50%);
-}
-.edu-gate-arrow--prev:hover {
-  transform: translateY(-50%) translateX(-2px) scale(1.08);
+  left: 0;
 }
 .edu-gate-arrow--next {
-  right: clamp(-1.5rem, -3vw, -0.25rem);
-  transform: translateY(-50%);
-}
-.edu-gate-arrow--next:hover {
-  transform: translateY(-50%) translateX(2px) scale(1.08);
+  right: 0;
 }
 @media (max-width: 768px) {
   .edu-gate-arrow {
@@ -1696,6 +1701,9 @@
     display: none;
   }
 }
+/* position/scale hover-lift giờ do Framer Motion (whileHover/whileTap) đảm
+   nhiệm trong EducationLevelGate.tsx - CSS transition chỉ còn border-color
+   (thuộc tính Framer không set) để tránh 2 nguồn cùng ghi transform. */
 .edu-gate-dot {
   position: relative;
   display: inline-flex;
@@ -1707,12 +1715,28 @@
   background: rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(6px);
   cursor: pointer;
-  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: border-color 0.3s ease;
 }
 .edu-gate-dot:hover {
-  background: rgba(255, 255, 255, 0.14);
   border-color: rgba(255, 255, 255, 0.4);
-  transform: translateY(-1px);
+}
+/* Nền trắng "active" tách thành 1 span riêng mang layoutId chung giữa 2
+   dot (xem EducationLevelGate.tsx) - Framer Motion tự animate (FLIP) nền
+   này trượt từ dot cũ sang dot mới mỗi khi frontIndex đổi, thay vì mỗi dot
+   tự bật/tắt background rời rạc như trước. Đặt absolute phủ kín, dưới nội
+   dung (z-index) để mark/label vẫn đọc được trên nó. */
+.edu-gate-dot-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.18);
+}
+.edu-gate-dot-mark,
+.edu-gate-dot-label {
+  position: relative;
+  z-index: 1;
 }
 .edu-gate-dot-mark {
   width: 0.55rem;
@@ -1736,7 +1760,6 @@
   color: #7dd3fc;
 }
 .edu-gate-dot--active {
-  background: rgba(255, 255, 255, 0.95);
   border-color: rgba(255, 255, 255, 0.95);
 }
 .edu-gate-dot--active .edu-gate-dot-label {
@@ -1746,10 +1769,10 @@
   transform: scale(1.15);
   box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 25%, transparent);
 }
-.edu-gate-dot--primary.edu-gate-dot--active {
+.edu-gate-dot--primary.edu-gate-dot--active .edu-gate-dot-bg {
   box-shadow: 0 4px 18px rgba(126, 217, 196, 0.35);
 }
-.edu-gate-dot--secondary.edu-gate-dot--active {
+.edu-gate-dot--secondary.edu-gate-dot--active .edu-gate-dot-bg {
   box-shadow: 0 4px 18px rgba(125, 211, 252, 0.35);
 }
 @media (max-width: 480px) {
@@ -2070,27 +2093,43 @@
 }
 
 .edu-card-title {
-  margin: 0.6rem 0 0;
+  margin: 0.7rem 0 0;
   font-family: var(--vas-display);
   font-size: clamp(1.8rem, 3.5vw, 2.6rem);
   line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 
+/* subtitle tách hẳn khỏi title bằng 1 vạch màu ngắn đứng trước (thay vì
+   chỉ dựa vào margin) - tạo điểm neo thị giác rõ ràng hơn giữa 2 dòng chữ
+   cùng cỡ đậm gần nhau, đỡ bị đọc dính thành 1 khối với title phía trên. */
 .edu-card-subtitle {
-  margin: 0;
+  margin: 0.85rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-weight: 700;
   font-size: 0.92rem;
   color: #0f7a6d;
+}
+.edu-card-subtitle::before {
+  content: "";
+  display: inline-block;
+  width: 1.4rem;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.6;
 }
 .edu-card--secondary .edu-card-subtitle {
   color: #a5b4fc;
 }
 
 .edu-card-body {
-  margin: 0.5rem 0 0;
+  margin: 0.6rem 0 0;
   max-width: 26rem;
   font-size: 0.9rem;
-  line-height: 1.6;
+  line-height: 1.65;
   color: #4b5563;
 }
 .edu-card--secondary .edu-card-body {
@@ -2098,15 +2137,15 @@
 }
 
 .edu-card-stats {
-  margin-top: 0.75rem;
+  margin-top: 1rem;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   font-size: 0.85rem;
   font-weight: 700;
 }
 .edu-card-stat-pill {
-  padding: 0.25rem 0.7rem;
+  padding: 0.3rem 0.8rem;
   border-radius: var(--vas-radius-sm);
   background: rgba(16, 122, 109, 0.12);
   color: #0f7a6d;
@@ -2120,8 +2159,16 @@
   background: rgba(129, 140, 248, 0.2);
   color: #c7d2fe;
 }
+/* Dấu chấm phân cách chuyển vào ::before (thay vì ký tự "• " gõ cứng
+   trong JSX) - tách style khỏi nội dung, dễ đổi/ẩn theo theme mà không
+   đụng vào copy. */
 .edu-card-stat-sep {
   color: #6b7280;
+}
+.edu-card-stat-sep::before {
+  content: "•";
+  margin-right: 0.5rem;
+  opacity: 0.6;
 }
 .edu-card--secondary .edu-card-stat-sep {
   color: #94a3b8;

@@ -39,22 +39,35 @@ export function HillDivider() {
           </linearGradient>
         </defs>
       </svg>
-      <svg
+      {/* Mỗi lớp đồi trượt lên từ dưới + fade khi vào khung nhìn, so le delay
+          (xa trước, gần sau) - cùng tinh thần "lớp xa chậm/tĩnh hơn, lớp gần
+          nổi bật hơn" như HeroSection phía trên, chỉ chạy 1 lần (viewport
+          once) vì đây là điểm chuyển tiếp đi qua 1 lần khi cuộn xuống, không
+          phải yếu tố lặp lại. */}
+      <motion.svg
         className="hill-divider-far"
         viewBox="0 0 1200 120"
         preserveAspectRatio="none"
         xmlns="http://www.w3.org/2000/svg"
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-40px" }}
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
       >
         <path d="M0,90 C150,40 300,100 450,70 C600,45 750,95 900,60 C1030,32 1120,75 1200,55 L1200,120 L0,120 Z" />
-      </svg>
-      <svg
+      </motion.svg>
+      <motion.svg
         className="hill-divider-near"
         viewBox="0 0 1200 120"
         preserveAspectRatio="none"
         xmlns="http://www.w3.org/2000/svg"
+        initial={{ opacity: 0, y: 32 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-40px" }}
+        transition={{ duration: 0.7, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
       >
         <path d="M0,70 C120,100 220,55 360,80 C520,108 620,60 760,85 C900,110 1000,68 1200,92 L1200,120 L0,120 Z" />
-      </svg>
+      </motion.svg>
 
       {/* Cụm cây mọc lên khi cuộn tới - dùng lại HillTree bên dưới, so le
           delay để không "mọc" đồng loạt cứng nhắc. */}

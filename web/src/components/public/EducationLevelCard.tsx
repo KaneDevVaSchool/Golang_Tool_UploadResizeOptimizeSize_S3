@@ -1,6 +1,7 @@
 import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
 import { ArrowRight, Rocket } from "lucide-react";
 import type { PointerEvent } from "react";
+import { fadeUp } from "../../lib/motionPresets";
 
 type EducationLevelCardProps = {
   level: "primary" | "secondary";
@@ -213,24 +214,50 @@ export function EducationLevelCard({ level, artworkCount, onSelect, peeking = fa
         )}
       </div>
 
-      <div className="edu-card-content">
-        <span className="edu-card-kicker">
+      {/* Nội dung chữ tự stagger riêng (kicker -> title -> subtitle -> body ->
+          stats -> CTA) qua fadeUp/custom={i}, tách khỏi whileInView của
+          .edu-card cha (vốn chỉ lo lift+fade cả khối) - viewport "once" đặt
+          lại ở đây vì .edu-card-content không phải cùng node với button cha,
+          Framer Motion không tự propagate variants qua 2 lần whileInView
+          khác trigger nên mỗi container animate độc lập theo đúng lúc chính
+          nó vào khung nhìn (2 node cùng nằm trong .edu-card nên thực tế vào
+          khung nhìn gần như đồng thời). */}
+      <motion.div
+        className="edu-card-content"
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: "-80px" }}
+      >
+        <motion.span className="edu-card-kicker" custom={0} variants={fadeUp}>
           {level === "secondary" && <Rocket size={13} />}
           {copy.kicker}
-        </span>
-        <h3 className="edu-card-title">{copy.title}</h3>
-        <p className="edu-card-subtitle">{copy.subtitle}</p>
-        <p className="edu-card-body">{copy.body}</p>
-        <div className="edu-card-stats">
+        </motion.span>
+        <motion.h3 className="edu-card-title" custom={1} variants={fadeUp}>
+          {copy.title}
+        </motion.h3>
+        <motion.p className="edu-card-subtitle" custom={2} variants={fadeUp}>
+          {copy.subtitle}
+        </motion.p>
+        <motion.p className="edu-card-body" custom={3} variants={fadeUp}>
+          {copy.body}
+        </motion.p>
+        <motion.div className="edu-card-stats" custom={4} variants={fadeUp}>
           <span className="edu-card-stat-pill">{artworkCount} tác phẩm</span>
-          <span className="edu-card-stat-sep">• {copy.gradeRange}</span>
-        </div>
-      </div>
+          <span className="edu-card-stat-sep">{copy.gradeRange}</span>
+        </motion.div>
+      </motion.div>
 
-      <div className="edu-card-cta">
+      <motion.div
+        className="edu-card-cta"
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: "-80px" }}
+        custom={5}
+        variants={fadeUp}
+      >
         <span>Khám phá ngay</span>
         <ArrowRight size={18} className="edu-card-cta-arrow" />
-      </div>
+      </motion.div>
     </motion.button>
   );
 }
