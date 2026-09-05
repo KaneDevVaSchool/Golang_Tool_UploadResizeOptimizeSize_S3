@@ -51,31 +51,3 @@ func SanitizeFilename(filename string) (string, error) {
 	return filename, nil
 }
 
-// ValidateFilename validate filename trước khi xử lý
-func ValidateFilename(filename string) error {
-	if len(filename) == 0 {
-		return errors.New("filename cannot be empty")
-	}
-
-	if len(filename) > MaxFilenameLength {
-		return errors.New("filename too long (max 255 characters)")
-	}
-
-	// ! Kiểm tra path traversal attempts
-	if strings.Contains(filename, "..") {
-		return errors.New("filename contains invalid path components")
-	}
-
-	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") {
-		return errors.New("filename contains path separators")
-	}
-
-	// ! Kiểm tra dangerous characters
-	for _, char := range []rune{'<', '>', ':', '"', '|', '?', '*'} {
-		if strings.ContainsRune(filename, char) {
-			return errors.New("filename contains invalid characters")
-		}
-	}
-
-	return nil
-}

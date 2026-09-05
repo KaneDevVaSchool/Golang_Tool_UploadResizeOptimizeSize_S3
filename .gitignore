@@ -5,6 +5,11 @@
 *.so
 *.dylib
 bin/
+# Binary build ra khi deploy trên VPS (deploy/deploy.sh)
+/server
+/server.prev
+/server.new
+/migrate
 
 # Test binary
 *.test
@@ -22,6 +27,8 @@ go.work
 .env
 .env.local
 .env.*.local
+# Cấu hình deploy riêng của từng máy (mẫu: deploy/config.env.example)
+deploy/config.env
 
 # Uploads directory
 uploads/
@@ -31,6 +38,9 @@ wp-uploads/
 # Application logs (Laravel-style storage/logs)
 storage/logs/*.log
 !storage/logs/.gitkeep
+
+# Dump database — có thể chứa dữ liệu thật, không đưa lên git
+storage/backups/
 
 # Web UI
 web/node_modules/

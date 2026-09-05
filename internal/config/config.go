@@ -115,6 +115,10 @@ type AuthConfig struct {
 	SessionTTL          time.Duration
 	SecureCookie        bool     // theo APP_ENV=production, giống CSRFConfig.SecureCookie
 	AllowedEmailDomains []string // optional, vd ["vaschools.edu.vn","hcm.vaschools.edu.vn"] - rỗng nghĩa là không giới hạn
+	// AllowedEmails là whitelist email chính xác được phép đăng nhập admin.
+	// Khi danh sách này không rỗng, nó là điều kiện quyết định: chỉ đúng các
+	// email trong danh sách mới vào được (AllowedEmailDomains bị bỏ qua).
+	AllowedEmails []string
 }
 
 func Load() (*Config, error) {

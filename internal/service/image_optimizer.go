@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"image"
@@ -386,55 +385,4 @@ func (o *ImageOptimizer) calculateOptimalJPEGQuality(fileSize int64) int {
 	}
 
 	return baseQuality
-}
-
-// OptimizeImageInMemory optimize image từ memory
-func (o *ImageOptimizer) OptimizeImageInMemory(img image.Image, format string, output io.Writer) (*OptimizationResult, error) {
-	var buf bytes.Buffer
-
-	switch format {
-	case "jpg", "jpeg":
-		quality := o.jpegQuality
-		if quality == 0 {
-			quality = 85
-		}
-		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
-			return nil, err
-		}
-	case "png":
-		encoder := &png.Encoder{
-			CompressionLevel: png.BestCompression,
-		}
-		if err := encoder.Encode(&buf, img); err != nil {
-			return nil, err
-		}
-	default:
-		return nil, fmt.Errorf("unsupported format for optimization: %s", format)
-	}
-
-	optimizedSize := int64(buf.Len())
-
-	_, err := io.Copy(output, &buf)
-	if err != nil {
-		return nil, err
-	}
-
-	return &OptimizationResult{
-		OptimizedSize: optimizedSize,
-		Format:        format,
-	}, nil
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

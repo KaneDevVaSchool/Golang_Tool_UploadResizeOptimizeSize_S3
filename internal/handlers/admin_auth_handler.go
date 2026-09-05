@@ -36,6 +36,7 @@ type AdminAuthHandler struct {
 	sessionMgr       *auth.SessionManager
 	adminUserRepo    repository.AdminUserRepository
 	allowedDomains   []string
+	allowedEmails    map[string]bool
 	secureCookie     bool
 	frontendAdminURL string
 	frontendLoginURL string
@@ -46,6 +47,7 @@ func NewAdminAuthHandler(
 	sessionMgr *auth.SessionManager,
 	adminUserRepo repository.AdminUserRepository,
 	allowedDomains []string,
+	allowedEmails []string,
 	secureCookie bool,
 ) *AdminAuthHandler {
 	normalized := make([]string, 0, len(allowedDomains))
@@ -55,25 +57,41 @@ func NewAdminAuthHandler(
 			normalized = append(normalized, d)
 		}
 	}
+	emailSet := make(map[string]bool, len(allowedEmails))
+	for _, e := range allowedEmails {
+		e = strings.ToLower(strings.TrimSpace(e))
+		if e != "" {
+			emailSet[e] = true
+		}
+	}
 	return &AdminAuthHandler{
 		oauthConfig:      oauthConfig,
 		sessionMgr:       sessionMgr,
 		adminUserRepo:    adminUserRepo,
 		allowedDomains:   normalized,
+		allowedEmails:    emailSet,
 		secureCookie:     secureCookie,
 		frontendAdminURL: "/admin",
 		frontendLoginURL: "/admin/login",
 	}
 }
 
-// isEmailDomainAllowed kiểm tra email có thuộc 1 trong các domain được phép
-// hay không. Danh sách rỗng nghĩa là không giới hạn (cho phép mọi domain) -
-// dùng trong dev khi ADMIN_ALLOWED_EMAIL_DOMAIN để trống.
-func (h *AdminAuthHandler) isEmailDomainAllowed(email string) bool {
+// isEmailAllowed quyết định email có được phép đăng nhập admin hay không.
+//
+// Whitelist email cụ thể (ADMIN_ALLOWED_EMAILS) có độ ưu tiên cao nhất: khi
+// nó không rỗng thì chỉ đúng các email trong đó mới vào được, bỏ qua hoàn
+// toàn kiểm tra domain. Chỉ khi whitelist rỗng mới rơi về kiểm tra domain
+// (ADMIN_ALLOWED_EMAIL_DOMAIN), và domain cũng rỗng nghĩa là không giới hạn.
+func (h *AdminAuthHandler) isEmailAllowed(email string) bool {
+	email = strings.ToLower(strings.TrimSpace(email))
+
+	if len(h.allowedEmails) > 0 {
+		return h.allowedEmails[email]
+	}
+
 	if len(h.allowedDomains) == 0 {
 		return true
 	}
-	email = strings.ToLower(email)
 	for _, domain := range h.allowedDomains {
 		if strings.HasSuffix(email, "@"+domain) {
 			return true
@@ -165,8 +183,17 @@ func (h *AdminAuthHandler) HandleGoogleCallback(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if !h.isEmailDomainAllowed(info.Email) {
-		h.redirectLoginWithError(w, r, "domain_not_allowed")
+	// Whitelist so khớp theo email nên bắt buộc email phải được Google xác
+	// thực - tránh trường hợp account đặt email trùng danh sách mà chưa verify.
+	if !info.EmailVerified {
+		log.Printf("[AdminAuth] Từ chối đăng nhập (email chưa xác thực): %s", info.Email)
+		h.redirectLoginWithError(w, r, "email_not_verified")
+		return
+	}
+
+	if !h.isEmailAllowed(info.Email) {
+		log.Printf("[AdminAuth] Từ chối đăng nhập (email không nằm trong danh sách cho phép): %s", info.Email)
+		h.redirectLoginWithError(w, r, "email_not_allowed")
 		return
 	}
 
@@ -192,12 +219,14 @@ func (h *AdminAuthHandler) HandleGoogleCallback(w http.ResponseWriter, r *http.R
 		}
 		log.Printf("[AdminAuth] Tạo admin user mới: %s", info.Email)
 	} else {
-		if err := h.adminUserRepo.UpdateLastLogin(ctx, user.ID); err != nil {
-			log.Printf("[AdminAuth] Failed to update last_login_at: %v", err)
-		}
+		// Chặn account bị vô hiệu hoá trước khi ghi last_login_at - lần đăng
+		// nhập bị từ chối không nên được ghi nhận như đăng nhập thành công.
 		if !user.IsActive {
 			h.redirectLoginWithError(w, r, "account_disabled")
 			return
+		}
+		if err := h.adminUserRepo.UpdateLastLogin(ctx, user.ID); err != nil {
+			log.Printf("[AdminAuth] Failed to update last_login_at: %v", err)
 		}
 	}
 

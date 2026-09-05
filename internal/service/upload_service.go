@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -18,6 +19,14 @@ import (
 type UploadService interface {
 	UploadImage(ctx context.Context, filename string, file io.Reader, fileSize int64, maxSize int64) (*models.UploadResponse, error)
 	UploadImageWithTransaction(ctx context.Context, filename string, file io.Reader, fileSize int64, maxSize int64) (*models.UploadResponse, *models.UploadRecord, error)
+	// UploadDerived đẩy một file dẫn xuất (biến thể ảnh đã resize) lên S3 tại
+	// key cho trước và trả URL công khai.
+	//
+	// Khác UploadImage ở chỗ: không sinh key mới, không kiểm tra kích thước,
+	// không ghi bảng uploads - dữ liệu đã nằm sẵn trong RAM và do server tạo
+	// ra chứ không phải người dùng gửi lên, nên mọi bước xác thực đầu vào ở
+	// đó đều thừa. Key do phía gọi đặt để bám theo key của ảnh gốc.
+	UploadDerived(ctx context.Context, key string, data []byte, contentType string) (string, error)
 }
 
 type uploadService struct {
@@ -58,6 +67,21 @@ func NewUploadService(s3Repo repository.S3Repository, uploadRepo repository.Uplo
 
 func (s *uploadService) objectURL(key string) string {
 	return utils.BuildS3ObjectURL(s.bucketName, s.region, key, s.endpoint, s.forcePathStyle)
+}
+
+func (s *uploadService) UploadDerived(ctx context.Context, key string, data []byte, contentType string) (string, error) {
+	if len(data) == 0 {
+		return "", fmt.Errorf("dữ liệu biến thể rỗng cho key %s", key)
+	}
+
+	if _, err := s.s3Repo.Upload(ctx, s.bucketName, key, bytes.NewReader(data), contentType, s.useACL); err != nil {
+		return "", fmt.Errorf("failed to upload derived object %s: %w", key, err)
+	}
+
+	// Luôn dùng URL tĩnh, kể cả khi usePresignedURL đang bật: URL của biến
+	// thể được lưu vào DB y như s3_url, mà presigned URL thì hết hạn - đúng
+	// cái bẫy đã khiến ảnh trả 403 sau vài giờ (xem docs/S3-PUBLIC-READ.md).
+	return s.objectURL(key), nil
 }
 
 func (s *uploadService) UploadImage(ctx context.Context, filename string, file io.Reader, fileSize int64, maxSize int64) (*models.UploadResponse, error) {

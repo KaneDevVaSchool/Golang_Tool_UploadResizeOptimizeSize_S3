@@ -72,15 +72,6 @@ type Container struct {
 	PublicHandler    *handlers.PublicHandler
 }
 
-// GetDBStats trả về thống kê connection pool nếu DB có sẵn
-func (c *Container) GetDBStats() interface{} {
-	if c.DB == nil {
-		return nil
-	}
-	stats := c.DB.GetStats()
-	return stats
-}
-
 func NewContainer() (*Container, error) {
 	cfg, err := config.Load()
 	if err != nil {
@@ -203,6 +194,7 @@ func NewContainer() (*Container, error) {
 			sessionMgr,
 			adminUserRepo,
 			cfg.Auth.AllowedEmailDomains,
+			cfg.Auth.AllowedEmails,
 			cfg.Auth.SecureCookie,
 		)
 	} else {
@@ -518,6 +510,7 @@ func (c *Container) GetServerHandler() http.Handler {
 		publicMux.HandleFunc("POST /api/v1/public/artworks/{id}/reactions", c.PublicHandler.HandleAddReaction)
 		publicMux.HandleFunc("DELETE /api/v1/public/artworks/{id}/reactions/{type}", c.PublicHandler.HandleRemoveReaction)
 		publicMux.HandleFunc("POST /api/v1/public/artworks/{id}/comments", c.PublicHandler.HandleCreateComment)
+		publicMux.HandleFunc("DELETE /api/v1/public/artworks/{id}/comments/{commentID}", c.PublicHandler.HandleDeleteComment)
 
 		var publicHandlerChain http.Handler = publicMux
 		if c.Config.RateLimit.Enabled {
@@ -559,6 +552,12 @@ func (c *Container) GetServerHandler() http.Handler {
 		mux.HandleFunc("/auth/google/callback", c.AdminAuthHandler.HandleGoogleCallback)
 	}
 
+	// Trang chia sẻ có Open Graph render phía server để Facebook lấy được
+	// title/description/ảnh của đúng tác phẩm trước khi chuyển vào SPA.
+	if c.PublicHandler != nil {
+		mux.HandleFunc("GET /chia-se/tac-pham/{id}", c.PublicHandler.HandleArtworkSharePage)
+	}
+
 	// Serve WordPress uploads directory (with security)
 	if c.Config.WordPress.Enabled {
 		wpFs := secureFileServer(http.Dir(c.Config.Directories.WPUploadsDir))
@@ -569,6 +568,11 @@ func (c *Container) GetServerHandler() http.Handler {
 	mux.Handle("/", spaFileServer("web/dist"))
 
 	handler := http.Handler(mux)
+
+	// Gzip nằm trong cùng (sát mux nhất): nó cần thấy Content-Type do handler
+	// đặt, và đặt trong cùng thì các middleware ngoài vẫn đo/ghi log bình thường.
+	// Bundle SPA ~950KB JS + ~180KB CSS trước đây gửi thô hoàn toàn.
+	handler = middleware.GzipMiddleware(handler)
 
 	// Apply middleware in order (last applied is outermost)
 	// Request ID middleware should be first to ensure all logs have request ID
@@ -701,25 +705,56 @@ func spaFileServer(distDir string) http.Handler {
 	fileServer := http.FileServer(http.Dir(absDist))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
-			http.ServeFile(w, r, indexPath)
+			serveSPAIndex(w, r, indexPath)
 			return
 		}
 
 		rel := filepath.Clean(strings.TrimPrefix(r.URL.Path, "/"))
 		if rel == "." || strings.HasPrefix(rel, "..") {
-			http.ServeFile(w, r, indexPath)
+			serveSPAIndex(w, r, indexPath)
 			return
 		}
 		full := filepath.Join(absDist, rel)
 		absFull, err := filepath.Abs(full)
 		if err != nil || (!strings.HasPrefix(absFull, absDist+string(os.PathSeparator)) && absFull != absDist) {
-			http.ServeFile(w, r, indexPath)
+			serveSPAIndex(w, r, indexPath)
 			return
 		}
 		if info, err := os.Stat(absFull); err == nil && !info.IsDir() {
+			setStaticCacheHeader(w, r.URL.Path)
 			fileServer.ServeHTTP(w, r)
 			return
 		}
-		http.ServeFile(w, r, indexPath)
+		serveSPAIndex(w, r, indexPath)
 	})
+}
+
+// serveSPAIndex trả index.html cho mọi route của SPA.
+//
+// index.html KHÔNG được cache lâu: nó chứa tên file bundle đã băm, nên bản cũ
+// nằm trong cache sẽ trỏ mãi vào bundle của lần deploy trước. no-cache vẫn cho
+// phép dùng lại sau khi revalidate (304), chỉ bắt buộc hỏi lại server mỗi lần.
+func serveSPAIndex(w http.ResponseWriter, r *http.Request, indexPath string) {
+	w.Header().Set("Cache-Control", "no-cache")
+	http.ServeFile(w, r, indexPath)
+}
+
+// setStaticCacheHeader đặt thời gian cache theo loại tài nguyên.
+//
+// Trước đây không có Cache-Control nào, nên trình duyệt phải revalidate cả
+// bundle đã băm tên ở mỗi lần tải trang.
+func setStaticCacheHeader(w http.ResponseWriter, urlPath string) {
+	switch {
+	// Vite băm nội dung vào tên file (index-B5t9s4PZ.js), nên nội dung tại một
+	// URL không bao giờ đổi - đổi nội dung là đổi luôn tên file. immutable báo
+	// trình duyệt đừng revalidate kể cả khi người dùng bấm tải lại.
+	case strings.HasPrefix(urlPath, "/assets/"):
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	// Ảnh/font tĩnh không băm tên: cache 7 ngày rồi revalidate, đủ để đổi ảnh
+	// mà không cần đợi quá lâu.
+	case strings.HasPrefix(urlPath, "/images/"), strings.HasPrefix(urlPath, "/fonts/"):
+		w.Header().Set("Cache-Control", "public, max-age=604800")
+	default:
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+	}
 }

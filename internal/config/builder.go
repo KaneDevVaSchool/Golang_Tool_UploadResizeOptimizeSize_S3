@@ -13,6 +13,22 @@ import (
 
 var loadEnvOnce sync.Once
 
+// defaultAllowedAdminEmails là danh sách tài khoản Google được phép đăng nhập
+// admin khi .env không khai báo ADMIN_ALLOWED_EMAILS. Email ngoài danh sách
+// này bị chặn ngay ở callback OAuth, không được tự tạo admin_users.
+// Toàn bộ phải viết thường - so khớp bằng strings.ToLower.
+var defaultAllowedAdminEmails = []string{
+	"khoana@hcm.vaschools.edu.vn",
+	"ngocntk@hcm.vaschools.edu.vn",
+	"toanbq@vaschools.edu.vn",
+	"thaoptp@hcm.vaschools.edu.vn",
+	"hiennn@vaschools.edu.vn",
+	"hoangbh@vaschools.edu.vn",
+	"nhunh@hcm.vaschools.edu.vn",
+	"thaontp@vaschools.edu.vn",
+	"phongcongnghe@vaschools.edu.vn",
+}
+
 type ConfigBuilder struct {
 	config *Config
 }
@@ -47,10 +63,6 @@ func (b *ConfigBuilder) WithServer(port string, readTimeout, writeTimeout, idleT
 		ShutdownTimeout: shutdownTimeout,
 	}
 	return b
-}
-
-func (b *ConfigBuilder) WithAWS(region, bucketName string, useACL bool, usePresignedURL bool, presignedURLExpiry int) *ConfigBuilder {
-	return b.WithAWSFull(region, bucketName, "", false, useACL, usePresignedURL, presignedURLExpiry)
 }
 
 func (b *ConfigBuilder) WithAWSFull(region, bucketName, endpoint string, forcePathStyle, useACL, usePresignedURL bool, presignedURLExpiry int) *ConfigBuilder {
@@ -144,7 +156,7 @@ func (b *ConfigBuilder) WithDatabase(enabled bool, driver, dataSource string, ma
 // WithAuth cấu hình Google OAuth + session admin. Không validate creds ở
 // đây - thiếu Client ID/Secret vẫn cho server khởi động bình thường,
 // BuildFromEnv() chỉ log cảnh báo để không chặn các tính năng khác.
-func (b *ConfigBuilder) WithAuth(clientID, clientSecret, redirectURL, sessionSecret, cookieName string, sessionTTL time.Duration, secureCookie bool, allowedEmailDomains []string) *ConfigBuilder {
+func (b *ConfigBuilder) WithAuth(clientID, clientSecret, redirectURL, sessionSecret, cookieName string, sessionTTL time.Duration, secureCookie bool, allowedEmailDomains, allowedEmails []string) *ConfigBuilder {
 	if cookieName == "" {
 		cookieName = "vas_admin_session"
 	}
@@ -160,6 +172,7 @@ func (b *ConfigBuilder) WithAuth(clientID, clientSecret, redirectURL, sessionSec
 		SessionTTL:          sessionTTL,
 		SecureCookie:        secureCookie,
 		AllowedEmailDomains: allowedEmailDomains,
+		AllowedEmails:       allowedEmails,
 	}
 	return b
 }
@@ -502,6 +515,19 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 			}
 		}
 	}
+	// Whitelist email cụ thể: chỉ đúng các tài khoản này mới đăng nhập admin
+	// được, email khác (kể cả cùng domain trường) đều bị từ chối. Override
+	// bằng ADMIN_ALLOWED_EMAILS trong .env khi cần đổi danh sách.
+	allowedEmails := defaultAllowedAdminEmails
+	if raw := getEnv("ADMIN_ALLOWED_EMAILS", ""); raw != "" {
+		allowedEmails = nil
+		for _, e := range strings.Split(raw, ",") {
+			e = strings.ToLower(strings.TrimSpace(e))
+			if e != "" {
+				allowedEmails = append(allowedEmails, e)
+			}
+		}
+	}
 	// Cookie session dùng chung quy ước "secure theo production" với CSRF
 	// cookie hiện có - đã tính csrfSecureCookie ở trên nên tái dùng luôn.
 	authSecureCookie := csrfSecureCookie
@@ -537,7 +563,7 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 		WithConcurrency(concurrencyEnabled, maxConcurrent, acquireTimeout).
 		WithAPI(apiEnabled, apiKey, corsOrigins, requireAPIKey).
 		WithWordPress(wpEnabled, wpBaseURL, wpImageSizes, wpOptimization).
-		WithAuth(googleClientID, googleClientSecret, googleRedirectURL, sessionSecret, "", time.Duration(sessionTTLHours)*time.Hour, authSecureCookie, allowedEmailDomains).
+		WithAuth(googleClientID, googleClientSecret, googleRedirectURL, sessionSecret, "", time.Duration(sessionTTLHours)*time.Hour, authSecureCookie, allowedEmailDomains, allowedEmails).
 		Build()
 }
 

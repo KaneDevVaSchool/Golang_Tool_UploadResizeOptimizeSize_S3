@@ -66,7 +66,3 @@ func ConcurrencyLimitMiddleware(limiter *ConcurrencyLimiter) func(http.Handler) 
 	}
 }
 
-// GetStats trả về concurrency statistics hiện tại
-func (c *ConcurrencyLimiter) GetStats() (current, waiting int64) {
-	return atomic.LoadInt64(&c.current), atomic.LoadInt64(&c.waiting)
-}

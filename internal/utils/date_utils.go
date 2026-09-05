@@ -12,7 +12,3 @@ func GetCurrentMonth() string {
 	return time.Now().Format("01")
 }
 
-// GetCurrentDate trả về ngày hiện tại dạng YYYY-MM-DD
-func GetCurrentDate() string {
-	return time.Now().Format("2006-01-02")
-}

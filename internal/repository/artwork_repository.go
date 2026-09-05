@@ -35,7 +35,7 @@ func NewArtworkRepository(db *database.DB) ArtworkRepository {
 	return &artworkRepository{db: db}
 }
 
-const artworkSelectColumns = `id, title, student_id, school_id, grade_level_id, s3_key, s3_url, thumbnail_url, file_size, width, height, is_featured, is_published, view_count, upload_id, created_by, created_at, updated_at`
+const artworkSelectColumns = `id, title, student_id, school_id, grade_level_id, s3_key, s3_url, thumbnail_url, variants, file_size, width, height, is_featured, is_published, view_count, upload_id, created_by, created_at, updated_at`
 
 func scanArtwork(scanner interface{ Scan(dest ...any) error }) (*models.Artwork, error) {
 	a := &models.Artwork{}
@@ -45,6 +45,7 @@ func scanArtwork(scanner interface{ Scan(dest ...any) error }) (*models.Artwork,
 
 	err := scanner.Scan(
 		&a.ID, &a.Title, &a.StudentID, &a.SchoolID, &a.GradeLevelID, &a.S3Key, &a.S3URL, &thumbnailURL,
+		&a.Variants,
 		&a.FileSize, &width, &height, &a.IsFeatured, &a.IsPublished, &a.ViewCount, &uploadID, &createdBy,
 		&a.CreatedAt, &a.UpdatedAt,
 	)
@@ -75,13 +76,13 @@ func (r *artworkRepository) Create(ctx context.Context, tx *database.Tx, artwork
 	now := time.Now()
 	query := `
 		INSERT INTO artworks (
-			title, student_id, school_id, grade_level_id, s3_key, s3_url, thumbnail_url,
+			title, student_id, school_id, grade_level_id, s3_key, s3_url, thumbnail_url, variants,
 			file_size, width, height, is_featured, is_published, view_count, upload_id, created_by,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
 	`
 	result, err := tx.ExecContext(ctx, query,
-		artwork.Title, artwork.StudentID, artwork.SchoolID, artwork.GradeLevelID, artwork.S3Key, artwork.S3URL, artwork.ThumbnailURL,
+		artwork.Title, artwork.StudentID, artwork.SchoolID, artwork.GradeLevelID, artwork.S3Key, artwork.S3URL, artwork.ThumbnailURL, artwork.Variants,
 		artwork.FileSize, artwork.Width, artwork.Height, artwork.IsFeatured, artwork.IsPublished, artwork.UploadID, artwork.CreatedBy,
 		now, now,
 	)

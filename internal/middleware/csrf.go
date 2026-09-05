@@ -133,15 +133,3 @@ func (c *CSRFProtection) CSRFMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// GetCSRFToken lấy CSRF token để dùng trong templates
-func (c *CSRFProtection) GetCSRFToken(r *http.Request) string {
-	token := c.getCSRFCookie(r)
-	if token == "" {
-		newToken, err := generateToken()
-		if err != nil {
-			return ""
-		}
-		token = newToken
-	}
-	return token
-}

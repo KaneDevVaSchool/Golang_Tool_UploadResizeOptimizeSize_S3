@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"s3-upload-tool/internal/database"
@@ -24,7 +26,10 @@ type BulkUploadItem struct {
 	FileSize int64  `json:"file_size,omitempty"`
 	Width    int    `json:"width,omitempty"`
 	Height   int    `json:"height,omitempty"`
-	Error    string `json:"error,omitempty"`
+	// Variants là các cỡ ảnh nhỏ đã sinh kèm lúc upload (thumb/medium/large
+	// × webp/jpg). FE gửi trả lại nguyên vẹn ở bước tạo artwork để lưu vào DB.
+	Variants models.ArtworkVariants `json:"variants,omitempty"`
+	Error    string                 `json:"error,omitempty"`
 }
 
 // BulkUploadFile là 1 file đầu vào cho BulkUploadToS3 - TempKey do FE tự
@@ -49,6 +54,7 @@ type CreateArtworkRequest struct {
 	FileSize     int64
 	Width        int
 	Height       int
+	Variants     models.ArtworkVariants
 	AwardID      *int64
 	CreatedBy    *int64
 }
@@ -169,12 +175,84 @@ func (s *artworkService) BulkUploadToS3(ctx context.Context, files []BulkUploadF
 			item.S3Key = resp.Key
 			item.S3URL = resp.URL
 			item.FileSize = file.FileSize
+			item.Variants = s.buildVariants(ctx, file, resp.Key)
 			results[idx] = item
 		}(i, f)
 	}
 
 	wg.Wait()
 	return results
+}
+
+// variantContentTypes - S3 phục vụ object kèm đúng Content-Type này, nếu sai
+// thì trình duyệt từ chối hiển thị hoặc tải về thay vì render.
+var variantContentTypes = map[string]string{
+	"webp": "image/webp",
+	"jpg":  "image/jpeg",
+}
+
+// buildVariants sinh các cỡ ảnh nhỏ rồi đẩy lên S3 cạnh ảnh gốc.
+//
+// Cố ý KHÔNG làm hỏng cả lần upload khi sinh biến thể thất bại: ảnh gốc đã
+// nằm an toàn trên S3, và trang vẫn hiển thị được (chỉ là tải nặng hơn) nhờ
+// đường lui về image_url ở frontend. Bắt người dùng upload lại từ đầu chỉ vì
+// khâu tối ưu phụ trợ hỏng thì thiệt hơn nhiều.
+func (s *artworkService) buildVariants(ctx context.Context, file BulkUploadFile, originalKey string) models.ArtworkVariants {
+	if _, err := file.Reader.Seek(0, io.SeekStart); err != nil {
+		log.Printf("[ArtworkService] Bỏ qua sinh biến thể cho %s: không tua lại được file: %v", file.FileName, err)
+		return nil
+	}
+
+	original, err := io.ReadAll(file.Reader)
+	if err != nil {
+		log.Printf("[ArtworkService] Bỏ qua sinh biến thể cho %s: không đọc được file: %v", file.FileName, err)
+		return nil
+	}
+
+	generated, _, _, err := GenerateVariants(ctx, original)
+	if err != nil {
+		log.Printf("[ArtworkService] Không sinh được biến thể cho %s: %v", file.FileName, err)
+		return nil
+	}
+	if len(generated) == 0 {
+		// Ảnh gốc vốn đã nhỏ hơn mọi cỡ đích - dùng thẳng ảnh gốc là đúng nhất.
+		return nil
+	}
+
+	// Bỏ đuôi file của key gốc rồi nối hậu tố biến thể:
+	//   vaschools-uploads/abc123.jpg -> vaschools-uploads/abc123_thumb.webp
+	base := strings.TrimSuffix(originalKey, filepath.Ext(originalKey))
+
+	var (
+		mu       sync.Mutex
+		variants = make(models.ArtworkVariants, len(generated))
+		wg       sync.WaitGroup
+	)
+
+	for _, v := range generated {
+		wg.Add(1)
+		go func(v GeneratedVariant) {
+			defer wg.Done()
+
+			key := fmt.Sprintf("%s_%s", base, v.Key())
+			url, err := s.uploadService.UploadDerived(ctx, key, v.Data, variantContentTypes[v.Format])
+			if err != nil {
+				log.Printf("[ArtworkService] Upload biến thể %s lỗi: %v", key, err)
+				return
+			}
+
+			mu.Lock()
+			variants[fmt.Sprintf("%s_%s", v.Name, v.Format)] = url
+			mu.Unlock()
+		}(v)
+	}
+
+	wg.Wait()
+
+	if len(variants) == 0 {
+		return nil
+	}
+	return variants
 }
 
 func (s *artworkService) CreateArtworkFromUpload(ctx context.Context, req CreateArtworkRequest) (*models.Artwork, error) {
@@ -219,9 +297,19 @@ func (s *artworkService) CreateArtworkFromUpload(ctx context.Context, req Create
 		GradeLevelID: req.GradeLevelID,
 		S3Key:        req.S3Key,
 		S3URL:        req.S3URL,
+		Variants:     req.Variants,
 		FileSize:     req.FileSize,
 		IsPublished:  true,
 		CreatedBy:    req.CreatedBy,
+	}
+	// thumbnail_url vẫn được ghi song song với variants: trang admin và các
+	// component cũ đọc trường này, và nó là bước lui một nấc trước khi phải
+	// rơi về ảnh gốc. Ưu tiên bản JPEG vì đây là đường dự phòng - mọi trình
+	// duyệt đều đọc được.
+	if thumb := req.Variants["thumb_jpg"]; thumb != "" {
+		artwork.ThumbnailURL = &thumb
+	} else if thumb := req.Variants["thumb_webp"]; thumb != "" {
+		artwork.ThumbnailURL = &thumb
 	}
 	if req.Width > 0 {
 		artwork.Width = &req.Width

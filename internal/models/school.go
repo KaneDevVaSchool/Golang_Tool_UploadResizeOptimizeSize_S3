@@ -20,17 +20,3 @@ const (
 	RegionVungTau = "vungtau"
 )
 
-// RegionLabel trả về tên tiếng Việt hiển thị cho 1 region - dùng ở cả
-// response API lẫn nơi cần label nhanh phía Go (vd log, seed script).
-func RegionLabel(region string) string {
-	switch region {
-	case RegionSaigon:
-		return "Sài Gòn"
-	case RegionCanTho:
-		return "Cần Thơ"
-	case RegionVungTau:
-		return "Vũng Tàu"
-	default:
-		return region
-	}
-}

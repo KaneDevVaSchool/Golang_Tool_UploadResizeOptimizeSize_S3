@@ -3,9 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"html"
+	"html/template"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"s3-upload-tool/internal/middleware"
 	"s3-upload-tool/internal/models"
@@ -20,6 +23,42 @@ const maxCommentContentLength = 1000
 // maxDisplayNameLength giới hạn độ dài tên hiển thị ẩn danh - khớp cột
 // artwork_comments.display_name VARCHAR(100) trong migration 011.
 const maxDisplayNameLength = 100
+
+var artworkShareTemplate = template.Must(template.New("artwork-share").Parse(`<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{.Title}}</title>
+  <meta name="description" content="{{.Description}}">
+  <meta property="og:locale" content="vi_VN">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Khu vườn nghệ thuật VA Schools">
+  <meta property="og:title" content="{{.Title}}">
+  <meta property="og:description" content="{{.Description}}">
+  <meta property="og:url" content="{{.ShareURL}}">
+  <meta property="og:image" content="{{.ImageURL}}">
+  <meta property="og:image:secure_url" content="{{.ImageURL}}">
+  <meta property="og:image:alt" content="{{.ImageAlt}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{.Title}}">
+  <meta name="twitter:description" content="{{.Description}}">
+  <meta name="twitter:image" content="{{.ImageURL}}">
+  <meta http-equiv="refresh" content="0;url={{.AppURL}}">
+</head>
+<body>
+  <p>Đang mở tác phẩm “{{.ImageAlt}}”… <a href="{{.AppURL}}">Xem tác phẩm</a></p>
+</body>
+</html>`))
+
+type artworkSharePageData struct {
+	Title       string
+	Description string
+	ShareURL    string
+	AppURL      string
+	ImageURL    string
+	ImageAlt    string
+}
 
 // PublicHandler expose API không cần đăng nhập cho trang public (danh sách
 // tác phẩm, billboard vinh danh, reaction/comment/view ẩn danh). Ghi dữ
@@ -51,7 +90,7 @@ func NewPublicHandler(
 	}
 }
 
-// HandleListArtworks GET /api/v1/public/artworks?region=&grade_level_id=&education_level=&page=&page_size=
+// HandleListArtworks GET /api/v1/public/artworks?search=&region=&grade_level_id=&education_level=&page=&page_size=
 // Luôn ép is_published=true - không public/trả về draft.
 func (h *PublicHandler) HandleListArtworks(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -61,6 +100,7 @@ func (h *PublicHandler) HandleListArtworks(w http.ResponseWriter, r *http.Reques
 
 	published := true
 	filter := models.ArtworkFilter{
+		Search:         sanitizePublicSearch(r.URL.Query().Get("search")),
 		EducationLevel: r.URL.Query().Get("education_level"),
 		IsPublished:    &published,
 		Page:           parseIntOrDefault(r.URL.Query().Get("page"), 1),
@@ -157,6 +197,56 @@ func (h *PublicHandler) HandleGetArtwork(w http.ResponseWriter, r *http.Request)
 	}
 
 	h.SendSuccess(w, artwork)
+}
+
+// HandleArtworkSharePage trả HTML có Open Graph ngay từ server để crawler
+// Facebook đọc được ảnh preview. Trình duyệt người dùng được chuyển tiếp về
+// SPA và mở đúng tác phẩm qua query ?tranh=<id>.
+func (h *PublicHandler) HandleArtworkSharePage(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePathID(r, "id")
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	artwork, err := h.artworkService.GetArtwork(r.Context(), id)
+	if err != nil || artwork == nil || !artwork.IsPublished {
+		http.NotFound(w, r)
+		return
+	}
+
+	scheme := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))
+	if scheme != "http" && scheme != "https" {
+		scheme = "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+	}
+	origin := &url.URL{Scheme: scheme, Host: r.Host}
+	appURL := origin.ResolveReference(&url.URL{
+		Path:     "/tac-pham-tieu-bieu",
+		RawQuery: url.Values{"tranh": {strconv.FormatInt(id, 10)}}.Encode(),
+	})
+	shareURL := origin.ResolveReference(r.URL)
+	imageURL, parseErr := url.Parse(artwork.S3URL)
+	if parseErr != nil || !imageURL.IsAbs() {
+		imageURL = origin.ResolveReference(&url.URL{Path: artwork.S3URL})
+	}
+
+	data := artworkSharePageData{
+		Title:       "“" + artwork.Title + "” — " + artwork.StudentName,
+		Description: "Ngắm tác phẩm “" + artwork.Title + "” của " + artwork.StudentName + " tại " + artwork.SchoolName + " trong Khu vườn nghệ thuật VA Schools.",
+		ShareURL:    shareURL.String(),
+		AppURL:      appURL.String(),
+		ImageURL:    imageURL.String(),
+		ImageAlt:    artwork.Title,
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	if err := artworkShareTemplate.Execute(w, data); err != nil {
+		http.Error(w, "Không thể mở trang chia sẻ", http.StatusInternalServerError)
+	}
 }
 
 type reactionRequestBody struct {
@@ -259,7 +349,12 @@ func (h *PublicHandler) HandleListComments(w http.ResponseWriter, r *http.Reques
 		h.SendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Không tải được bình luận")
 		return
 	}
-	h.SendSuccess(w, comments)
+	visitorToken := strings.TrimSpace(r.URL.Query().Get("visitor_token"))
+	publicComments := make([]publicCommentResponse, 0, len(comments))
+	for _, comment := range comments {
+		publicComments = append(publicComments, toPublicComment(comment, visitorToken))
+	}
+	h.SendSuccess(w, publicComments)
 }
 
 type commentRequestBody struct {
@@ -268,11 +363,32 @@ type commentRequestBody struct {
 	VisitorToken string `json:"visitor_token"`
 }
 
+type publicCommentResponse struct {
+	ID          int64     `json:"id"`
+	ArtworkID   int64     `json:"artwork_id"`
+	DisplayName string    `json:"display_name"`
+	Content     string    `json:"content"`
+	CreatedAt   time.Time `json:"created_at"`
+	CanDelete   bool      `json:"can_delete"`
+}
+
+func toPublicComment(comment *models.ArtworkComment, visitorToken string) publicCommentResponse {
+	return publicCommentResponse{
+		ID:        comment.ID,
+		ArtworkID: comment.ArtworkID,
+		// Dữ liệu cũ từng được HTML-escape trước khi lưu khiến React hiển thị
+		// nguyên chuỗi &amp;/&quot;. Unescape khi trả JSON; React vẫn tự escape
+		// lúc render nên không mở lại lỗ hổng XSS.
+		DisplayName: html.UnescapeString(comment.DisplayName),
+		Content:     html.UnescapeString(comment.Content),
+		CreatedAt:   comment.CreatedAt,
+		CanDelete:   visitorToken != "" && visitorToken == comment.VisitorToken,
+	}
+}
+
 // HandleCreateComment POST /api/v1/public/artworks/{id}/comments - ẩn danh,
-// chỉ yêu cầu display_name tự nhập (không xác thực danh tính thật). Nội
-// dung được escape qua html.EscapeString để chống XSS khi FE render lại
-// (double bảo vệ - React tự escape khi render text, nhưng escape ở backend
-// đảm bảo dữ liệu lưu DB cũng an toàn nếu có nơi khác đọc trực tiếp).
+// chỉ yêu cầu display_name tự nhập (không xác thực danh tính thật). Lưu text
+// nguyên bản; JSON encoder và React escape ở đúng output context.
 func (h *PublicHandler) HandleCreateComment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.SendError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Chỉ hỗ trợ POST")
@@ -316,9 +432,11 @@ func (h *PublicHandler) HandleCreateComment(w http.ResponseWriter, r *http.Reque
 	}
 
 	comment := &models.ArtworkComment{
-		ArtworkID:    artworkID,
-		DisplayName:  html.EscapeString(displayName),
-		Content:      html.EscapeString(content),
+		ArtworkID: artworkID,
+		// Lưu text nguyên bản. JSON + React chịu trách nhiệm encode/escape ở
+		// đúng output context, tránh double-escape làm lỗi dấu và ký tự.
+		DisplayName:  displayName,
+		Content:      content,
 		VisitorToken: visitorToken,
 		IPAddress:    middleware.GetClientIP(r),
 	}
@@ -328,7 +446,39 @@ func (h *PublicHandler) HandleCreateComment(w http.ResponseWriter, r *http.Reque
 		h.SendError(w, http.StatusInternalServerError, "COMMENT_FAILED", "Không gửi được bình luận")
 		return
 	}
-	h.SendSuccess(w, created)
+	h.SendSuccess(w, toPublicComment(created, visitorToken))
+}
+
+// HandleDeleteComment chỉ cho trình duyệt đã tạo bình luận xoá bằng đúng
+// visitor_token. Không trả thông tin phân biệt "không tồn tại" và
+// "không thuộc sở hữu" để tránh dò quyền sở hữu bình luận.
+func (h *PublicHandler) HandleDeleteComment(w http.ResponseWriter, r *http.Request) {
+	artworkID, ok := parsePathID(r, "id")
+	if !ok {
+		h.SendError(w, http.StatusBadRequest, "INVALID_ID", "ID tác phẩm không hợp lệ")
+		return
+	}
+	commentID, ok := parsePathID(r, "commentID")
+	if !ok {
+		h.SendError(w, http.StatusBadRequest, "INVALID_COMMENT_ID", "ID bình luận không hợp lệ")
+		return
+	}
+	visitorToken := strings.TrimSpace(r.URL.Query().Get("visitor_token"))
+	if visitorToken == "" {
+		h.SendError(w, http.StatusBadRequest, "MISSING_VISITOR_TOKEN", "Thiếu định danh trình duyệt")
+		return
+	}
+
+	deleted, err := h.commentRepo.DeleteOwned(r.Context(), commentID, artworkID, visitorToken)
+	if err != nil {
+		h.SendError(w, http.StatusInternalServerError, "COMMENT_DELETE_FAILED", "Không xoá được bình luận")
+		return
+	}
+	if !deleted {
+		h.SendError(w, http.StatusNotFound, "COMMENT_NOT_FOUND", "Không tìm thấy bình luận có thể xoá")
+		return
+	}
+	h.SendSuccess(w, map[string]bool{"deleted": true})
 }
 
 // billboardEntry là 1 tác phẩm đạt giải kèm thông tin giải - dùng cho
@@ -366,4 +516,15 @@ func (h *PublicHandler) HandleBillboard(w http.ResponseWriter, r *http.Request) 
 	}
 
 	h.SendSuccess(w, entries)
+}
+
+// maxPublicSearchLength khớp maxlength của ô tìm trên /phong-trien-lam.
+const maxPublicSearchLength = 80
+
+func sanitizePublicSearch(raw string) string {
+	search := strings.TrimSpace(raw)
+	if runes := []rune(search); len(runes) > maxPublicSearchLength {
+		return string(runes[:maxPublicSearchLength])
+	}
+	return search
 }

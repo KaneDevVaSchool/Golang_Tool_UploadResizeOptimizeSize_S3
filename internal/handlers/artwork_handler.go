@@ -116,7 +116,11 @@ type createArtworkBody struct {
 	FileSize     int64  `json:"file_size"`
 	Width        int    `json:"width"`
 	Height       int    `json:"height"`
-	AwardID      *int64 `json:"award_id"`
+	// Variants do bulk-upload trả về ở bước 1, FE gửi lại nguyên vẹn. Không
+	// bắt buộc: ảnh gốc nhỏ hoặc khâu sinh biến thể lỗi thì trường này rỗng
+	// và trang vẫn chạy bằng ảnh gốc.
+	Variants models.ArtworkVariants `json:"variants"`
+	AwardID  *int64                 `json:"award_id"`
 }
 
 // HandleCreate POST /api/v1/admin/artworks - bước 2 sau bulk-upload: nhận
@@ -154,6 +158,7 @@ func (h *ArtworkHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		FileSize:     body.FileSize,
 		Width:        body.Width,
 		Height:       body.Height,
+		Variants:     body.Variants,
 		AwardID:      body.AwardID,
 		CreatedBy:    createdBy,
 	})

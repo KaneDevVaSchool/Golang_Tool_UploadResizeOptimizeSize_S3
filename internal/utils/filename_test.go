@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -24,7 +25,7 @@ func TestSanitizeFilename(t *testing.T) {
 			input:   "../../../etc/passwd",
 			wantErr: false,
 			checkFunc: func(s string) bool {
-				return s != "" && s != "../../../etc/passwd" && !contains(s, "..")
+				return s != "" && s != "../../../etc/passwd" && !strings.Contains(s, "..")
 			},
 		},
 		{
@@ -37,7 +38,7 @@ func TestSanitizeFilename(t *testing.T) {
 			input:   "file<>name.jpg",
 			wantErr: false,
 			checkFunc: func(s string) bool {
-				return !contains(s, "<") && !contains(s, ">")
+				return !strings.Contains(s, "<") && !strings.Contains(s, ">")
 			},
 		},
 		{
@@ -45,7 +46,7 @@ func TestSanitizeFilename(t *testing.T) {
 			input:   "path/to/file.jpg",
 			wantErr: false,
 			checkFunc: func(s string) bool {
-				return !contains(s, "/") && !contains(s, "\\")
+				return !strings.Contains(s, "/") && !strings.Contains(s, "\\")
 			},
 		},
 		{
@@ -72,43 +73,4 @@ func TestSanitizeFilename(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestValidateFilename(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		wantErr bool
-	}{
-		{"valid filename", "test.jpg", false},
-		{"empty filename", "", true},
-		{"path traversal", "../../file.jpg", true},
-		{"path separator", "path/file.jpg", true},
-		{"dangerous chars", "file<>name.jpg", true},
-		{"too long", string(make([]byte, 300)) + ".jpg", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateFilename(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateFilename() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) &&
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
-			containsMiddle(s, substr)))
-}
-
-func containsMiddle(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

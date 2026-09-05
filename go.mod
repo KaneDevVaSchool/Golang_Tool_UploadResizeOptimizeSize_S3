@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.26.1
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.15.7
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.47.5
+	github.com/gen2brain/webp v0.6.4
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
@@ -35,5 +36,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.21.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.26.5 // indirect
 	github.com/aws/smithy-go v1.19.0 // indirect
+	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 )

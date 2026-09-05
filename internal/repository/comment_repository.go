@@ -17,6 +17,9 @@ type CommentRepository interface {
 	// ListByArtwork trả comment mới nhất trước; includeHidden chỉ dùng ở
 	// trang quản trị (moderation), public luôn truyền false.
 	ListByArtwork(ctx context.Context, artworkID int64, includeHidden bool) ([]*models.ArtworkComment, error)
+	// DeleteOwned chỉ xoá khi comment thuộc đúng artwork và visitor token đã
+	// tạo nó; token hoạt động như quyền sở hữu ẩn danh phía trình duyệt.
+	DeleteOwned(ctx context.Context, id, artworkID int64, visitorToken string) (bool, error)
 	SetHidden(ctx context.Context, id int64, hidden bool) error
 	CountByArtwork(ctx context.Context, artworkID int64) (int64, error)
 	// CountByArtworkBatch trả map artworkID -> số comment KHÔNG ẩn, dùng cho
@@ -78,6 +81,24 @@ func (r *commentRepository) ListByArtwork(ctx context.Context, artworkID int64, 
 		comments = append(comments, c)
 	}
 	return comments, rows.Err()
+}
+
+func (r *commentRepository) DeleteOwned(ctx context.Context, id, artworkID int64, visitorToken string) (bool, error) {
+	result, err := r.db.ExecContext(
+		ctx,
+		`DELETE FROM artwork_comments WHERE id = ? AND artwork_id = ? AND visitor_token = ?`,
+		id,
+		artworkID,
+		visitorToken,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to delete owned comment: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to get deleted comment rows: %w", err)
+	}
+	return rows > 0, nil
 }
 
 func (r *commentRepository) SetHidden(ctx context.Context, id int64, hidden bool) error {
