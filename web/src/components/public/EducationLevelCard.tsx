@@ -15,18 +15,18 @@ type EducationLevelCardProps = {
 
 const COPY = {
   primary: {
-    kicker: "VƯỜN ƯƠM SẮC MÀU TUỔI THƠ",
+    kicker: "VƯỜN ƯƠM SẮC MÀU",
     title: "Khối Tiểu Học",
-    subtitle: "Dành cho học sinh Lớp 1 đến Lớp 5",
-    body: "Bước vào khu vườn thần tiên nơi trí tưởng tượng bay bổng cùng những nét cọ ngây thơ, rực rỡ và tràn đầy niềm vui hồn nhiên.",
-    gradeRange: "5 Khối lớp (Lớp 1 - 5)",
+    subtitle: "Lớp 1 đến Lớp 5",
+    body: "Ở tuổi này, mặt trời có thể màu tím và cả nhà mình đều biết bay. Các em vẽ đúng những gì mình thấy trong đầu — không rào đón, không sợ sai.",
+    gradeRange: "5 khối lớp (Lớp 1 – 5)",
   },
   secondary: {
-    kicker: "XƯỞNG NGHỆ THUẬT HIỆN ĐẠI",
+    kicker: "XƯỞNG VẼ CỦA TUỔI TRẺ",
     title: "Khối Trung Học",
-    subtitle: "THCS & THPT (Lớp 6 đến Lớp 12)",
-    body: "Khám phá không gian nghệ thuật đương đại đậm chất cá tính, tư duy trừu tượng và khát vọng bản lĩnh của tuổi trẻ.",
-    gradeRange: "7 Khối lớp (Lớp 6 - 12)",
+    subtitle: "THCS & THPT · Lớp 6 đến Lớp 12",
+    body: "Nét cọ đã vững hơn, và điều muốn nói cũng nhiều hơn. Mỗi bức tranh là một lần các em thử trả lời: mình là ai, và mình nhìn thế giới thế nào.",
+    gradeRange: "7 khối lớp (Lớp 6 – 12)",
   },
 } as const;
 
@@ -255,7 +255,7 @@ export function EducationLevelCard({ level, artworkCount, onSelect, peeking = fa
         custom={5}
         variants={fadeUp}
       >
-        <span>Khám phá ngay</span>
+        <span>Xem tranh khối này</span>
         <ArrowRight size={18} className="edu-card-cta-arrow" />
       </motion.div>
     </motion.button>

@@ -5,10 +5,10 @@ import { useParallaxScrollListener } from "../../hooks/useParallaxScroll";
 import { fadeUp } from "../../lib/motionPresets";
 import type { Region } from "./RegionTabs";
 
-const REGION_BUTTONS: { key: Region; label: string }[] = [
-  { key: "saigon", label: "Sài Gòn" },
-  { key: "cantho", label: "Cần Thơ" },
-  { key: "vungtau", label: "Vũng Tàu" },
+const REGION_BUTTONS: { key: Region; label: string; icon: string }[] = [
+  { key: "saigon", label: "Sài Gòn", icon: "🏙️" },
+  { key: "cantho", label: "Cần Thơ", icon: "🌾" },
+  { key: "vungtau", label: "Vũng Tàu", icon: "🌊" },
 ];
 
 // Hệ số tốc độ mỗi lớp - lớp "xa" di chuyển chậm hơn scroll thật (< 1),
@@ -143,7 +143,7 @@ export function HeroSection({ onSelectRegion }: { onSelectRegion: (region: Regio
           trong public.css) cắm trực tiếp vào transform của chính nó nên
           cũng cần div "giá đỡ" riêng chỉ lo dịch chuyển theo scroll, giống
           cơ chế đã dùng cho .hero-decor-layer--flora bên dưới. */}
-      <div className="hero-decor-layer" ref={crittersRef}>
+      <div className="hero-decor-layer hero-decor-layer--critters" ref={crittersRef}>
         <HeroCritters />
       </div>
 
@@ -231,30 +231,48 @@ export function HeroSection({ onSelectRegion }: { onSelectRegion: (region: Regio
           initial="hidden"
           animate="show"
         />
+        {/* Huy hiệu kỷ niệm - thay dòng kicker chữ hoa phẳng bằng một khối
+            có viền/nền riêng: mốc "20" được tách ra làm con số lớn để mắt
+            có một điểm dừng trước khi vào tiêu đề, thay vì 6 khối chữ cùng
+            cỡ xếp dọc đều nhau. */}
         <motion.p className="hero-kicker" custom={1} variants={fadeUp} initial="hidden" animate="show">
-          Kỷ niệm 20 năm thành lập · 2006 – 2026
+          <span className="hero-kicker-num">20</span>
+          <span className="hero-kicker-text">
+            Năm thành lập
+            <span className="hero-kicker-years">2006 – 2026</span>
+          </span>
         </motion.p>
+        {/* Tiêu đề tách 2 dòng: dòng dẫn nhỏ hơn, dòng nhấn lớn - tạo bậc
+            thang cỡ chữ trong cùng một tiêu đề thay vì một khối đồng cỡ. */}
         <motion.h1 className="hero-title" custom={2} variants={fadeUp} initial="hidden" animate="show">
-          20 Năm Trường Việt Mỹ Của Em
+          <span className="hero-title-lead">20 Năm Trường Việt Mỹ</span>
+          <span className="hero-title-main">Của Em</span>
         </motion.h1>
         <motion.p className="hero-subtitle" custom={3} variants={fadeUp} initial="hidden" animate="show">
-          Nơi hội tụ những nét vẽ hồn nhiên và đầy tự hào của học sinh khắp hệ thống — chào mừng hành
-          trình 20 năm xây dựng "Trường học của sự lắng nghe".
+          Hai mươi mùa tựu trường, hai mươi mùa phượng nở. Bao thế hệ học trò đã lớn lên dưới mái trường này,
+          mang theo những kỷ niệm chẳng lời nào tả hết. Năm nay, các em kể lại câu chuyện ấy theo cách của
+          riêng mình — bằng nét cọ và sắc màu tuổi thơ.
         </motion.p>
 
         <motion.div className="hero-region-cta" custom={4} variants={fadeUp} initial="hidden" animate="show">
-          <span className="hero-region-label">Chọn phòng tranh trưng bày</span>
+          {/* Nhãn nằm giữa 2 đường kẻ mảnh (::before/::after) - vạch một
+              đường ngang cắt qua cột nội dung, tách phần "mời xem tranh"
+              khỏi phần giới thiệu phía trên. */}
+          <span className="hero-region-label">Mời bạn ghé thăm phòng tranh của từng cơ sở</span>
           <div className="hero-region-buttons">
             {REGION_BUTTONS.map((r) => (
               <motion.button
                 key={r.key}
                 type="button"
-                className="hero-region-btn"
+                className={`hero-region-btn hero-region-btn--${r.key}`}
                 onClick={() => onSelectRegion(r.key)}
                 whileHover={{ y: -4, scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
               >
-                {r.label}
+                <span className="hero-region-btn-icon" aria-hidden>
+                  {r.icon}
+                </span>
+                <span className="hero-region-btn-label">{r.label}</span>
               </motion.button>
             ))}
           </div>

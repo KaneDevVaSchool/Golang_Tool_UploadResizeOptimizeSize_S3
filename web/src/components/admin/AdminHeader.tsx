@@ -1,38 +1,54 @@
-import { ChevronDown, LogOut, Menu } from "lucide-react";
+import { ChevronDown, ExternalLink, LogOut, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ConfirmDialog } from "../ConfirmDialog";
 import type { AdminUser } from "../../hooks/useAdminAuth";
 import { adminRequest } from "../../lib/adminApi";
 import { toast } from "../../lib/toastBus";
+import { useRegisterPageHeaderSlot } from "./pageHeaderPortal";
 
 /**
- * Header admin: avatar tròn (ảnh Google hoặc chữ cái đầu), dropdown
- * tên/email/role, nút đăng xuất mở ConfirmDialog (tái dùng component có
- * sẵn) - chỉ thực sự logout khi người dùng xác nhận trong dialog.
+ * Header admin - port AppHeader.vue (va-workspace): MỘT hàng thấp
+ * (--admin-header-h) gồm
+ *   nút menu · vùng portal cho AdminPageHeader · lối tắt + tài khoản.
+ *
+ * Nút menu đa dụng như bản gốc: desktop thu gọn/mở rộng sidebar, dưới
+ * desktop mở drawer off-canvas.
  */
 export function AdminHeader({
   user,
+  collapsed,
+  isDesktop,
+  onToggleSidebar,
   onLogout,
-  onOpenMobileSidebar,
 }: {
   user: AdminUser;
+  collapsed: boolean;
+  isDesktop: boolean;
+  onToggleSidebar: () => void;
   onLogout: () => void;
-  onOpenMobileSidebar: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const registerSlot = useRegisterPageHeaderSlot();
 
   useEffect(() => {
     if (!menuOpen) return;
     function onClickOutside(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
     document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [menuOpen]);
 
   async function confirmLogout() {
@@ -52,49 +68,87 @@ export function AdminHeader({
 
   const initial = (user.name || user.email || "?").trim().charAt(0).toUpperCase();
 
+  // Desktop: icon phản ánh trạng thái thu gọn; mobile: icon hamburger.
+  const ToggleIcon = !isDesktop ? Menu : collapsed ? PanelLeftOpen : PanelLeftClose;
+  const toggleLabel = !isDesktop
+    ? "Mở menu điều hướng"
+    : collapsed
+      ? "Mở rộng menu"
+      : "Thu gọn menu";
+
   return (
     <header className="admin-header">
       <button
         type="button"
-        className="admin-header-menu-btn"
-        aria-label="Mở menu điều hướng"
-        onClick={onOpenMobileSidebar}
+        className="admin-header-icon-btn"
+        aria-label={toggleLabel}
+        title={toggleLabel}
+        aria-expanded={isDesktop ? !collapsed : undefined}
+        onClick={onToggleSidebar}
       >
-        <Menu size={22} />
+        <ToggleIcon size={20} strokeWidth={2} />
       </button>
 
-      <div className="admin-header-spacer" />
+      {/* Đích portal của AdminPageHeader (xem pageHeaderPortal.tsx) */}
+      <div id="admin-content-header" className="admin-header-page" ref={registerSlot} />
 
-      <div className="admin-header-account" ref={menuRef}>
-        <button type="button" className="admin-header-account-btn" onClick={() => setMenuOpen((v) => !v)}>
-          {user.avatar_url ? (
-            <img src={user.avatar_url} alt="" className="admin-header-avatar" referrerPolicy="no-referrer" />
-          ) : (
-            <span className="admin-header-avatar admin-header-avatar--fallback">{initial}</span>
-          )}
-          <ChevronDown size={16} className={`admin-header-chevron${menuOpen ? " admin-header-chevron--open" : ""}`} />
-        </button>
+      <div className="admin-header-actions">
+        <a
+          href="/"
+          target="_blank"
+          rel="noreferrer"
+          className="admin-header-icon-btn admin-header-view-site"
+          aria-label="Xem trang triển lãm"
+          title="Xem trang triển lãm"
+        >
+          <ExternalLink size={18} strokeWidth={2} />
+        </a>
 
-        {menuOpen && (
-          <div className="admin-header-dropdown" role="menu">
-            <div className="admin-header-dropdown-info">
-              <strong>{user.name || "Quản trị viên"}</strong>
-              <span>{user.email}</span>
-              <span className="admin-header-role-badge">{user.role === "super_admin" ? "Quản trị cấp cao" : "Quản trị viên"}</span>
+        <div className="admin-header-account" ref={menuRef}>
+          <button
+            type="button"
+            className="admin-header-account-btn"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label="Menu tài khoản"
+            onClick={() => setMenuOpen((v) => !v)}
+          >
+            {user.avatar_url ? (
+              <img src={user.avatar_url} alt="" className="admin-header-avatar" referrerPolicy="no-referrer" />
+            ) : (
+              <span className="admin-header-avatar admin-header-avatar--fallback">{initial}</span>
+            )}
+            <span className="admin-header-account-name">{user.name || "Quản trị viên"}</span>
+            <ChevronDown
+              size={16}
+              className={`admin-header-chevron${menuOpen ? " admin-header-chevron--open" : ""}`}
+            />
+          </button>
+
+          {menuOpen && (
+            <div className="admin-header-dropdown" role="menu">
+              <div className="admin-header-dropdown-info">
+                <strong>{user.name || "Quản trị viên"}</strong>
+                <span>{user.email}</span>
+                <span className="admin-header-role-badge">
+                  {user.role === "super_admin" ? "Quản trị cấp cao" : "Quản trị viên"}
+                </span>
+              </div>
+              <button
+                type="button"
+                role="menuitem"
+                className="admin-header-dropdown-item admin-header-dropdown-item--danger"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setConfirmOpen(true);
+                }}
+              >
+                <LogOut size={16} />
+                Đăng xuất
+              </button>
             </div>
-            <button
-              type="button"
-              className="admin-header-dropdown-item admin-header-dropdown-item--danger"
-              onClick={() => {
-                setMenuOpen(false);
-                setConfirmOpen(true);
-              }}
-            >
-              <LogOut size={16} />
-              Đăng xuất
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <ConfirmDialog

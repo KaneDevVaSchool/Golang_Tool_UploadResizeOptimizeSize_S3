@@ -1,9 +1,14 @@
 /* Styles cho toàn bộ khu vực /admin/* - login, sidebar, header, layout.
-   Dùng token --vas-* từ tokens.css, KHÔNG đụng tới style UploadTool cũ. */
+   Header + sidebar + page header port từ va-workspace (AppHeader.vue,
+   AppSidebar.vue, AppLayout.vue, PageHeader.vue), dùng bộ token gốc
+   --color, --space, --radius khai báo trong tokens.css cho .admin-shell.
+   KHÔNG đụng tới style UploadTool cũ. */
 
 /* index.css khoá html/body/#root overflow:hidden cho UploadTool (1 màn hình
-   cố định). Trang admin cần cuộn được - class này (gắn qua
-   useScrollableBody hook) mở khoá lại chỉ khi đang ở trang admin. */
+   cố định). Class này (gắn qua useScrollableBody hook) mở khoá lại cho các
+   trang cần cuộn theo body: /admin/login và khu vực public.
+   Khung /admin/* KHÔNG dùng nó - .admin-shell cao 100dvh và tự cuộn nội bộ
+   trong .admin-content (xem AppLayout.vue của va-workspace). */
 html.scrollable-page,
 body.scrollable-page,
 body.scrollable-page #root {
@@ -18,34 +23,52 @@ html.scrollable-page {
 /* ---------------------------------------------------------------------- */
 /* Login page                                                              */
 /* ---------------------------------------------------------------------- */
+/* Bố cục bám nguyên mẫu gốc va-hrm (Pages/Auth/Login.tsx - Tailwind), đối
+   chiếu bản CSS thuần va-workspace. Trang login luôn sáng cố định: bản gốc
+   dùng màu Tailwind cứng (bg-white/text-slate-900) nên khai báo token cục bộ
+   ở đây thay vì --vas-surface/--vas-text dùng chung, để card trắng không bị
+   chữ tối-trên-tối nếu sau này thêm dark mode. */
 .admin-login {
+  --login-card-bg: #ffffff;
+  --login-text: #1a1a1a;
+  --login-text-muted: #6b6b6f;
+  --login-border: #e5e5e8;
+
   position: fixed;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 2.5rem 1rem;
   background: var(--vas-tri-thuc);
   overflow: hidden;
   font-family: var(--vas-font);
 }
 
+/* Watermark: PNG tối trên nền trong suốt -> invert thành họa tiết sáng trên
+   nền brand (tương đương "brightness-0 invert contrast-150" của bản gốc).
+   KHÔNG hạ opacity: độ mờ đến từ chính ảnh nguồn, giảm thêm là mất họa tiết. */
 .admin-login-watermark {
   position: absolute;
-  inset: -5%;
-  width: 110%;
-  height: 110%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
+  object-position: center;
+  transform: scale(1.05);
   filter: brightness(0) invert(1) contrast(1.5);
-  opacity: 0.08;
   pointer-events: none;
 }
 
 .admin-login-scrim {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(ellipse 60% 55% at 50% 30%, rgba(255, 255, 255, 0.06), transparent 70%),
-    linear-gradient(160deg, rgba(122, 0, 43, 0.4) 0%, transparent 55%);
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--vas-tri-thuc) 5%, transparent),
+    transparent,
+    color-mix(in srgb, var(--vas-tri-thuc) 20%, transparent)
+  );
   pointer-events: none;
 }
 
@@ -55,61 +78,103 @@ html.scrollable-page {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  width: min(400px, 92vw);
+  width: 100%;
+  max-width: 32rem;
+}
+
+.admin-login-header {
+  margin-bottom: 2rem;
+  padding: 0 1rem;
 }
 
 .admin-login-logo {
-  height: 2.4rem;
-  width: auto;
+  display: block;
+  width: 100%;
+  max-width: min(100%, 300px);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(var(--vas-shadow-sm));
 }
 
 .admin-login-card {
   width: 100%;
-  background: var(--vas-surface);
+  max-width: 28rem;
+  background: var(--login-card-bg);
   border-radius: var(--vas-radius-lg);
   box-shadow: var(--vas-shadow-lg);
-  padding: 2.4rem 2rem;
+  padding: 2.5rem 2rem;
   text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 .admin-login-card h1 {
   margin: 0;
   font-family: var(--vas-display);
-  font-size: 1.6rem;
-  color: var(--vas-text);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--login-text);
 }
 
 .admin-login-card p {
-  margin: 0 0 1rem;
-  color: var(--vas-text-muted);
-  font-size: 0.92rem;
+  margin: 1rem auto 0;
+  max-width: 20rem;
+  color: var(--login-text-muted);
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
+.admin-login-actions {
+  margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .admin-login-google-btn {
-  display: grid;
-  place-items: center;
-  width: 3.4rem;
-  height: 3.4rem;
-  border-radius: 50%;
-  border: none;
-  background: #ffffff;
-  box-shadow: 0 6px 18px rgba(36, 20, 23, 0.18);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border: 1px solid var(--login-border);
+  border-radius: 999px;
+  background: var(--login-card-bg);
+  box-shadow: var(--vas-shadow-md);
   cursor: pointer;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition: box-shadow 0.15s ease;
 }
 .admin-login-google-btn:hover {
-  box-shadow: 0 10px 24px rgba(36, 20, 23, 0.24);
-  transform: translateY(-2px);
+  box-shadow: var(--vas-shadow-lg);
 }
-.admin-login-google-btn:active {
-  transform: translateY(0);
+
+.admin-login-google-icon {
+  display: block;
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+@media (max-width: 480px) {
+  .admin-login-card {
+    padding: 2rem 1.5rem;
+  }
+
+  .admin-login-logo {
+    max-width: 240px;
+  }
+}
+
+@media (min-width: 768px) {
+  .admin-login-card {
+    padding: 3rem 2.5rem;
+  }
+
+  .admin-login-logo {
+    max-width: 320px;
+  }
+
+  .admin-login-google-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
 }
 
 /* ---------------------------------------------------------------------- */
@@ -139,36 +204,83 @@ html.scrollable-page {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Shell layout                                                            */
+/* Shell layout - port AppLayout.vue (va-workspace)                         */
 /* ---------------------------------------------------------------------- */
+/* Khung cao đúng 1 màn hình, KHÔNG để cả trang cuộn: chỉ .admin-content
+   cuộn nội bộ. Nhờ vậy header/sidebar luôn đứng yên, và trên mobile không
+   bị "nhảy" khi bàn phím ảo bật lên (100dvh theo viewport động). */
 .admin-shell {
   display: flex;
-  min-height: 100vh;
-  background: var(--vas-surface-muted);
-  font-family: var(--vas-font);
-  color: var(--vas-text);
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--color-surface-muted);
+  font-family: var(--font-family-base);
+  color: var(--color-text);
 }
 
 .admin-main {
+  position: relative;
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
+/* Vùng nội dung: nền watermark cố định + lớp cuộn nội bộ. */
 .admin-content {
+  position: relative;
   flex: 1;
-  padding: clamp(1rem, 2.5vw, 2rem);
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Watermark logo VAS: position:fixed nên KHÔNG cuộn theo nội dung (yêu cầu
+   "mờ nhạt, cố định"). Đặt sau header/sidebar về z-index để không phủ lên
+   chúng; mọi card nội dung có position:relative nên luôn nằm trên.
+
+   background-logo.png là logo TRẮNG trên nền trong suốt (vẽ cho nền brand
+   tối của trang login) - để nguyên thì tàng hình hoàn toàn trên nền sáng
+   của khu admin. invert(1) lật thành logo tối, rồi mới hạ opacity xuống
+   mức chìm. Cùng thủ thuật filter mà .admin-login-watermark đang dùng,
+   chỉ ngược chiều. */
+.admin-content-watermark {
+  position: fixed;
+  z-index: 0;
+  right: -2rem;
+  bottom: -3rem;
+  width: clamp(18rem, 40vw, 38rem);
+  height: clamp(18rem, 40vw, 38rem);
+  background-image: url("/images/background-logo.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  filter: invert(1);
+  opacity: 0.05;
+  pointer-events: none;
+  user-select: none;
+}
+
+.admin-content-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
   max-width: 96rem;
   margin: 0 auto;
-  width: 100%;
+  padding: clamp(0.875rem, 2.2vw, 1.75rem);
+  /* Chừa chỗ cho thanh home indicator / thanh điều hướng của điện thoại. */
+  padding-bottom: calc(clamp(0.875rem, 2.2vw, 1.75rem) + env(safe-area-inset-bottom, 0px));
 }
 
 .admin-page-placeholder {
-  background: var(--vas-surface);
-  border-radius: var(--vas-radius-md);
+  position: relative;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
   padding: 2rem;
-  box-shadow: var(--vas-shadow-sm);
+  box-shadow: inset 0 0 0 1px var(--color-border), var(--shadow-sm);
 }
 .admin-page-placeholder h1 {
   margin: 0 0 0.5rem;
@@ -177,179 +289,319 @@ html.scrollable-page {
 }
 .admin-page-placeholder p {
   margin: 0;
-  color: var(--vas-text-muted);
+  color: var(--color-text-muted);
 }
 
 /* ---------------------------------------------------------------------- */
-/* Sidebar                                                                  */
+/* Sidebar - port AppSidebar.vue (va-workspace)                            */
 /* ---------------------------------------------------------------------- */
-.admin-sidebar {
-  width: var(--vas-sidebar-expanded);
+.admin-sidebar-wrap {
+  position: relative;
+  z-index: 20;
   flex-shrink: 0;
-  background: var(--vas-tri-thuc);
-  color: rgba(255, 255, 255, 0.86);
+}
+
+.admin-sidebar-overlay {
+  display: none;
+}
+
+.admin-sidebar {
+  position: relative;
+  width: var(--spacing-sidebar-expanded);
+  height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: visible;
   transition: width 0.2s ease;
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  z-index: 30;
+
+  /* "sidebar-surface" của va-workspace: nền brand + 2 lớp sheen tinh tế. */
+  background-color: var(--color-sidebar);
+  background-image:
+    linear-gradient(
+      180deg,
+      var(--color-sidebar-sheen-top) 0%,
+      transparent 28%,
+      var(--color-sidebar-sheen-bottom) 100%
+    ),
+    linear-gradient(90deg, var(--color-sidebar-sheen-side) 0%, transparent 40%);
+  color: var(--color-sidebar-text);
 }
 
 .admin-sidebar--collapsed {
-  width: var(--vas-sidebar-rail);
+  width: var(--spacing-sidebar-rail);
 }
 
+/* ---------- Brand ---------- */
 .admin-sidebar-brand {
+  position: relative;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.1rem 1rem;
-  min-height: 3.75rem;
+  gap: var(--space-2);
+  height: var(--admin-header-h);
+  padding: var(--space-2) var(--space-4);
+  box-shadow: 0 1px 0 var(--color-sidebar-divider);
+}
+
+.admin-sidebar--collapsed .admin-sidebar-brand {
+  padding: var(--space-2);
+}
+
+.admin-sidebar-brand-link {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+}
+
+.admin-sidebar-brand-link:focus-visible {
+  outline: 2px solid var(--color-sidebar-focus);
+  outline-offset: 2px;
 }
 
 .admin-sidebar-logo {
-  height: 1.6rem;
+  display: block;
   width: auto;
+  max-width: 100%;
+  height: 1.75rem;
+  object-fit: contain;
+  filter: brightness(1.04);
 }
+
 .admin-sidebar-mark {
-  height: 1.8rem;
-  width: auto;
-  margin: 0 auto;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  object-fit: contain;
+  filter: brightness(1.04);
 }
 
 .admin-sidebar-close {
-  border: none;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  border-radius: 50%;
+  flex-shrink: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
   width: 2rem;
   height: 2rem;
-  display: grid;
-  place-items: center;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-sidebar-text-muted);
   cursor: pointer;
 }
 
+.admin-sidebar-close:hover {
+  color: var(--color-on-primary);
+  background: var(--color-sidebar-hover);
+}
+
+/* ---------- Nav ---------- */
 .admin-sidebar-nav {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 0.5rem 0.6rem;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-3);
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-sidebar-scroll-thumb) transparent;
+}
+
+.admin-sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+.admin-sidebar-nav::-webkit-scrollbar-thumb {
+  background-color: var(--color-sidebar-scroll-thumb);
+  border-radius: var(--radius-full);
+}
+.admin-sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-sidebar-scroll-thumb-hover);
+}
+
+.admin-sidebar--collapsed .admin-sidebar-nav {
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-2);
+  overflow: visible;
+}
+
+.admin-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.admin-sidebar-section-label {
+  margin: 0 0 var(--space-2);
+  padding: 0 var(--space-3);
+  color: var(--color-sidebar-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .admin-sidebar-link {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.7rem 0.8rem;
-  border-radius: var(--vas-radius-sm);
-  color: rgba(255, 255, 255, 0.82);
+  gap: var(--space-3);
+  min-height: 2.5rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: var(--radius-md);
+  color: var(--color-sidebar-text);
   text-decoration: none;
-  font-size: 0.92rem;
+  font-size: 0.875rem;
   font-weight: 500;
-  transition: background 0.15s ease;
+  white-space: nowrap;
+  overflow: visible;
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
 }
-.admin-sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-.admin-sidebar-link--active {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
-  font-weight: 700;
+
+.admin-sidebar--collapsed .admin-sidebar-link {
+  justify-content: center;
+  width: 2.5rem;
+  padding: 0.375rem;
 }
 
 .admin-sidebar-icon {
   flex-shrink: 0;
   display: grid;
   place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-sidebar-well);
+  color: var(--color-sidebar-text-muted);
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
 }
 
-.admin-sidebar--collapsed .admin-sidebar-link {
-  justify-content: center;
+.admin-sidebar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+.admin-sidebar-link:hover {
+  background: var(--color-sidebar-hover);
+  color: var(--color-on-primary);
+}
+
+.admin-sidebar-link:hover .admin-sidebar-icon {
+  background: var(--color-sidebar-hover);
+  color: var(--color-on-primary);
+}
+
+.admin-sidebar-link:focus-visible {
+  outline: 2px solid var(--color-sidebar-focus);
+  outline-offset: 2px;
+}
+
+.admin-sidebar-link--active {
+  background: var(--color-sidebar-active);
+  color: var(--color-on-primary);
+  font-weight: 600;
+}
+
+.admin-sidebar-link--active .admin-sidebar-icon {
+  background: var(--color-sidebar-well-strong);
+  color: var(--color-on-primary);
+}
+
+/* Nhãn bay ra khi sidebar ở dạng rail (chỉ icon). */
 .admin-sidebar-flyout {
   position: absolute;
-  left: calc(100% + 0.6rem);
+  left: calc(100% + var(--space-2));
   top: 50%;
   transform: translateY(-50%);
-  background: var(--vas-tri-thuc-900);
-  color: #fff;
-  padding: 0.4rem 0.7rem;
-  border-radius: var(--vas-radius-sm);
-  font-size: 0.82rem;
-  white-space: nowrap;
+  z-index: 20;
+  display: block;
+  min-width: 8.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-sidebar-flyout);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease;
-  box-shadow: var(--vas-shadow-md);
+  white-space: nowrap;
+  transition: opacity 150ms ease;
 }
-.admin-sidebar-link:hover .admin-sidebar-flyout {
+
+.admin-sidebar-link:hover .admin-sidebar-flyout,
+.admin-sidebar-link:focus-visible .admin-sidebar-flyout {
   opacity: 1;
 }
 
-.admin-sidebar-collapse-toggle {
-  margin: 0.6rem;
-  border: none;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border-radius: var(--vas-radius-sm);
-  padding: 0.6rem;
-  cursor: pointer;
+/* ---------------------------------------------------------------------- */
+/* Header - port AppHeader.vue (va-workspace)                              */
+/* ---------------------------------------------------------------------- */
+.admin-header {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--admin-header-h);
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  box-shadow: 0 1px 0 var(--color-border);
+}
+
+.admin-header-icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.admin-sidebar-collapse-toggle:hover {
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.admin-sidebar-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 25;
-  background: rgba(20, 5, 10, 0.45);
-  backdrop-filter: blur(2px);
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
   border: none;
-  cursor: pointer;
-}
-
-/* ---------------------------------------------------------------------- */
-/* Header                                                                   */
-/* ---------------------------------------------------------------------- */
-.admin-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
-  background: var(--vas-surface);
-  box-shadow: 0 1px 0 var(--vas-border);
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  min-height: 3.5rem;
-}
-
-.admin-header-menu-btn {
-  border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--vas-text);
+  color: var(--color-text);
   cursor: pointer;
-  display: grid;
-  place-items: center;
-  padding: 0.35rem;
-  border-radius: var(--vas-radius-sm);
-}
-.admin-header-menu-btn:hover {
-  background: var(--vas-surface-muted);
+  text-decoration: none;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 }
 
-.admin-header-spacer {
+.admin-header-icon-btn:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-primary);
+}
+
+.admin-header-icon-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Đích portal của AdminPageHeader. */
+.admin-header-page {
   flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.admin-header-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .admin-header-account {
@@ -359,32 +611,57 @@ html.scrollable-page {
 .admin-header-account-btn {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.375rem;
+  height: 2.25rem;
+  padding: 0.125rem 0.375rem 0.125rem 0.125rem;
   border: none;
+  border-radius: var(--radius-full);
   background: transparent;
+  color: var(--color-text);
+  font-family: inherit;
   cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 999px;
+  transition: background-color 150ms ease;
+}
+
+.admin-header-account-btn:hover {
+  background: var(--color-surface-muted);
+}
+
+.admin-header-account-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.admin-header-account-name {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 500;
 }
 
 .admin-header-avatar {
-  width: 2.1rem;
-  height: 2.1rem;
-  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-full);
   object-fit: cover;
+  flex-shrink: 0;
 }
+
 .admin-header-avatar--fallback {
   display: grid;
   place-items: center;
-  background: var(--vas-tri-thuc);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 0.875rem;
 }
 
 .admin-header-chevron {
-  color: var(--vas-text-muted);
-  transition: transform 0.15s ease;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform 150ms ease;
 }
 .admin-header-chevron--open {
   transform: rotate(180deg);
@@ -393,93 +670,436 @@ html.scrollable-page {
 .admin-header-dropdown {
   position: absolute;
   right: 0;
-  top: calc(100% + 0.5rem);
-  width: 15rem;
-  background: var(--vas-surface);
-  border-radius: var(--vas-radius-md);
-  box-shadow: var(--vas-shadow-lg);
-  padding: 0.75rem;
+  top: calc(100% + var(--space-2));
+  z-index: 40;
+  width: 16rem;
+  padding: 0.375rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  z-index: 40;
+  gap: 0.25rem;
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-lg);
+  animation: admin-menu-in 140ms ease-out;
 }
 
 .admin-header-dropdown-info {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.4rem 0.5rem 0.7rem;
-  box-shadow: 0 1px 0 var(--vas-border);
+  gap: 0.125rem;
+  padding: 0.5rem 0.5rem 0.75rem;
+  box-shadow: 0 1px 0 var(--color-border);
 }
 .admin-header-dropdown-info strong {
-  font-size: 0.92rem;
+  font-size: 0.875rem;
+  color: var(--color-text);
 }
 .admin-header-dropdown-info span {
-  font-size: 0.8rem;
-  color: var(--vas-text-muted);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
 }
 .admin-header-role-badge {
   align-self: flex-start;
-  margin-top: 0.3rem;
-  padding: 0.15rem 0.55rem;
-  border-radius: 999px;
-  background: var(--vas-tri-thuc-100);
-  color: var(--vas-tri-thuc);
-  font-size: 0.72rem !important;
+  margin-top: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-surface);
+  color: var(--color-primary) !important;
+  font-size: 0.6875rem !important;
   font-weight: 600;
 }
 
 .admin-header-dropdown-item {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem;
   border: none;
+  border-radius: var(--radius-sm);
   background: transparent;
-  padding: 0.55rem 0.5rem;
-  border-radius: var(--vas-radius-sm);
-  font-size: 0.88rem;
-  cursor: pointer;
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 0.8125rem;
   text-align: left;
-  color: var(--vas-text);
+  cursor: pointer;
 }
 .admin-header-dropdown-item:hover {
-  background: var(--vas-surface-muted);
+  background: var(--color-surface-muted);
 }
 .admin-header-dropdown-item--danger {
-  color: var(--vas-danger);
+  color: var(--color-primary);
+}
+.admin-header-dropdown-item--danger:hover {
+  background: var(--color-danger-tint-bg);
 }
 
 /* ---------------------------------------------------------------------- */
-/* Responsive: mobile/tablet <1280px - sidebar thành off-canvas drawer     */
+/* Page header (portal lên .admin-header-page) - port PageHeader.vue       */
 /* ---------------------------------------------------------------------- */
+.admin-page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+.admin-page-header-left {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.admin-page-header-title-wrap {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.admin-page-header-title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.admin-page-header-subtitle {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.admin-page-header-right {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-page-header-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 2rem;
+  padding: 0 0.625rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.admin-page-header-primary:hover {
+  background: var(--color-primary-hover);
+}
+
+.admin-page-header-primary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.admin-page-header-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Hành động phụ (VD nút quay lại) - viền nhạt thay vì nền brand đặc. */
+.admin-page-header-primary--ghost {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.admin-page-header-primary--ghost:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-primary);
+}
+
+.admin-page-header-primary-caret {
+  opacity: 0.85;
+}
+
+.admin-page-header-menu {
+  position: absolute;
+  top: calc(100% - 0.25rem);
+  left: 0;
+  z-index: 40;
+  width: 17rem;
+  padding: 0.375rem 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-lg);
+  animation: admin-menu-in 140ms ease-out;
+}
+
+.admin-page-header-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-page-header-menu-item:hover {
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
+}
+
+.admin-page-header-menu-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+}
+
+.admin-page-header-menu-copy {
+  min-width: 0;
+}
+
+.admin-page-header-menu-label {
+  display: block;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.admin-page-header-menu-desc {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+
+@keyframes admin-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Nội dung trên nền watermark                                             */
+/* ---------------------------------------------------------------------- */
+/* Watermark là lớp position:fixed nằm dưới (.admin-content-watermark,
+   z-index 0). Mọi "mặt giấy" của nội dung phải tạo stacking context riêng
+   để chữ/ảnh không bị họa tiết logo lẫn vào. Gom vào 1 rule thay vì sửa
+   rải rác từng component. */
+.admin-page-placeholder,
+.dashboard-card,
+.artworks-filter-bar,
+.artworks-table,
+.artworks-edit-main,
+.award-card,
+.award-form,
+.stat-card {
+  position: relative;
+  z-index: 1;
+}
+
+/* Card nội dung: viền 1px mảnh + bóng nhẹ thay cho bóng đổ dày, đồng bộ
+   với ngôn ngữ thị giác của va-workspace. */
+.dashboard-card,
+.artworks-filter-bar,
+.artworks-table,
+.artworks-edit-main,
+.award-card,
+.award-form {
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-sm);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Responsive                                                              */
+/* ---------------------------------------------------------------------- */
+
+/* --- Tablet + mobile (<1280px): sidebar thành drawer off-canvas --- */
 @media (max-width: 1279px) {
-  .admin-sidebar {
+  .admin-sidebar-wrap {
     position: fixed;
-    left: 0;
+    inset: 0;
+    z-index: 40;
+    pointer-events: none;
+  }
+
+  .admin-sidebar-overlay {
+    display: block;
+    position: absolute;
+    inset: 0;
+    border: none;
+    padding: 0;
+    background: var(--color-sidebar-overlay);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    cursor: pointer;
+  }
+
+  .admin-sidebar {
+    position: absolute;
     top: 0;
-    width: var(--vas-sidebar-drawer);
+    bottom: 0;
+    left: 0;
+    width: min(86vw, var(--spacing-sidebar-drawer));
     transform: translateX(-100%);
     transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: var(--shadow-lg);
   }
-  .admin-sidebar--drawer-open {
+
+  /* Dưới desktop luôn hiện nhãn đầy đủ, kể cả khi cờ collapsed đang bật. */
+  .admin-sidebar--collapsed {
+    width: min(86vw, var(--spacing-sidebar-drawer));
+  }
+
+  .admin-sidebar-wrap--open {
+    pointer-events: auto;
+  }
+
+  .admin-sidebar-wrap--open .admin-sidebar-overlay {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .admin-sidebar-wrap--open .admin-sidebar {
     transform: translateX(0);
   }
-  .admin-sidebar--drawer-closed {
-    transform: translateX(-100%);
-  }
-}
 
-@media (min-width: 1280px) {
-  .admin-header-menu-btn {
+  .admin-sidebar-close {
+    display: flex;
+  }
+
+  .admin-sidebar-flyout {
     display: none;
   }
 }
 
-@media (max-width: 480px) {
+/* --- Tablet (<1024px): tiết kiệm bề ngang trên header --- */
+@media (max-width: 1023px) {
+  .admin-header-account-name {
+    display: none;
+  }
+}
+
+/* --- Mobile (<768px) --- */
+@media (max-width: 767px) {
+  .admin-header {
+    padding: 0 var(--space-2);
+    /* Chừa tai thỏ / bo góc màn hình khi xoay ngang. */
+    padding-left: max(var(--space-2), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--space-2), env(safe-area-inset-right, 0px));
+  }
+
+  .admin-header-view-site {
+    display: none;
+  }
+
+  .admin-header-chevron {
+    display: none;
+  }
+
+  /* Nút hành động chính thu về dạng icon tròn - nhãn vẫn còn cho screen
+     reader qua aria-label, và title khi hover. */
+  .admin-page-header-primary-label {
+    display: none;
+  }
+
+  .admin-page-header-primary {
+    width: 2rem;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .admin-page-header-primary-caret {
+    display: none;
+  }
+
+  .admin-page-header-subtitle {
+    display: none;
+  }
+
+  .admin-page-header-menu {
+    width: min(17rem, calc(100vw - 1.5rem));
+  }
+
   .admin-header-dropdown {
-    width: calc(100vw - 2rem);
-    right: -0.5rem;
+    width: min(17rem, calc(100vw - 1rem));
+    right: -0.25rem;
+  }
+}
+
+/* Vùng chạm tối thiểu 44px trên thiết bị cảm ứng (không có hover chính xác) */
+@media (hover: none) and (pointer: coarse) {
+  .admin-header-icon-btn,
+  .admin-sidebar-close {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .admin-sidebar-link {
+    min-height: 2.875rem;
+  }
+
+  .admin-page-header-primary {
+    min-height: 2.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-sidebar,
+  .admin-sidebar-overlay,
+  .admin-sidebar-link,
+  .admin-sidebar-flyout,
+  .admin-header-chevron,
+  .admin-header-account-btn,
+  .admin-header-icon-btn,
+  .admin-page-header-primary {
+    transition: none;
+  }
+
+  .admin-header-dropdown,
+  .admin-page-header-menu {
+    animation: none;
   }
 }
 
@@ -982,34 +1602,51 @@ html.scrollable-page {
   .artworks-table-head {
     display: none;
   }
+  /* Mỗi ô thống kê có grid-area RIÊNG. Trước đây views/reactions/comments
+     cùng gán area "stats" nên grid xếp chồng cả 3 lên nhau (số lượt xem in
+     đè lên hàng cảm xúc). Nay: lượt xem + bình luận đứng cạnh nhau ở dòng
+     "stats", cảm xúc chiếm dòng riêng vì có thể xuống nhiều hàng. */
   .artworks-table-row {
-    grid-template-columns: 3.25rem 1fr;
+    grid-template-columns: 3.25rem auto minmax(0, 1fr);
     grid-template-areas:
-      "thumb title"
-      "thumb meta"
-      "award award"
-      "stats actions";
-    row-gap: 0.35rem;
+      "thumb title    title"
+      "thumb meta     meta"
+      "award award    award"
+      "views comments ."
+      "react react    react"
+      "acts  acts     acts";
+    row-gap: 0.4rem;
     padding: 0.75rem;
   }
   .artworks-cell-thumb { grid-area: thumb; }
   .artworks-cell-title { grid-area: title; }
   .artworks-cell-meta { grid-area: meta; }
   .artworks-cell-award { grid-area: award; }
+
   .artworks-cell-views,
-  .artworks-cell-reactions,
   .artworks-cell-comments {
-    grid-area: stats;
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.3rem;
     text-align: left;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--vas-text-muted);
   }
-  .artworks-cell-views::before { content: "👁 "; }
-  .artworks-cell-comments::before { content: "💬 "; }
+  .artworks-cell-views { grid-area: views; }
+  .artworks-cell-comments { grid-area: comments; }
+  .artworks-cell-reactions { grid-area: react; }
+
+  .artworks-cell-views::before { content: "👁"; }
+  .artworks-cell-comments::before { content: "💬"; }
+
+  /* Hàng nút thao tác tách khỏi phần dữ liệu bằng 1 đường kẻ mảnh. */
   .artworks-cell-actions {
-    grid-area: actions;
+    grid-area: acts;
     justify-content: flex-end;
+    margin-top: 0.15rem;
+    padding-top: 0.5rem;
+    box-shadow: 0 -1px 0 var(--color-border);
   }
 }
 
@@ -1132,7 +1769,10 @@ html.scrollable-page {
   font-weight: 600;
   color: var(--vas-text-muted);
 }
-.form-field input,
+/* :not([type="checkbox"]) - checkbox KHÔNG được ăn width:100%/padding của
+   ô nhập text. Trước đây nó giãn hết chiều ngang ô, đẩy nhãn "Hiển thị
+   công khai" ra tận mép phải và trông như bị lệch khỏi ô tick. */
+.form-field input:not([type="checkbox"]):not([type="radio"]),
 .form-field select {
   padding: 0.55rem 0.7rem;
   border-radius: var(--vas-radius-sm);
@@ -1141,6 +1781,16 @@ html.scrollable-page {
   font-size: 0.88rem;
   color: var(--vas-text);
   width: 100%;
+}
+
+.form-field input[type="checkbox"],
+.form-field input[type="radio"] {
+  flex-shrink: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
 }
 .form-field input:focus,
 .form-field select:focus {
@@ -1301,9 +1951,12 @@ html.scrollable-page {
   margin: 0;
 }
 
+/* Dính đáy vùng cuộn (.admin-content). z-index cao hơn các card anh em
+   (z-index 1) để luôn nổi trên nội dung đang trôi qua bên dưới. */
 .artworks-upload-footer {
   position: sticky;
   bottom: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1475,5 +2128,138 @@ html.scrollable-page {
   }
   .award-form {
     position: static;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Tinh chỉnh responsive cho nội dung (mobile / tablet)                     */
+/* ---------------------------------------------------------------------- */
+/* Bổ sung SAU các rule gốc để thắng theo thứ tự nguồn - cố ý gom lại một
+   chỗ thay vì rải vào từng section, cho dễ đối chiếu khi chỉnh breakpoint. */
+
+/* --- Tablet (768px - 1279px) --- */
+@media (min-width: 768px) and (max-width: 1279px) {
+  /* Awards: cột form 18rem quá chật khi không còn sidebar chiếm chỗ ->
+     cho danh sách và form chia đôi cân đối hơn. */
+  .awards-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.85fr);
+    gap: 1rem;
+  }
+}
+
+/* --- Mobile (<768px) --- */
+@media (max-width: 767px) {
+  /* Thanh lọc: mỗi control chiếm trọn 1 dòng, chạm dễ hơn là nhồi 2-3
+     cột select tí hon. Search luôn ở trên cùng. */
+  .artworks-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+  .artworks-search-input {
+    flex: 1 1 auto;
+  }
+  .artworks-filter-bar select {
+    width: 100%;
+  }
+
+  /* Chiều cao 44px cho mọi ô nhập - chuẩn vùng chạm tối thiểu, đồng thời
+     font-size >=16px để iOS Safari không tự phóng to trang khi focus. */
+  .artworks-filter-bar select,
+  .artworks-search-input {
+    min-height: 2.75rem;
+  }
+  .artworks-search-input input,
+  .artworks-filter-bar select {
+    font-size: 1rem;
+  }
+
+  /* Nút hành động trong bảng: to hơn cho ngón tay. */
+  .artworks-icon-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  /* Phân trang: nút rộng, số trang nằm giữa. */
+  .artworks-pagination {
+    gap: 0.5rem;
+  }
+  .artworks-pagination button {
+    flex: 1;
+    min-height: 2.75rem;
+    max-width: 8rem;
+  }
+
+  /* Footer upload dính đáy: bấm "Lưu" phải luôn với tới được. */
+  .artworks-upload-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+    text-align: center;
+    /* Tránh bị thanh điều hướng của trình duyệt di động che mất. */
+    bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .artworks-upload-footer .btn {
+    justify-content: center;
+    min-height: 2.75rem;
+  }
+
+  /* Awards: nút sửa/xoá xuống hàng riêng thay vì ép card chật lại. */
+  .award-card {
+    flex-wrap: wrap;
+  }
+  .award-card-actions {
+    margin-left: auto;
+  }
+  .award-form-actions .btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 2.75rem;
+  }
+
+  /* Dashboard: biểu đồ tròn/cột giữ được tỉ lệ đọc được ở màn hình hẹp. */
+  .dashboard-card {
+    padding: 1rem;
+  }
+  .stat-card-value {
+    font-size: 1.65rem;
+  }
+}
+
+/* --- Mobile hẹp (<480px) --- */
+@media (max-width: 479px) {
+  /* Thống kê 2 cột thay vì 1 - 4 thẻ xếp dọc làm trang quá dài. */
+  .dashboard-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+  .stat-card-value {
+    font-size: 1.35rem;
+  }
+  .stat-card-label {
+    font-size: 0.75rem;
+  }
+}
+
+/* Vùng chạm tối thiểu trên thiết bị cảm ứng, không phụ thuộc bề ngang
+   (tablet ngang vẫn là cảm ứng). */
+@media (hover: none) and (pointer: coarse) {
+  .artworks-icon-btn,
+  .award-card-actions .artworks-icon-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .artworks-pagination button,
+  .award-form-actions .btn,
+  .artworks-upload-footer .btn {
+    min-height: 2.75rem;
+  }
+
+  /* Hover flyout/tooltip vô nghĩa trên cảm ứng - ẩn để không "dính" lại
+     sau khi chạm. */
+  .admin-sidebar-flyout {
+    display: none;
   }
 }

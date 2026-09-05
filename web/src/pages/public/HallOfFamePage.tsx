@@ -1,26 +1,102 @@
-import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
-import { PageHero } from "../../components/public/PageHero";
+import { ArrowRight, Award as AwardIcon, Crown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { FeaturedGardenScene } from "../../components/public/FeaturedGardenScene";
+import { FeaturedHero } from "../../components/public/FeaturedHero";
+import { HallArtworkCard } from "../../components/public/HallArtworkCard";
+import { HallFireworks } from "../../components/public/HallFireworks";
+import { HallRail } from "../../components/public/HallRail";
+import { PublicLightbox } from "../../components/public/PublicLightbox";
 import { fetchBillboard, type BillboardEntry } from "../../lib/publicApi";
 
-// clip-path riêng theo hạng: Nhất = khiên hexagon nổi bật, Nhì/Ba = bo góc
-// bất đối xứng nhẹ hơn, còn lại = ribbon cắt góc dưới. Đơn giản, thuần CSS,
-// không cần thư viện.
-function clipPathForRank(rank: number): string {
-  if (rank === 1) return "polygon(50% 0%, 100% 20%, 100% 80%, 50% 100%, 0% 80%, 0% 20%)";
-  if (rank === 2) return "polygon(0% 0%, 100% 0%, 100% 88%, 85% 100%, 0% 100%)";
-  if (rank === 3) return "polygon(15% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 15%)";
-  return "polygon(0% 0%, 100% 0%, 100% 100%, 8% 100%, 0% 85%)";
+/** Bậc ngoài podium (chuyên đề / khuyến khích) gom chung vào một nhóm. */
+const OTHER_TIER = 99;
+
+/**
+ * Nhãn huy chương + banner trên bệ bục, theo từng hạng.
+ *
+ * Banner phải thật ngắn: bệ chỉ rộng khoảng 1/3 bục và mọi dòng chữ trên bệ
+ * đều bị khoá một hàng, chữ dài sẽ bị cắt bằng "…" chứ không xuống dòng.
+ */
+const TIER_META: Record<number, { medal: string; banner: string }> = {
+  1: { medal: "Vàng", banner: "★ Giải Nhất ★" },
+  2: { medal: "Bạc", banner: "Giải Nhì" },
+  3: { medal: "Đồng", banner: "Giải Ba" },
+};
+
+function foldAwardKey(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
 }
 
 /**
- * Trang /trien-lam/bang-vang - billboard vinh danh các tác phẩm đạt giải.
- * Khung ảnh dùng clip-path riêng theo hạng giải (Nhất nổi bật nhất),
- * border/glow theo award.color_hex.
+ * Bậc của một tác phẩm. Ưu tiên rank_order do admin đặt; chỉ khi rank nằm
+ * ngoài 1..3 mới đoán theo slug/tên - dữ liệu cũ có award chưa gán
+ * rank_order chuẩn nhưng tên vẫn là "Giải Nhất/Nhì/Ba".
+ */
+function tierOf(entry: BillboardEntry): number {
+  const { rank_order: rank, slug, name } = entry.award;
+  if (rank >= 1 && rank <= 3) return rank;
+  const key = foldAwardKey(`${slug} ${name}`);
+  if (/\bnhat\b|giai-nhat/.test(key)) return 1;
+  if (/\bnhi\b|giai-nhi/.test(key)) return 2;
+  if (/\bgiai ba\b|giai-ba\b/.test(key)) return 3;
+  return OTHER_TIER;
+}
+
+/** Thứ tự hiển thị trong bục: Nhì trái - Nhất giữa - Ba phải. */
+const PODIUM_ORDER = [2, 1, 3];
+
+/**
+ * Nhánh nguyệt quế cho khung quán quân. Vẽ tay bằng path thay vì dùng icon
+ * có sẵn: nhánh cần cong ôm theo cạnh khung, còn icon vòng nguyệt quế của
+ * lucide là một vòng khép kín không tách đôi được.
+ */
+function LaurelBranch() {
+  return (
+    <svg viewBox="0 0 40 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M31 116C14 98 8 74 12 50C15 30 22 14 31 4" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+      {[
+        { x: 27, y: 100, r: -28 },
+        { x: 21, y: 86, r: -20 },
+        { x: 17, y: 71, r: -12 },
+        { x: 15, y: 56, r: -4 },
+        { x: 16, y: 41, r: 6 },
+        { x: 19, y: 27, r: 16 },
+        { x: 24, y: 14, r: 26 },
+      ].map((leaf, i) => (
+        <ellipse
+          key={i}
+          cx={leaf.x}
+          cy={leaf.y}
+          rx="8.5"
+          ry="4.6"
+          fill="currentColor"
+          transform={`rotate(${leaf.r} ${leaf.x} ${leaf.y})`}
+        />
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * Trang /bang-vang - bục vinh danh 3 vị trí + dải giải chuyên đề.
+ *
+ *  1. Bục podium: Nhì trái - Nhất giữa (cao hơn) - Ba phải, đúng một tác
+ *     phẩm mỗi hạng theo giải admin đã gán.
+ *  2. Dải giải chuyên đề: mọi giải nằm ngoài podium (Khuyến khích, giải
+ *     theo chủ đề...).
+ *
+ * Card dùng chung HallArtworkCard ở cả hai tầng nên hover/tỉ lệ đồng nhất.
  */
 export default function HallOfFamePage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sharedArtworkId = Number(searchParams.get("tranh"));
   const [entries, setEntries] = useState<BillboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -35,44 +111,241 @@ export default function HallOfFamePage() {
     return () => controller.abort();
   }, []);
 
+  const { podium, specials, ordered } = useMemo(() => {
+    const byTier = new Map<number, BillboardEntry[]>();
+    for (const entry of entries) {
+      const tier = tierOf(entry);
+      const bucket = byTier.get(tier);
+      if (bucket) bucket.push(entry);
+      else byTier.set(tier, [entry]);
+    }
+
+    // Bục lấy thẳng tác phẩm admin đã gán - cuộc thi chỉ có một giải Nhất,
+    // một Nhì, một Ba nên mỗi hạng đúng một ô. Trang KHÔNG tự xếp hạng lại
+    // (theo lượt thích hay bất cứ tiêu chí nào): ai đạt giải là quyết định
+    // của ban giám khảo, trang chỉ trình bày.
+    //
+    // Phòng dữ liệu bất thường (admin lỡ gán 2 tác phẩm cùng hạng), lấy id
+    // nhỏ nhất để bục luôn đúng 3 ô thay vì vỡ bố cục, và cảnh báo ở
+    // console để admin biết mà sửa - im lặng nuốt mất một giải thì tệ hơn.
+    const podiumList = PODIUM_ORDER.map((rank) => {
+      const list = byTier.get(rank) ?? [];
+      if (list.length === 0) return null;
+      if (list.length > 1 && import.meta.env.DEV) {
+        console.warn(
+          `[Bảng vàng] Hạng ${rank} có ${list.length} tác phẩm được gán giải, chỉ hiện 1. Kiểm tra lại phần gán giải trong admin.`,
+        );
+      }
+      const entry = [...list].sort((a, b) => a.id - b.id)[0];
+      return { rank, entry };
+    }).filter((slot): slot is { rank: number; entry: BillboardEntry } => slot !== null);
+
+    // Mọi giải ngoài podium (Khuyến khích, giải chuyên đề...) vào dải dưới.
+    const specialList = [...byTier.entries()]
+      .filter(([rank]) => rank > 3)
+      .sort(([a], [b]) => a - b)
+      .flatMap(([, list]) => list);
+
+    // Thứ tự lightbox = đúng thứ tự mắt đọc trang: bục (trái→phải) rồi
+    // tới dải giải chuyên đề.
+    const flat = [...podiumList.map((slot) => slot.entry), ...specialList];
+
+    return { podium: podiumList, specials: specialList, ordered: flat };
+  }, [entries]);
+
+  // Link chia sẻ ?tranh=<id> mở đúng tác phẩm trong lightbox.
+  useEffect(() => {
+    if (loading || !Number.isInteger(sharedArtworkId) || sharedArtworkId <= 0) return;
+    const index = ordered.findIndex((item) => item.id === sharedArtworkId);
+    if (index >= 0) setActiveIndex(index);
+  }, [loading, ordered, sharedArtworkId]);
+
+  function setArtworkInUrl(id: number | null) {
+    const next = new URLSearchParams(searchParams);
+    if (id === null) next.delete("tranh");
+    else next.set("tranh", String(id));
+    setSearchParams(next);
+  }
+
+  function handleOpenArtwork(index: number) {
+    setActiveIndex(index);
+    setArtworkInUrl(ordered[index].id);
+  }
+
+  function handleCloseArtwork() {
+    setActiveIndex(null);
+    setArtworkInUrl(null);
+  }
+
+  /** Index trên mảng phẳng để lightbox duyệt xuyên suốt cả trang. */
+  const flatIndexOf = (entry: BillboardEntry) => ordered.indexOf(entry);
+
   return (
-    <>
-      <PageHero
-        variant="dark"
+    <div className="featured-page hall-page">
+      {/* Không có thú/chim ở trang này: bục vinh danh đã có pháo hoa, thêm
+          sóc thỏ chạy qua chỉ chia mắt người xem ra hai chỗ. */}
+      <FeaturedHero
+        critters={false}
         kicker="Bảng vàng"
-        title="Billboard vinh danh"
-        description="Vinh danh những tác phẩm xuất sắc nhất cuộc thi."
+        title="Nơi những nét vẽ được gọi tên"
+        description="Mỗi bức tranh ở đây bắt đầu từ một trang giấy trắng và rất nhiều lần các em dám vẽ tiếp. Xin chúc mừng những tác phẩm được ban giám khảo xướng tên — và cảm ơn mọi bàn tay nhỏ đã góp màu cho mùa thi này."
       />
-      <section className="billboard-section public-page-section">
+
+      <section className="featured-gallery-section hall-section">
+        <FeaturedGardenScene critters={false} />
+
         {loading ? (
-          <p className="admin-empty-note admin-empty-note--light">Đang tải…</p>
-        ) : entries.length === 0 ? (
-          <p className="admin-empty-note admin-empty-note--light">Chưa có tác phẩm đạt giải nào được công bố.</p>
+          <p className="admin-empty-note">Đang mở bảng vàng…</p>
+        ) : ordered.length === 0 ? (
+          <p className="admin-empty-note">
+            Bảng vàng đang chờ được xướng tên. Kết quả sẽ hiện tại đây ngay khi ban giám khảo công bố.
+          </p>
         ) : (
-          <div className="billboard-grid">
-            {entries.map((entry, index) => (
-              <motion.div
-                key={`${entry.id}-${entry.award.id}`}
-                className="billboard-card"
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45, delay: Math.min(index, 8) * 0.05, ease: [0.22, 1, 0.36, 1] }}
-                style={{ ["--billboard-color" as string]: entry.award.color_hex }}
-              >
-                <div className="billboard-frame" style={{ clipPath: clipPathForRank(entry.award.rank_order) }}>
-                  <img src={entry.image_url} alt={entry.title} loading="lazy" />
+          <div className="hall-wrap">
+            {/* --- Tầng 1: bục vinh danh --------------------------------- */}
+            {podium.length > 0 && (
+              <section className="hall-honour hall-panel hall-panel--honour" aria-labelledby="buc-vinh-danh">
+                <HallFireworks />
+
+                <header className="hall-honour-heading">
+                  <span className="hall-honour-rule" aria-hidden />
+                  <div className="hall-honour-titles">
+                    <span className="hall-honour-eyebrow" aria-hidden>
+                      Phần 1
+                    </span>
+                    <h2 id="buc-vinh-danh">Bục Vinh Danh</h2>
+                    <p className="hall-honour-sub">Ba tác phẩm xuất sắc nhất mùa thi năm nay</p>
+                  </div>
+                  <span className="hall-honour-rule" aria-hidden />
+                </header>
+
+                <div className="hall-podium" role="list">
+                  {podium.map(({ rank, entry }) => {
+                    const meta = TIER_META[rank];
+                    return (
+                      <div key={rank} className="hall-podium-slot" data-rank={rank} role="listitem">
+                        <span className="hall-podium-crest">
+                          {rank === 1 ? (
+                            <Crown size={15} strokeWidth={2.2} aria-hidden />
+                          ) : (
+                            <AwardIcon size={14} strokeWidth={2.2} aria-hidden />
+                          )}
+                          {entry.award.name}
+                        </span>
+
+                        <div className="hall-podium-stage">
+                          {/* Vòng nguyệt quế ôm hai bên khung quán quân. */}
+                          {rank === 1 && (
+                            <>
+                              <span className="hall-laurel hall-laurel--left" aria-hidden>
+                                <LaurelBranch />
+                              </span>
+                              <span className="hall-laurel hall-laurel--right" aria-hidden>
+                                <LaurelBranch />
+                              </span>
+                            </>
+                          )}
+
+                          <HallArtworkCard
+                            item={entry}
+                            award={entry.award}
+                            index={rank}
+                            variant="podium"
+                            medalLabel={meta.medal}
+                            onClick={() => handleOpenArtwork(flatIndexOf(entry))}
+                          />
+                        </div>
+
+                        <div className="hall-podium-base">
+                          <span className="hall-podium-rank" aria-hidden>
+                            {rank}
+                          </span>
+                          <span className="hall-podium-banner">{meta.banner}</span>
+                          <span className="hall-podium-name" title={entry.title}>{`“${entry.title}”`}</span>
+                          <span className="hall-podium-student" title={entry.student_name}>
+                            {entry.student_name}
+                          </span>
+                          <span className="hall-podium-school" title={entry.school_name}>
+                            {entry.class_name ? `Lớp ${entry.class_name} · ` : ""}
+                            {entry.school_name}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <span className="billboard-award-badge" style={{ background: entry.award.color_hex }}>
-                  {entry.award.name}
-                </span>
-                <strong className="billboard-title">{entry.title}</strong>
-                <span className="billboard-student">{entry.student_name}</span>
-                <span className="billboard-school">{entry.school_name}</span>
-              </motion.div>
-            ))}
+              </section>
+            )}
+
+            {/* --- Tầng 2: giải chuyên đề -------------------------------- */}
+            {/* Hai tầng trước đây trôi cạnh nhau trên cùng nền vườn nên đọc
+                như một khối card liền mạch. Vạch phân cách + khung riêng cho
+                mỗi tầng để mắt biết đây là một hạng mục khác. */}
+            {specials.length > 0 && (
+              <>
+                {podium.length > 0 && (
+                  <div className="hall-divider" aria-hidden>
+                    <span className="hall-divider-line" />
+                    <span className="hall-divider-mark">✦</span>
+                    <span className="hall-divider-line" />
+                  </div>
+                )}
+
+                <article className="hall-tier hall-tier--special hall-panel hall-panel--special" aria-labelledby="giai-chuyen-de">
+                  <header className="hall-tier-heading">
+                    <span className="hall-tier-medal hall-tier-medal--special" aria-hidden>
+                      <AwardIcon size={18} strokeWidth={2.2} />
+                    </span>
+                    <div className="hall-tier-titles">
+                      <span className="hall-tier-eyebrow" aria-hidden>
+                        Phần 2
+                      </span>
+                      <h2 id="giai-chuyen-de">Giải Thưởng Đặc Biệt &amp; Chuyên Đề</h2>
+                      <p className="hall-tier-sub">
+                        Những tác phẩm khiến ban giám khảo dừng lại thật lâu — mỗi bức một lý do rất riêng
+                      </p>
+                    </div>
+                    <span className="hall-tier-count">{specials.length} tác phẩm</span>
+                  </header>
+
+                  <HallRail entries={specials} onOpen={(entry) => handleOpenArtwork(flatIndexOf(entry))} />
+                </article>
+              </>
+            )}
+
+            {/* --- Lời kết ---------------------------------------------- */}
+            {/* Bảng vàng chỉ gọi tên được vài em, nhưng trang này được phụ
+                huynh của tất cả các em mở ra. Khối kết dẫn họ sang phòng
+                triển lãm - nơi tranh của con mình chắc chắn có mặt. */}
+            <aside className="hall-closing">
+              <span className="hall-closing-mark" aria-hidden>
+                🌱
+              </span>
+              <p className="hall-closing-lead">
+                Một mùa thi khép lại, nhưng điều ở lại không phải là thứ hạng — mà là buổi chiều các em ngồi
+                pha màu, những lần tẩy đi vẽ lại, và ánh mắt khi bức tranh cuối cùng cũng xong.
+              </p>
+              <p className="hall-closing-note">
+                Xin cảm ơn thầy cô, và cảm ơn quý phụ huynh đã ngồi cạnh các em suốt chặng đường ấy. Mỗi tác
+                phẩm gửi về đều được trân trọng trưng bày.
+              </p>
+              <Link className="hall-closing-cta" to="/phong-trien-lam">
+                Xem toàn bộ tác phẩm dự thi
+                <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
+              </Link>
+            </aside>
           </div>
         )}
+
+        {activeIndex !== null && (
+          <PublicLightbox
+            items={ordered}
+            activeIndex={activeIndex}
+            onNavigate={handleOpenArtwork}
+            onClose={handleCloseArtwork}
+          />
+        )}
       </section>
-    </>
+    </div>
   );
 }

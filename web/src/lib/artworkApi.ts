@@ -51,6 +51,15 @@ export type Award = {
   is_active: boolean;
 };
 
+/** Khoá của map variants: "<cỡ>_<định dạng>", khớp GeneratedVariant bên Go. */
+export type ArtworkVariantKey =
+  | "thumb_webp"
+  | "thumb_jpg"
+  | "medium_webp"
+  | "medium_jpg"
+  | "large_webp"
+  | "large_jpg";
+
 export type ArtworkWithMeta = {
   id: number;
   title: string;
@@ -59,6 +68,13 @@ export type ArtworkWithMeta = {
   grade_level_id: number;
   image_url: string;
   thumbnail_url?: string;
+  /**
+   * Các cỡ ảnh dẫn xuất sinh lúc upload, khoá dạng "<cỡ>_<định dạng>"
+   * ("thumb_webp", "medium_jpg"...). Có thể vắng mặt: tác phẩm upload trước
+   * khi có tính năng này, hoặc ảnh gốc vốn đã nhỏ hơn mọi cỡ đích.
+   * Dùng qua helper trong lib/artworkImage.ts thay vì đọc trực tiếp.
+   */
+  variants?: Partial<Record<ArtworkVariantKey, string>>;
   file_size: number;
   width?: number;
   height?: number;
@@ -98,10 +114,6 @@ export function updateArtwork(id: number, payload: UpdateArtworkPayload): Promis
 
 export function deleteArtwork(id: number): Promise<{ deleted: boolean }> {
   return adminRequest<{ deleted: boolean }>(`/api/v1/admin/artworks/${id}`, { method: "DELETE" });
-}
-
-export function getArtwork(id: number): Promise<ArtworkWithMeta> {
-  return adminRequest<ArtworkWithMeta>(`/api/v1/admin/artworks/${id}`);
 }
 
 export function toggleFeatured(id: number, featured: boolean): Promise<{ is_featured: boolean }> {

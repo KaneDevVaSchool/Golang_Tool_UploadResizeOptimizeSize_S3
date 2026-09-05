@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import { StatCard } from "../../components/admin/StatCard";
 import { TopArtworksList } from "../../components/admin/TopArtworksList";
 import { fetchDashboardStats, type DashboardStats } from "../../lib/dashboardApi";
@@ -49,11 +50,23 @@ export default function Dashboard() {
     return () => controller.abort();
   }, []);
 
+  // Header vẫn hiện ở cả trạng thái đang tải / rỗng, tránh thanh header
+  // trống rồi mới "nhảy" ra tiêu đề khi có dữ liệu.
   if (loading && !stats) {
-    return <div className="admin-page-placeholder">Đang tải số liệu…</div>;
+    return (
+      <>
+        <AdminPageHeader title="Tổng quan" subtitle="Đang tải…" />
+        <div className="admin-page-placeholder">Đang tải số liệu…</div>
+      </>
+    );
   }
   if (!stats) {
-    return <div className="admin-page-placeholder">Không có dữ liệu để hiển thị.</div>;
+    return (
+      <>
+        <AdminPageHeader title="Tổng quan" />
+        <div className="admin-page-placeholder">Không có dữ liệu để hiển thị.</div>
+      </>
+    );
   }
 
   const regionData = (Object.keys(REGION_LABEL) as Array<keyof typeof REGION_LABEL>).map((key) => ({
@@ -71,6 +84,11 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-page">
+      <AdminPageHeader
+        title="Tổng quan"
+        subtitle={`${stats.total_artworks} tác phẩm trong triển lãm`}
+      />
+
       <section className="dashboard-stat-grid">
         <StatCard label="Tổng số tác phẩm" value={stats.total_artworks} icon={Images} tone="tri-thuc" />
         <StatCard

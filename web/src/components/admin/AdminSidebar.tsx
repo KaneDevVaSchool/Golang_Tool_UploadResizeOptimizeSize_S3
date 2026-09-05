@@ -1,70 +1,69 @@
-import { Image, LayoutDashboard, Menu, Trophy, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Image, LayoutDashboard, Trophy, Upload, X } from "lucide-react";
+import { useEffect, type ComponentType } from "react";
 import { NavLink } from "react-router-dom";
 
-const SIDEBAR_COLLAPSE_KEY = "vas_admin_sidebar_collapsed";
-const DESKTOP_BREAKPOINT = "(min-width: 1280px)";
+type IconType = ComponentType<{ size?: number | string; strokeWidth?: number }>;
 
 type MenuItem = {
   id: string;
   label: string;
   path: string;
-  icon: typeof LayoutDashboard;
+  icon: IconType;
   end?: boolean;
 };
 
-const MENU_ITEMS: MenuItem[] = [
-  { id: "dashboard", label: "Dashboard", path: "/admin", icon: LayoutDashboard, end: true },
-  { id: "artworks", label: "Quản lý tác phẩm", path: "/admin/artworks", icon: Image },
-  { id: "awards", label: "Quản lý giải thưởng", path: "/admin/awards", icon: Trophy },
+type MenuSection = {
+  id: string;
+  label: string;
+  items: MenuItem[];
+};
+
+/** Menu chia nhóm giống MENU_SECTIONS của AppSidebar.vue (va-workspace). */
+const MENU_SECTIONS: MenuSection[] = [
+  {
+    id: "general",
+    label: "Điều hướng",
+    items: [{ id: "dashboard", label: "Tổng quan", path: "/admin", icon: LayoutDashboard, end: true }],
+  },
+  {
+    id: "content",
+    label: "Nội dung",
+    items: [
+      { id: "artworks", label: "Quản lý tác phẩm", path: "/admin/artworks", icon: Image, end: true },
+      { id: "upload", label: "Tải tác phẩm mới", path: "/admin/artworks/upload", icon: Upload },
+    ],
+  },
+  {
+    id: "config",
+    label: "Cấu hình",
+    items: [{ id: "awards", label: "Quản lý giải thưởng", path: "/admin/awards", icon: Trophy }],
+  },
 ];
 
-function readCollapsed(): boolean {
-  try {
-    return localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
 /**
- * Sidebar admin - port UX từ AppSidebar.vue (va-workspace, chỉ tham khảo
- * pattern, code React thuần):
- * - Desktop (>=1280px): collapse/expand toggle, trạng thái lưu localStorage.
- * - Mobile/tablet (<1280px): off-canvas drawer, Escape để đóng, khoá scroll
- *   body khi mở.
- * - Active link theo NavLink của react-router (tự so path).
+ * Sidebar admin - port nguyên bố cục + hành vi AppSidebar.vue của
+ * va-workspace:
+ * - Brand logo trên cùng (mark khi thu gọn, wordmark khi mở rộng).
+ * - Menu chia nhóm có nhãn section chữ hoa nhỏ; icon nằm trong "well" bo góc.
+ * - Desktop (>=1280px): rail 4rem khi thu gọn + flyout nhãn khi hover;
+ *   trạng thái collapsed do AdminLayout giữ (nút toggle nằm trên header,
+ *   đúng như va-workspace) và lưu localStorage.
+ * - Tablet/mobile (<1280px): off-canvas drawer + overlay, Escape để đóng,
+ *   khoá scroll body khi mở.
  */
 export function AdminSidebar({
   mobileOpen,
+  collapsed,
+  isDesktop,
   onCloseMobile,
 }: {
   mobileOpen: boolean;
+  collapsed: boolean;
+  isDesktop: boolean;
   onCloseMobile: () => void;
 }) {
-  const [collapsed, setCollapsed] = useState(readCollapsed);
-  const [isDesktop, setIsDesktop] = useState(
-    () => typeof window !== "undefined" && window.matchMedia(DESKTOP_BREAKPOINT).matches,
-  );
-
   useEffect(() => {
-    const mq = window.matchMedia(DESKTOP_BREAKPOINT);
-    const sync = () => setIsDesktop(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(SIDEBAR_COLLAPSE_KEY, String(collapsed));
-    } catch {
-      // localStorage có thể bị chặn (private mode) - bỏ qua, không ảnh hưởng chức năng chính
-    }
-  }, [collapsed]);
-
-  useEffect(() => {
-    if (!mobileOpen) return;
+    if (isDesktop || !mobileOpen) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onCloseMobile();
     }
@@ -74,69 +73,73 @@ export function AdminSidebar({
       document.body.style.overflow = "";
       window.removeEventListener("keydown", onKey);
     };
-  }, [mobileOpen, onCloseMobile]);
+  }, [mobileOpen, isDesktop, onCloseMobile]);
 
   const showCollapsed = isDesktop && collapsed;
 
   return (
-    <>
-      {!isDesktop && mobileOpen && (
-        <button type="button" className="admin-sidebar-overlay" aria-label="Đóng menu" onClick={onCloseMobile} />
-      )}
+    <div className={`admin-sidebar-wrap${!isDesktop && mobileOpen ? " admin-sidebar-wrap--open" : ""}`}>
+      <button
+        type="button"
+        className="admin-sidebar-overlay"
+        aria-label="Đóng menu"
+        tabIndex={!isDesktop && mobileOpen ? 0 : -1}
+        onClick={onCloseMobile}
+      />
 
       <aside
-        className={`admin-sidebar${showCollapsed ? " admin-sidebar--collapsed" : ""}${
-          !isDesktop ? (mobileOpen ? " admin-sidebar--drawer-open" : " admin-sidebar--drawer-closed") : ""
-        }`}
+        className={`admin-sidebar${showCollapsed ? " admin-sidebar--collapsed" : ""}`}
+        aria-label={showCollapsed ? "Menu thu gọn" : "Menu chính"}
       >
         <div className="admin-sidebar-brand">
-          {showCollapsed ? (
-            <img src="/images/vas-white-mark.png" alt="VA Schools" className="admin-sidebar-mark" />
-          ) : (
-            <img src="/images/vas-white.png" alt="VA Schools" className="admin-sidebar-logo" />
-          )}
-          {!isDesktop && (
-            <button type="button" className="admin-sidebar-close" aria-label="Đóng menu" onClick={onCloseMobile}>
-              <X size={20} />
-            </button>
-          )}
+          <NavLink to="/admin" end className="admin-sidebar-brand-link" onClick={onCloseMobile}>
+            {showCollapsed ? (
+              <img src="/images/vas-white-mark.png" alt="VA Schools" className="admin-sidebar-mark" />
+            ) : (
+              <img src="/images/vas-white.png" alt="VA Schools" className="admin-sidebar-logo" />
+            )}
+          </NavLink>
+
+          <button type="button" className="admin-sidebar-close" aria-label="Đóng menu" onClick={onCloseMobile}>
+            <X size={18} strokeWidth={2} />
+          </button>
         </div>
 
         <nav className="admin-sidebar-nav" aria-label="Điều hướng quản trị">
-          {MENU_ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.id}
-                to={item.path}
-                end={item.end}
-                className={({ isActive }) => `admin-sidebar-link${isActive ? " admin-sidebar-link--active" : ""}`}
-                onClick={() => {
-                  if (!isDesktop) onCloseMobile();
-                }}
-                title={showCollapsed ? item.label : undefined}
-              >
-                <span className="admin-sidebar-icon">
-                  <Icon size={20} strokeWidth={2} />
-                </span>
-                {!showCollapsed && <span className="admin-sidebar-label">{item.label}</span>}
-                {showCollapsed && <span className="admin-sidebar-flyout">{item.label}</span>}
-              </NavLink>
-            );
-          })}
-        </nav>
+          {MENU_SECTIONS.map((section) => (
+            <section key={section.id} className="admin-sidebar-section">
+              {!showCollapsed && <p className="admin-sidebar-section-label">{section.label}</p>}
 
-        {isDesktop && (
-          <button
-            type="button"
-            className="admin-sidebar-collapse-toggle"
-            onClick={() => setCollapsed((v) => !v)}
-            aria-label={collapsed ? "Mở rộng menu" : "Thu gọn menu"}
-          >
-            <Menu size={18} />
-          </button>
-        )}
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.id}
+                    to={item.path}
+                    end={item.end}
+                    className={({ isActive }) =>
+                      `admin-sidebar-link${isActive ? " admin-sidebar-link--active" : ""}`
+                    }
+                    aria-label={showCollapsed ? item.label : undefined}
+                    onClick={() => {
+                      if (!isDesktop) onCloseMobile();
+                    }}
+                  >
+                    <span className="admin-sidebar-icon">
+                      <Icon size={18} strokeWidth={2} />
+                    </span>
+                    {showCollapsed ? (
+                      <span className="admin-sidebar-flyout">{item.label}</span>
+                    ) : (
+                      <span className="admin-sidebar-label">{item.label}</span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </section>
+          ))}
+        </nav>
       </aside>
-    </>
+    </div>
   );
 }

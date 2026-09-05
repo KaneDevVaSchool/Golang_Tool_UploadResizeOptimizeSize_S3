@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { addReaction, removeReaction, type ReactionCounts } from "../../lib/publicApi";
 import { playReactionSound } from "../../lib/sound";
 import { toast } from "../../lib/toastBus";
@@ -33,6 +34,51 @@ export function ReactionPicker({
   const [localReaction, setLocalReaction] = useState<string | null>(null);
   const [burstKey, setBurstKey] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ left: 8, top: 8 });
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
+
+  function cancelClose() {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }
+
+  function scheduleClose() {
+    cancelClose();
+    closeTimerRef.current = window.setTimeout(() => setOpen(false), 160);
+  }
+
+  function updateMenuPosition() {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const menuWidth = Math.min(280, window.innerWidth - 16);
+    const menuHeight = 58;
+    const left = Math.min(Math.max(8, rect.right - menuWidth), window.innerWidth - menuWidth - 8);
+    const top = rect.top >= menuHeight + 12 ? rect.top - menuHeight - 8 : rect.bottom + 8;
+    setMenuPosition({ left, top });
+  }
+
+  function showMenu() {
+    cancelClose();
+    updateMenuPosition();
+    setOpen(true);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const reposition = () => updateMenuPosition();
+    window.addEventListener("resize", reposition);
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open]);
+
+  useEffect(() => () => cancelClose(), []);
 
   async function handlePick(key: string) {
     if (pending) return;
@@ -65,44 +111,57 @@ export function ReactionPicker({
   return (
     <div
       className="reaction-picker"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={showMenu}
+      onMouseLeave={scheduleClose}
     >
       <button
+        ref={triggerRef}
         type="button"
         className={`reaction-picker-trigger${localReaction ? " reaction-picker-trigger--active" : ""}`}
-        onClick={() => handlePick(localReaction ?? "like")}
+        onClick={() => {
+          if (open) setOpen(false);
+          else showMenu();
+        }}
         aria-label="Bày tỏ cảm xúc"
+        aria-expanded={open}
       >
         <span className="reaction-picker-emoji">{activeReaction?.emoji ?? "🤍"}</span>
         <span>{totalCount > 0 ? totalCount : "Thích"}</span>
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            className="reaction-picker-menu"
-            initial={{ opacity: 0, y: 8, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.9 }}
-            transition={{ duration: 0.16 }}
-          >
-            {REACTIONS.map((r) => (
-              <button
-                key={r.key}
-                type="button"
-                className="reaction-picker-option"
-                title={r.label}
-                onClick={() => handlePick(r.key)}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {open && (
+              <motion.div
+                className="reaction-picker-menu reaction-picker-menu--portal"
+                style={{ left: menuPosition.left, top: menuPosition.top } as CSSProperties}
+                initial={{ opacity: 0, y: 8, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.9 }}
+                transition={{ duration: 0.16 }}
+                onMouseEnter={cancelClose}
+                onMouseLeave={scheduleClose}
               >
-                <motion.span whileHover={{ scale: 1.3, y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 12 }}>
-                  {r.emoji}
-                </motion.span>
-              </button>
-            ))}
-          </motion.div>
+                {REACTIONS.map((r) => (
+                  <button
+                    key={r.key}
+                    type="button"
+                    className="reaction-picker-option"
+                    title={r.label}
+                    aria-label={r.label}
+                    onClick={() => handlePick(r.key)}
+                  >
+                    <motion.span whileHover={{ scale: 1.3, y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 12 }}>
+                      {r.emoji}
+                    </motion.span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body,
         )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {burstKey && (

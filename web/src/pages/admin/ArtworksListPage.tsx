@@ -1,6 +1,6 @@
 import { Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import { ArtworkEditModal } from "../../components/admin/ArtworkEditModal";
 import { ReactionIcons } from "../../components/admin/ReactionIcons";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -142,12 +142,11 @@ export default function ArtworksListPage() {
 
   return (
     <div className="artworks-list-page">
-      <div className="artworks-list-header">
-        <h1>Quản lý tác phẩm</h1>
-        <Link to="/admin/artworks/upload" className="btn btn-primary">
-          <Plus size={16} /> Tải tác phẩm mới
-        </Link>
-      </div>
+      <AdminPageHeader
+        title="Quản lý tác phẩm"
+        subtitle={totalCount > 0 ? `${totalCount} tác phẩm` : undefined}
+        primaryAction={{ label: "Tải tác phẩm mới", icon: Plus, to: "/admin/artworks/upload" }}
+      />
 
       <div className="artworks-filter-bar">
         <div className="artworks-search-input">

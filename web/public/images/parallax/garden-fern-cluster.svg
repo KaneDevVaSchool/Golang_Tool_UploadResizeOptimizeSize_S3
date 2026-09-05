@@ -1,0 +1,19 @@
+<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Cụm lá dương xỉ nhỏ - hoạ tiết góc khung ảnh (FeaturedArtworkFrame).
+       Neo tại góc (0,0), xoè ra phía dương - component cha xoay 0/90/180/270deg
+       để dùng chung 1 file cho cả 4 góc khung. currentColor để tint theo token. -->
+  <path d="M4 4c14 2 26 10 34 22M4 4c10 12 15 26 15 40M4 4c6 14 7 30 4 44"
+        stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.8"/>
+  <!-- lá chét dọc theo nhánh chính -->
+  <g fill="currentColor" opacity="0.75">
+    <ellipse cx="16" cy="10" rx="7" ry="3" transform="rotate(35 16 10)"/>
+    <ellipse cx="24" cy="18" rx="8" ry="3.2" transform="rotate(40 24 18)"/>
+    <ellipse cx="31" cy="28" rx="8.5" ry="3.4" transform="rotate(50 31 28)"/>
+    <ellipse cx="10" cy="20" rx="6" ry="2.6" transform="rotate(75 10 20)"/>
+    <ellipse cx="14" cy="32" rx="7" ry="2.8" transform="rotate(80 14 32)"/>
+    <ellipse cx="7" cy="30" rx="5.5" ry="2.4" transform="rotate(95 7 30)"/>
+    <ellipse cx="9" cy="42" rx="6" ry="2.5" transform="rotate(100 9 42)"/>
+  </g>
+  <!-- nụ nhỏ điểm gold -->
+  <circle cx="36" cy="34" r="3.2" fill="#c49c57" opacity="0.85"/>
+</svg>

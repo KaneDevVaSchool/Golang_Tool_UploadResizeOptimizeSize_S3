@@ -12,15 +12,25 @@ const ERROR_MESSAGES: Record<string, string> = {
   userinfo_failed: "Không lấy được thông tin tài khoản Google.",
   incomplete_profile: "Tài khoản Google thiếu thông tin cần thiết.",
   domain_not_allowed: "Email này không thuộc hệ thống Trường Việt Mỹ.",
+  email_not_allowed: "Tài khoản này không có quyền truy cập hệ thống. Vui lòng liên hệ quản trị viên.",
+  email_not_verified: "Email Google của bạn chưa được xác thực.",
   account_disabled: "Tài khoản của bạn đã bị vô hiệu hoá.",
   server_error: "Có lỗi xảy ra, vui lòng thử lại sau.",
 };
 
 /**
- * Trang đăng nhập admin - phong cách tham khảo va-workspace: card trắng nổi
- * trên nền --vas-tri-thuc, watermark logo full-background invert trắng, nút
- * Google tròn chỉ icon (không text). Click nút = redirect thật tới
- * /auth/google/login (browser-redirect flow, không phải popup/AJAX).
+ * Trang đăng nhập admin - bố cục port 1-1 từ nguyên mẫu gốc va-hrm
+ * (resources/js/Pages/Auth/Login.tsx, React/Tailwind) sang CSS thuần theo
+ * token --vas-* của dự án này, đối chiếu thêm bản CSS thuần va-workspace
+ * (Modules/Identity/resources/js/pages/Login.vue).
+ *
+ * Giữ nguyên bản gốc: nền --vas-tri-thuc (#9a0036), watermark
+ * background-logo.png invert trắng KHÔNG giảm opacity (độ mờ đến từ chính
+ * ảnh nguồn - hạ opacity nữa là họa tiết biến mất), logo-2.png cỡ lớn ở
+ * header, card trắng bo góc, nút Google tròn chỉ icon google.png.
+ *
+ * Click nút = redirect thật tới /auth/google/login (browser-redirect flow,
+ * không phải popup/AJAX).
  */
 export default function Login() {
   useScrollableBody();
@@ -54,32 +64,38 @@ export default function Login() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        <img className="admin-login-logo" src="/images/vas-white.png" alt="VA Schools" />
+        <header className="admin-login-header">
+          <img
+            className="admin-login-logo"
+            src="/images/logo-2.png"
+            alt="Vietnam America Schools — Trường học của sự lắng nghe"
+            width={320}
+            height={92}
+          />
+        </header>
 
         <div className="admin-login-card">
           <h1>Đăng nhập</h1>
-          <p>Đăng nhập bằng tài khoản Google do nhà trường cung cấp</p>
+          <p>Đăng nhập thông qua tài khoản mail do nhà trường cung cấp</p>
 
-          <button type="button" className="admin-login-google-btn" onClick={loginWithGoogle}>
-            <svg width="22" height="22" viewBox="0 0 48 48" aria-hidden>
-              <path
-                fill="#FFC107"
-                d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
+          <div className="admin-login-actions">
+            <button
+              type="button"
+              className="admin-login-google-btn"
+              aria-label="Đăng nhập bằng Google"
+              onClick={loginWithGoogle}
+            >
+              <img
+                className="admin-login-google-icon"
+                src="/images/google.png"
+                alt=""
+                width={40}
+                height={40}
+                loading="eager"
+                decoding="async"
               />
-              <path
-                fill="#FF3D00"
-                d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"
-              />
-              <path
-                fill="#4CAF50"
-                d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
-              />
-              <path
-                fill="#1976D2"
-                d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"
-              />
-            </svg>
-          </button>
+            </button>
+          </div>
         </div>
       </motion.div>
     </div>

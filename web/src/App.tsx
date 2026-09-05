@@ -1,17 +1,9 @@
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import { RouteFallback } from "./components/RouteFallback";
 import { ToastHost } from "./components/ToastHost";
-import AdminLayout from "./pages/admin/AdminLayout";
-import ArtworksListPage from "./pages/admin/ArtworksListPage";
-import ArtworksUploadPage from "./pages/admin/ArtworksUploadPage";
-import AwardsPage from "./pages/admin/AwardsPage";
-import Dashboard from "./pages/admin/Dashboard";
-import Login from "./pages/admin/Login";
-import FeaturedArtworksPage from "./pages/public/FeaturedArtworksPage";
-import GalleryPage from "./pages/public/GalleryPage";
-import HallOfFamePage from "./pages/public/HallOfFamePage";
-import HomePage from "./pages/public/HomePage";
 import PublicLayout from "./pages/public/PublicLayout";
-import UploadTool from "./pages/UploadTool";
+import HomePage from "./pages/public/HomePage";
 
 /**
  * Router gốc của toàn bộ app:
@@ -25,28 +17,54 @@ import UploadTool from "./pages/UploadTool";
  *   chưa đăng nhập).
  * - "/tac-pham-tieu-bieu", "/phong-trien-lam", "/bang-vang" các trang con
  *   của khu vực public, dùng chung PublicLayout (navbar cố định).
+ *
+ * Tách bundle theo route (React.lazy):
+ * PublicLayout + HomePage nạp tĩnh vì đó là điểm vào của gần như mọi khách
+ * truy cập — lazy chúng chỉ thêm một vòng chờ mạng trước khi thấy nội dung.
+ * Mọi thứ còn lại nạp theo nhu cầu. Quan trọng nhất là khu /admin và
+ * /upload: trước đây phụ huynh vào xem tranh phải tải kèm cả dashboard quản
+ * trị, thư viện biểu đồ recharts (~400KB) và công cụ upload S3 — toàn bộ
+ * đều không truy cập được từ trang public.
  */
+
+const FeaturedArtworksPage = lazy(() => import("./pages/public/FeaturedArtworksPage"));
+const GalleryPage = lazy(() => import("./pages/public/GalleryPage"));
+const HallOfFamePage = lazy(() => import("./pages/public/HallOfFamePage"));
+
+const UploadTool = lazy(() => import("./pages/UploadTool"));
+
+const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
+const AdminLogin = lazy(() => import("./pages/admin/Login"));
+const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
+const ArtworksListPage = lazy(() => import("./pages/admin/ArtworksListPage"));
+const ArtworksUploadPage = lazy(() => import("./pages/admin/ArtworksUploadPage"));
+const AwardsPage = lazy(() => import("./pages/admin/AwardsPage"));
+
 export default function App() {
   return (
     <>
       <ToastHost />
-      <Routes>
-        <Route path="/" element={<PublicLayout />}>
-          <Route index element={<HomePage />} />
-          <Route path="tac-pham-tieu-bieu" element={<FeaturedArtworksPage />} />
-          <Route path="phong-trien-lam" element={<GalleryPage />} />
-          <Route path="bang-vang" element={<HallOfFamePage />} />
-        </Route>
-        <Route path="/trien-lam" element={<Navigate to="/" replace />} />
-        <Route path="/upload" element={<UploadTool />} />
-        <Route path="/admin/login" element={<Login />} />
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="artworks" element={<ArtworksListPage />} />
-          <Route path="artworks/upload" element={<ArtworksUploadPage />} />
-          <Route path="awards" element={<AwardsPage />} />
-        </Route>
-      </Routes>
+      {/* Một Suspense bọc ngoài toàn bộ Routes là đủ: mỗi lần chỉ có một
+          route đang khớp, nên không có hai chunk cùng treo fallback. */}
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route path="/" element={<PublicLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="tac-pham-tieu-bieu" element={<FeaturedArtworksPage />} />
+            <Route path="phong-trien-lam" element={<GalleryPage />} />
+            <Route path="bang-vang" element={<HallOfFamePage />} />
+          </Route>
+          <Route path="/trien-lam" element={<Navigate to="/" replace />} />
+          <Route path="/upload" element={<UploadTool />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="artworks" element={<ArtworksListPage />} />
+            <Route path="artworks/upload" element={<ArtworksUploadPage />} />
+            <Route path="awards" element={<AwardsPage />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </>
   );
 }

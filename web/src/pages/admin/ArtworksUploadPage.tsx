@@ -2,6 +2,7 @@ import { ArrowLeft, CheckCircle2, Loader2, UploadCloud } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dropzone } from "../../components/Dropzone";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import {
   ArtworkMetaForm,
   EMPTY_META_FORM_VALUES,
@@ -181,12 +182,16 @@ export default function ArtworksUploadPage() {
 
   return (
     <div className="artworks-upload-page">
-      <div className="artworks-upload-header">
-        <button type="button" className="btn btn-ghost" onClick={() => navigate("/admin/artworks")}>
-          <ArrowLeft size={16} /> Quay lại danh sách
-        </button>
-        <h1>Tải tác phẩm mới</h1>
-      </div>
+      <AdminPageHeader
+        title="Tải tác phẩm mới"
+        subtitle={validCount > 0 ? `${doneCount}/${validCount} đã lưu` : undefined}
+        primaryAction={{
+          label: "Quay lại danh sách",
+          icon: ArrowLeft,
+          variant: "ghost",
+          onClick: () => navigate("/admin/artworks"),
+        }}
+      />
 
       {stage === "select" && (
         <div className="artworks-upload-dropzone-wrap">

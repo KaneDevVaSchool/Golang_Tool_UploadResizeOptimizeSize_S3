@@ -1,0 +1,15 @@
+<svg width="60" height="46" viewBox="0 0 60 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Bướm tự vẽ - bay theo quỹ đạo số 8 trong FeaturedGardenScene (cùng kỹ
+       thuật translateX/Y nhiều điểm mà HeroSection dùng cho chim). Cánh trái/
+       phải tách riêng <g> để có thể vỗ cánh bằng scaleX qua CSS animation. -->
+  <g>
+    <path d="M30 23c-4-14-16-22-26-20-8 2-8 14 0 20 8 6 20 6 26 0z" fill="currentColor" opacity="0.92"/>
+    <path d="M30 23c-2-9-9-14-16-13-5 1-5 9 1 13 6 4 12 4 15 0z" fill="#c49c57" opacity="0.55"/>
+  </g>
+  <g>
+    <path d="M30 23c4-14 16-22 26-20 8 2 8 14 0 20-8 6-20 6-26 0z" fill="currentColor" opacity="0.92"/>
+    <path d="M30 23c2-9 9-14 16-13 5 1 5 9-1 13-6 4-12 4-15 0z" fill="#c49c57" opacity="0.55"/>
+  </g>
+  <path d="M30 12v22" stroke="#241417" stroke-width="2.2" stroke-linecap="round" opacity="0.7"/>
+  <path d="M30 13c-2-4-6-6-9-5M30 13c2-4 6-6 9-5" stroke="#241417" stroke-width="1.6" stroke-linecap="round" opacity="0.6"/>
+</svg>

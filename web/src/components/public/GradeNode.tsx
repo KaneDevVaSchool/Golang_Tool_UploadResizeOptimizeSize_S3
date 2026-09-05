@@ -4,19 +4,24 @@ export function GradeNode({
   label,
   active,
   onClick,
+  variant = "circle",
+  ariaLabel,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  variant?: "circle" | "chip";
+  ariaLabel?: string;
 }) {
   return (
     <motion.button
       type="button"
-      className={`grade-node${active ? " grade-node--active" : ""}`}
+      className={`grade-node${variant === "chip" ? " grade-node--chip" : ""}${active ? " grade-node--active" : ""}`}
       onClick={onClick}
-      whileHover={{ scale: 1.08, y: -4 }}
-      whileTap={{ scale: 0.96 }}
-      transition={{ type: "spring", stiffness: 320, damping: 18 }}
+      aria-pressed={active}
+      aria-label={ariaLabel}
+      whileTap={{ scale: 0.94 }}
+      transition={{ type: "spring", stiffness: 420, damping: 26 }}
     >
       {label}
     </motion.button>

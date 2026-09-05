@@ -1,156 +1,161 @@
-import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { GradeNode } from "../../components/public/GradeNode";
-import { PageHero } from "../../components/public/PageHero";
+import { FeaturedGardenScene } from "../../components/public/FeaturedGardenScene";
+import { FeaturedHero } from "../../components/public/FeaturedHero";
+import { GalleryLevelSection } from "../../components/public/GalleryLevelSection";
+import { GallerySearch } from "../../components/public/GallerySearch";
 import { PublicLightbox } from "../../components/public/PublicLightbox";
-import { SecondaryStarfield } from "../../components/public/SecondaryStarfield";
-import type { ArtworkWithMeta } from "../../lib/artworkApi";
-import { fetchGradeLevels, type GradeLevel } from "../../lib/artworkApi";
-import { fetchPublicArtworks } from "../../lib/publicApi";
+import type { ArtworkWithMeta, GradeLevel } from "../../lib/artworkApi";
+import { fetchGradeLevels } from "../../lib/artworkApi";
 
 type EduLevel = "primary" | "secondary";
 
-const LEVEL_TABS: { key: EduLevel; label: string }[] = [
-  { key: "primary", label: "Khối Tiểu học" },
-  { key: "secondary", label: "Khối Trung học" },
+const LEVELS: { key: EduLevel; title: string; subtitle: string }[] = [
+  {
+    key: "primary",
+    title: "Khối Tiểu học",
+    subtitle: "Lớp 1 đến Lớp 5 — nơi màu nào cũng đúng và trí tưởng tượng chưa từng biết sợ",
+  },
+  {
+    key: "secondary",
+    title: "Khối Trung học",
+    subtitle: "Lớp 6 đến Lớp 12 — những nét vẽ đã biết mình muốn nói điều gì",
+  },
 ];
 
 /**
- * Trang /trien-lam/phong-trien-lam - chọn cấp học (tab) rồi chọn khối lớp
- * (node) để xem tác phẩm. Cấp học khởi tạo đọc từ query "?khoi=" (điều
- * hướng từ Gate ở trang chủ), mặc định "primary".
+ * Trang /phong-trien-lam — đúng 2 section (Tiểu học / Trung học).
+ * Mỗi section: tiêu đề, node chọn lớp, slide tranh cuộn ngang.
+ * Query "?tim=" lọc theo tên tranh / học sinh, chia sẻ được.
  */
 export default function GalleryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialLevel = searchParams.get("khoi") === "secondary" ? "secondary" : "primary";
-  const [level, setLevel] = useState<EduLevel>(initialLevel);
+  const sharedArtworkId = Number(searchParams.get("tranh"));
+  const searchQuery = (searchParams.get("tim") ?? "").trim();
+  const [searchInput, setSearchInput] = useState(searchQuery);
   const [grades, setGrades] = useState<GradeLevel[]>([]);
   const [selectedGradeId, setSelectedGradeId] = useState<number | null>(null);
-  const [items, setItems] = useState<ArtworkWithMeta[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [lightbox, setLightbox] = useState<{ items: ArtworkWithMeta[]; index: number } | null>(null);
+  const didInitFromUrl = useRef(false);
 
   useEffect(() => {
     fetchGradeLevels().then(setGrades).catch(() => setGrades([]));
   }, []);
 
-  function handleChangeLevel(next: EduLevel) {
-    setLevel(next);
-    setSearchParams({ khoi: next });
-    setSelectedGradeId(null);
-    setItems([]);
+  function patchParams(patch: Record<string, string | null>, options?: { replace?: boolean }) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) next.delete(key);
+        else next.set(key, value);
+      }
+      return next;
+    }, { replace: options?.replace ?? false });
   }
 
-  const filteredGrades = grades.filter((g) => g.education_level === level);
+  useEffect(() => {
+    setSearchInput((current) => (current.trim() === searchQuery ? current : searchQuery));
+  }, [searchQuery]);
 
   useEffect(() => {
-    if (!selectedGradeId) return;
-    const controller = new AbortController();
-    setLoading(true);
-    fetchPublicArtworks({ grade_level_id: selectedGradeId, page_size: 60 }, controller.signal)
-      .then((res) => setItems(res.items ?? []))
-      .catch(() => {
-        if (!controller.signal.aborted) setItems([]);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [selectedGradeId]);
+    const trimmed = searchInput.trim();
+    if (trimmed === searchQuery) return;
+    const timer = window.setTimeout(() => {
+      setLightbox(null);
+      patchParams({ tim: trimmed || null, tranh: null }, { replace: true });
+    }, 320);
+    return () => window.clearTimeout(timer);
+  }, [searchInput, searchQuery]);
 
-  const isSecondary = level === "secondary";
+  useEffect(() => {
+    if (didInitFromUrl.current || grades.length === 0) return;
+    didInitFromUrl.current = true;
+    const fromUrl = Number(searchParams.get("khoi_lop"));
+    if (Number.isInteger(fromUrl) && fromUrl > 0 && grades.some((g) => g.id === fromUrl)) {
+      setSelectedGradeId(fromUrl);
+    }
+    const targetLevel =
+      grades.find((g) => g.id === fromUrl)?.education_level ??
+      (searchParams.get("khoi") === "secondary" ? "secondary" : "primary");
+    window.setTimeout(() => {
+      document.getElementById(`khoi-${targetLevel}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+  }, [grades, searchParams]);
+
+  function handleSelectGrade(gradeId: number | null) {
+    setSelectedGradeId(gradeId);
+    setLightbox(null);
+    const grade = grades.find((g) => g.id === gradeId);
+    patchParams({
+      khoi: grade?.education_level ?? null,
+      khoi_lop: gradeId === null ? null : String(gradeId),
+      trang: null,
+      tranh: null,
+    });
+  }
+
+  const handleOpenArtwork = useCallback((items: ArtworkWithMeta[], index: number) => {
+    setLightbox({ items, index });
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set("tranh", String(items[index].id));
+      return next;
+    });
+  }, [setSearchParams]);
+
+  function handleCloseArtwork() {
+    setLightbox(null);
+    patchParams({ tranh: null });
+  }
 
   return (
-    <>
-      <PageHero
+    <div className="featured-page">
+      <FeaturedHero
         kicker="Phòng triển lãm"
-        title="Tác phẩm theo khối lớp"
-        description="Chọn cấp học rồi chọn khối lớp để xem tác phẩm học sinh."
-        variant={isSecondary ? "dark" : "light"}
+        title="Ở đây có tranh của con"
+        description="Không một bức nào bị bỏ lại phía sau. Chọn khối, chọn lớp, hoặc gõ tên con vào ô tìm kiếm — bức tranh em gửi về đang được treo ở đây, ngay ngắn như mọi bức tranh khác."
       />
-      <section
-        className={`grade-explorer-section public-page-section${
-          isSecondary ? " grade-explorer-section--secondary" : ""
-        }`}
-      >
-        {isSecondary && (
-          <div className="grade-explorer-decor" aria-hidden>
-            <img className="grade-explorer-hill" src="/images/parallax/hill2.png" alt="" />
-            <SecondaryStarfield />
-          </div>
-        )}
-        <div className="level-tabs" role="tablist" aria-label="Chọn cấp học">
-          {LEVEL_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              aria-selected={level === tab.key}
-              className={`level-tab${level === tab.key ? " level-tab--active" : ""}`}
-              onClick={() => handleChangeLevel(tab.key)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
 
-        <div className="grade-node-grid">
-          {filteredGrades.map((g) => (
-            <GradeNode
-              key={g.id}
-              label={g.label}
-              active={g.id === selectedGradeId}
-              onClick={() => setSelectedGradeId(g.id === selectedGradeId ? null : g.id)}
+      <section className="featured-gallery-section gallery-explorer-section">
+        <FeaturedGardenScene />
+        <GallerySearch value={searchInput} onChange={setSearchInput} />
+
+        <div className="gallery-hall">
+          {LEVELS.map(({ key, title, subtitle }) => (
+            <GalleryLevelSection
+              key={key}
+              level={key}
+              title={title}
+              subtitle={subtitle}
+              search={searchQuery}
+              grades={grades.filter((g) => g.education_level === key)}
+              selectedGradeId={
+                grades.find((g) => g.id === selectedGradeId)?.education_level === key ? selectedGradeId : null
+              }
+              onSelectGrade={(gradeId) => {
+                if (
+                  gradeId === null &&
+                  grades.find((g) => g.id === selectedGradeId)?.education_level !== key
+                ) {
+                  return;
+                }
+                handleSelectGrade(gradeId);
+              }}
+              sharedArtworkId={Number.isInteger(sharedArtworkId) ? sharedArtworkId : undefined}
+              onOpenArtwork={handleOpenArtwork}
             />
           ))}
         </div>
 
-        <AnimatePresence mode="wait">
-          {selectedGradeId && (
-            <motion.div
-              key={selectedGradeId}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.3 }}
-              className="grade-artworks-wrap"
-            >
-              {loading ? (
-                <p className="admin-empty-note">Đang tải…</p>
-              ) : items.length === 0 ? (
-                <p className="admin-empty-note">Chưa có tác phẩm nào cho khối này.</p>
-              ) : (
-                <div className="featured-gallery-grid">
-                  {items.map((item, index) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="featured-gallery-item"
-                      onClick={() => setActiveIndex(index)}
-                    >
-                      <img src={item.thumbnail_url || item.image_url} alt={item.title} loading="lazy" />
-                      <span className="featured-gallery-overlay">
-                        <strong>{item.title}</strong>
-                        <span>{item.student_name}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {activeIndex !== null && (
+        {lightbox && (
           <PublicLightbox
-            items={items}
-            activeIndex={activeIndex}
-            onNavigate={setActiveIndex}
-            onClose={() => setActiveIndex(null)}
+            items={lightbox.items}
+            activeIndex={lightbox.index}
+            onNavigate={(index) => setLightbox((prev) => (prev ? { ...prev, index } : prev))}
+            onClose={handleCloseArtwork}
           />
         )}
       </section>
-    </>
+    </div>
   );
 }

@@ -115,8 +115,11 @@ export function EducationLevelGate({
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.5 }}
         >
-          <span className="section-kicker">Cổng thông tin</span>
-          <h2>Chọn khối để khám phá</h2>
+          <span className="section-kicker">Phòng triển lãm</span>
+          <h2>Con đang học khối nào?</h2>
+          <p className="section-heading-sub">
+            Chọn một khối để bước vào phòng tranh của các em — nơi mỗi lớp có một dãy trưng bày riêng.
+          </p>
         </motion.div>
 
         <motion.div

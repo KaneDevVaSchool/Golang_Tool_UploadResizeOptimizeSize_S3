@@ -49,7 +49,7 @@ export function readOnboardingDone(): boolean {
   }
 }
 
-export function writeOnboardingDone() {
+function writeOnboardingDone() {
   try {
     localStorage.setItem(STORAGE_KEY, "1");
   } catch {

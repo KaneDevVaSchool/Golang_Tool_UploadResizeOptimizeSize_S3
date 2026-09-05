@@ -2,6 +2,151 @@
    UploadTool cũ tiếp tục dùng biến --red-deep etc. trong index.css - không
    đụng vào để tránh phá vỡ giao diện đang chạy. 2 bộ token độc lập, không
    xung đột vì tên biến khác nhau hoàn toàn (--vas-* vs --red-*). */
+
+/* ---------------------------------------------------------------------- */
+/* Bộ token gốc port nguyên từ va-workspace (resources/css/theme.css).      */
+/* Dùng cho khu vực /admin/* để header + sidebar giống hệt hệ thống gốc.    */
+/*                                                                          */
+/* CỐ Ý khai báo trong .admin-shell / .admin-login chứ KHÔNG phải :root:    */
+/* index.css (UploadTool) đã dùng --radius-sm / --shadow ở :root với giá    */
+/* trị khác hẳn (0.9rem vs 6px) và được nạp SAU file này, nên đặt ở :root   */
+/* sẽ bị ghi đè. Giới hạn phạm vi vào khung admin là cách duy nhất giữ được */
+/* cả 2 bộ token mà không phải sửa UploadTool đang chạy.                    */
+/*                                                                          */
+/* Các biến --vas-* bên dưới GIỮ NGUYÊN ở :root (public.css phụ thuộc       */
+/* nhiều nơi), chỉ dùng lại giá trị tương ứng.                              */
+/* ---------------------------------------------------------------------- */
+.admin-shell,
+.admin-login,
+.admin-loading-screen {
+  /* ---------- Primary ---------- */
+  --color-primary: #9a0036;
+  --color-primary-50: #ffeff1;
+  --color-primary-100: #ffe0e4;
+  --color-primary-200: #ffc5cf;
+  --color-primary-300: #ff96a7;
+  --color-primary-400: #ff5b7a;
+  --color-primary-500: #ff2251;
+  --color-primary-600: #ff0043;
+  --color-primary-700: #da003f;
+  --color-primary-800: #b6003a;
+  --color-primary-900: #9a0036;
+
+  --color-primary-hover: var(--color-primary-700);
+  --color-primary-active: var(--color-primary-800);
+  --color-primary-surface: var(--color-primary-50);
+  --color-primary-surface-strong: var(--color-primary-100);
+  --color-on-primary: #ffffff;
+
+  /* ---------- Secondary "Nhân Ái" ---------- */
+  --color-secondary: #009082;
+  --color-secondary-50: #e6f5f3;
+  --color-secondary-100: #cceae7;
+  --color-secondary-500: #009082;
+  --color-secondary-600: #00786c;
+  --color-secondary-700: #005f56;
+
+  /* ---------- Tertiary "Khai Phóng" ---------- */
+  --color-tertiary: #1750b5;
+  --color-tertiary-50: #eaf1fb;
+  --color-tertiary-100: #d5e3f7;
+  --color-tertiary-600: #1750b5;
+  --color-tertiary-700: #124291;
+
+  /* ---------- Gold "Trách Nhiệm" ---------- */
+  --color-gold: #c49c57;
+  --color-gold-50: #faf5ec;
+  --color-gold-100: #f3e7d1;
+  --color-gold-500: #c49c57;
+  --color-gold-600: #a67f42;
+
+  /* ---------- Umber "Bản Lĩnh" ---------- */
+  --color-umber: #725139;
+  --color-umber-50: #f6f1ed;
+  --color-umber-100: #ebe3db;
+  --color-umber-200: #d6c6b5;
+  --color-umber-700: #4c3626;
+
+  /* ---------- Sidebar (brand primary-900, hover/active dịu) ---------- */
+  --color-sidebar: var(--color-primary-900);
+  --color-sidebar-active: color-mix(in srgb, var(--color-on-primary) 14%, var(--color-primary-900));
+  --color-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --color-sidebar-well: rgba(255, 255, 255, 0.08);
+  --color-sidebar-well-strong: rgba(255, 255, 255, 0.14);
+  --color-sidebar-text: rgba(255, 255, 255, 0.82);
+  --color-sidebar-text-muted: rgba(255, 255, 255, 0.56);
+  --color-sidebar-divider: rgba(255, 255, 255, 0.1);
+  --color-sidebar-ring: rgba(255, 255, 255, 0.16);
+  --color-sidebar-sheen-top: rgba(255, 255, 255, 0.06);
+  --color-sidebar-sheen-side: rgba(255, 255, 255, 0.03);
+  --color-sidebar-sheen-bottom: rgba(0, 0, 0, 0.16);
+  --color-sidebar-scroll-thumb: rgba(255, 255, 255, 0.22);
+  --color-sidebar-scroll-thumb-hover: rgba(255, 255, 255, 0.32);
+  --color-sidebar-focus: rgba(255, 255, 255, 0.45);
+  --color-sidebar-flyout: var(--color-surface);
+  --color-sidebar-overlay: color-mix(in srgb, #000000 55%, transparent);
+  --spacing-sidebar-rail: 4rem;
+  --spacing-sidebar-expanded: 15.5rem;
+  --spacing-sidebar-drawer: 17rem;
+
+  /* ---------- Neutral / nền / chữ ---------- */
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f7f7f8;
+  --color-text: #1a1a1a;
+  --color-text-muted: #6b6b6f;
+  --color-border: #e5e5e8;
+  --color-border-strong: #bbbbbb;
+
+  /* ---------- Trạng thái ---------- */
+  --color-success: #1a9c5c;
+  --color-warning: #d98c00;
+  --color-danger: var(--color-primary-600);
+  --color-info: #2563eb;
+
+  /* ---------- Trạng thái - "soft tint" (nền nhạt + chữ đậm) ---------- */
+  --color-success-tint-bg: #e9f7f0;
+  --color-success-tint-fg: #146b40;
+  --color-success-tint-border: #b7e6cd;
+  --color-danger-tint-bg: #fdecec;
+  --color-danger-tint-fg: #9a0036;
+  --color-danger-tint-border: #f6c6cf;
+  --color-warning-tint-bg: #fdf3e0;
+  --color-warning-tint-fg: #8a5a00;
+  --color-warning-tint-border: #f3ddab;
+  --color-info-tint-bg: #e8f0fe;
+  --color-info-tint-fg: #1d4ed8;
+  --color-info-tint-border: #c3d7fb;
+
+  /* ---------- Typography ---------- */
+  --font-family-base: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --text-h1: clamp(1.625rem, 1.4rem + 0.9vw, 2rem);
+  --text-h2: clamp(1.375rem, 1.25rem + 0.6vw, 1.625rem);
+
+  /* ---------- Spacing scale ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+
+  /* ---------- Bo góc ---------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  /* ---------- Bóng đổ ---------- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+
+  /* ---------- Chiều cao khung admin ---------- */
+  --admin-header-h: 3.25rem;
+}
+
 :root {
   /* 5 màu giá trị cốt lõi VAS */
   --vas-nhan-ai: #009082; /* NHÂN ÁI - teal */

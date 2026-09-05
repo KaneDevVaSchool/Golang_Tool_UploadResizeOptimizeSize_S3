@@ -1,5 +1,6 @@
 import { Award as AwardIcon, Medal, Pencil, Plus, Star, Trash2, Trophy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { createAward, deleteAward, fetchAwards, updateAward, type Award } from "../../lib/awardApi";
 import { toast } from "../../lib/toastBus";
@@ -140,9 +141,10 @@ export default function AwardsPage() {
 
   return (
     <div className="awards-page">
-      <div className="artworks-list-header">
-        <h1>Quản lý giải thưởng</h1>
-      </div>
+      <AdminPageHeader
+        title="Quản lý giải thưởng"
+        subtitle={awards.length > 0 ? `${awards.length} giải thưởng` : undefined}
+      />
 
       <div className="awards-layout">
         <div className="awards-list">
