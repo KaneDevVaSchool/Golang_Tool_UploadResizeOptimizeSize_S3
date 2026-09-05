@@ -13,7 +13,8 @@ tên biến, tên bảng, tên endpoint đều lấy từ code — không phải
 |---|---|
 | Người mới vào dự án | [ARCHITECTURE](./ARCHITECTURE.md) → [detail_design/](./detail_design/README.md) |
 | Cần gọi API | [API](./API.md) |
-| Cần deploy | [deploys/](./deploys/README.md) |
+| Deploy lần đầu | [deploys/00-tu-dau-den-cuoi](./deploys/00-tu-dau-den-cuoi.md) |
+| Deploy lại / vận hành | [deploys/](./deploys/README.md) |
 | Cần biết làm gì tiếp | [plan/](./plan/README.md) |
 | Cần sửa 1 package cụ thể | [MODULES](./MODULES.md) |
 
@@ -47,7 +48,8 @@ ràng buộc, và lý do đằng sau mỗi quyết định.
 | File | Phạm vi |
 |---|---|
 | [README.md](./deploys/README.md) | Chọn phương án, checklist tổng |
-| [01-vps-systemd.md](./deploys/01-vps-systemd.md) | Quy trình chuẩn: binary + systemd + Nginx + Certbot |
+| [00-tu-dau-den-cuoi.md](./deploys/00-tu-dau-den-cuoi.md) | **Deploy lần đầu**: hướng dẫn cực chi tiết từ lúc chưa mua VPS đến khi nghiệm thu xong |
+| [01-vps-systemd.md](./deploys/01-vps-systemd.md) | Quy trình rút gọn: binary + systemd + Nginx + Certbot |
 | [02-configuration.md](./deploys/02-configuration.md) | Toàn bộ biến môi trường: ý nghĩa, mặc định, ràng buộc |
 | [03-operations.md](./deploys/03-operations.md) | Vận hành: log, backup, sự cố thường gặp, rollback |
 | [S3-PUBLIC-READ.md](./S3-PUBLIC-READ.md) | Cấu hình bucket policy cho ảnh public |

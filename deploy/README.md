@@ -1,132 +1,198 @@
-# Deploy pictures.vaschools.edu.vn (Binary + systemd + Nginx)
+# Deploy — pictures.vaschools.edu.vn
 
-Mục tiêu: domain `pictures.vaschools.edu.vn` hiện đang trỏ tạm và hiển thị giao diện
-cũ vì **chưa có app + vhost thật chạy phía sau**. Làm theo thứ tự dưới đây để nó chạy
-đúng bản UI mới trong repo này.
+Deploy bằng **binary Go + systemd + Nginx**. Không dùng Docker.
 
-## 0. Điều kiện
+## TL;DR
 
-- DNS: `pictures.vaschools.edu.vn` → A record trỏ đúng IP VPS (kiểm tra bằng
-  `nslookup pictures.vaschools.edu.vn` hoặc `dig +short pictures.vaschools.edu.vn`
-  từ máy local — phải ra đúng IP VPS, nếu chưa đúng thì HTTPS ở bước 4 sẽ fail).
-- Nginx đã cài trên VPS (`sudo apt install -y nginx`).
-- Đã build binary + web UI (xem [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md) mục
-  "Cách B: Binary trực tiếp + systemd") và có sẵn ở `/opt/s3-upload-tool/`:
-  - `/opt/s3-upload-tool/server` (binary)
-  - `/opt/s3-upload-tool/web/dist` (build UI mới)
-  - `/opt/s3-upload-tool/.env` (copy từ `.env.example`, chỉnh production)
+```bash
+# Lần đầu
+sudo bash deploy/preflight.sh      # kiểm tra VPS đủ điều kiện chưa
+sudo bash deploy/deploy.sh         # build + cài service + nginx
+sudo bash deploy/setup-https.sh    # bật HTTPS
 
-## Cách nhanh: dùng deploy.sh
+# Các lần cập nhật sau
+cd /opt/s3-upload-tool && sudo bash deploy/deploy.sh
 
-Nếu đã thoả điều kiện ở mục 0 (DNS trỏ đúng, Nginx/Go/Node đã cài, và
-`/opt/s3-upload-tool/.env` đã có), có thể chạy 1 lệnh thay cho toàn bộ bước 1-3
-bên dưới:
+# Khi có sự cố
+sudo bash deploy/status.sh
+```
+
+---
+
+## Các file trong thư mục này
+
+| File | Việc nó làm |
+|---|---|
+| `preflight.sh` | Kiểm tra VPS: Go/Node/Nginx, `.env`, DNS, cổng, đĩa. Chỉ đọc, không sửa gì. |
+| `deploy.sh` | Build web + binary, chạy migration, cài service/nginx, health-check, **tự rollback** nếu hỏng. |
+| `setup-https.sh` | Xin chứng chỉ Let's Encrypt, bật redirect HTTPS, bật `CSRF_SECURE_COOKIE`. |
+| `status.sh` | Xem service, health, chứng chỉ, phiên bản đang chạy, log gần nhất. |
+| `systemd/*.service` | Định nghĩa service (auto-restart, graceful shutdown, sandbox bảo mật). |
+| `nginx/*.conf` | Vhost: reverse proxy, gzip, giới hạn upload 200MB, security header. |
+| `config.env.example` | Đổi domain/đường dẫn/port mặc định nếu cần. |
+
+---
+
+## Cài đặt lần đầu (chi tiết)
+
+### 1. Chuẩn bị VPS
+
+Ubuntu/Debian, có quyền sudo:
+
+```bash
+sudo apt update
+sudo apt install -y git nginx curl
+
+# Go 1.24+
+wget https://go.dev/dl/go1.24.2.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.24.2.linux-amd64.tar.gz
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc && source ~/.bashrc
+
+# Node 20+ (để build giao diện)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+```
+
+### 2. Lấy mã nguồn
+
+```bash
+sudo git clone <repo-url> /opt/s3-upload-tool
+cd /opt/s3-upload-tool
+```
+
+### 3. Tạo `.env`
+
+```bash
+sudo cp .env.example .env
+sudo nano .env
+```
+
+Bắt buộc cho production — **thiếu là server không khởi động**:
+
+```env
+APP_ENV=production
+CORS_ORIGINS=https://pictures.vaschools.edu.vn   # KHÔNG để "*"
+API_REQUIRE_KEY=true
+API_KEY=<sinh bằng: openssl rand -hex 32>
+
+AWS_REGION=ap-southeast-1
+S3_BUCKET_NAME=<tên bucket>
+AWS_ACCESS_KEY_ID=<...>            # bỏ qua nếu VPS là EC2 có IAM role
+AWS_SECRET_ACCESS_KEY=<...>
+
+CSRF_SECURE_COOKIE=true            # setup-https.sh sẽ tự bật
+
+# Database MySQL (nếu dùng gallery/admin)
+DATABASE_ENABLED=true
+DATABASE_URL=user:pass@tcp(localhost:3306)/va_stu_pic_db_prd
+SESSION_SECRET=<openssl rand -hex 32>
+
+# Đăng nhập admin bằng Google
+GOOGLE_CLIENT_ID=<...>
+GOOGLE_CLIENT_SECRET=<...>
+GOOGLE_REDIRECT_URL=https://pictures.vaschools.edu.vn/auth/google/callback
+ADMIN_ALLOWED_EMAIL_DOMAIN=vaschools.edu.vn
+```
+
+> `GOOGLE_REDIRECT_URL` phải trùng **chính xác** với Authorized redirect URI
+> khai trong Google Cloud Console, kể cả `https://` và dấu `/` cuối.
+
+### 4. Kiểm tra rồi deploy
+
+```bash
+sudo bash deploy/preflight.sh     # sửa hết mục ✗ trước khi đi tiếp
+sudo bash deploy/deploy.sh
+```
+
+### 5. Bật HTTPS
+
+DNS phải trỏ đúng IP VPS trước.
+
+```bash
+sudo bash deploy/setup-https.sh
+```
+
+---
+
+## Cập nhật code
 
 ```bash
 cd /opt/s3-upload-tool
 sudo bash deploy/deploy.sh
 ```
 
-Script sẽ tự: `git pull` → build web UI → build binary → tạo `appuser` nếu
-chưa có → cài/enable systemd service → cài/enable Nginx vhost → reload Nginx →
-health-check qua `127.0.0.1:8080`. Chạy lại được nhiều lần (idempotent), dùng
-luôn cho các lần cập nhật code sau này.
-
-Bước 1-3 dưới đây là chi tiết thủ công tương đương, đọc khi cần debug hoặc muốn
-hiểu script đang làm gì. Sau khi chạy xong (script hoặc thủ công), tiếp tục
-mục 4 (Certbot/HTTPS).
-
-## 1. Tạo user chạy app + cấp quyền
+Tuỳ chọn:
 
 ```bash
-sudo useradd -r -s /sbin/nologin appuser
-sudo chown -R appuser:appuser /opt/s3-upload-tool
-sudo chmod +x /opt/s3-upload-tool/server
+sudo bash deploy/deploy.sh --skip-web   # chỉ sửa Go, khỏi build lại UI (nhanh hơn nhiều)
+sudo bash deploy/deploy.sh --no-pull    # deploy code đang có, không git pull
 ```
 
-## 2. Cài systemd service
+`deploy.sh` giữ lại binary cũ (`server.prev`). Nếu bản mới không qua
+health-check, script tự khôi phục bản cũ và restart để site không chết.
+
+---
+
+## Vận hành
 
 ```bash
-sudo cp deploy/systemd/s3-upload-tool.service /etc/systemd/system/s3-upload-tool.service
-sudo systemctl daemon-reload
-sudo systemctl enable s3-upload-tool
-sudo systemctl start s3-upload-tool
-sudo systemctl status s3-upload-tool   # phải là active (running)
+sudo bash deploy/status.sh                      # tổng quan
+sudo systemctl restart s3-upload-tool           # khởi động lại
+sudo journalctl -u s3-upload-tool -f            # log realtime
+sudo journalctl -u s3-upload-tool -p err -n 50  # chỉ lỗi
+```
 
-# App phải trả lời trên localhost trước khi đụng tới Nginx:
+Log ứng dụng dạng file: `/opt/s3-upload-tool/storage/logs/app-YYYY-MM-DD.log`
+
+---
+
+## Xử lý sự cố
+
+**Service không lên**
+```bash
+sudo journalctl -u s3-upload-tool -n 50 --no-pager
+```
+Hay gặp: `.env` thiếu `API_KEY`, hoặc `CORS_ORIGINS=*` khi `APP_ENV=production`
+— hai lỗi này server chủ động từ chối khởi động.
+
+**Web hiện 502 Bad Gateway** — Nginx chạy nhưng app thì không:
+```bash
+sudo systemctl status s3-upload-tool
 curl http://127.0.0.1:8080/api/v1/health
 ```
 
-Nếu bước này chưa OK (service crash / health không trả 200 ok), dừng lại xử lý
-trước — đừng cấu hình Nginx trên một service chưa chạy được, sẽ chỉ thấy 502.
-Xem log: `sudo journalctl -u s3-upload-tool -f`.
+**Vẫn thấy giao diện cũ** — trình duyệt cache; thử Ctrl+Shift+R. Nếu vẫn vậy,
+kiểm tra `web/dist` đã build lại chưa (`bash deploy/status.sh`).
 
-## 3. Cài vhost Nginx (HTTP trước)
+**Upload ảnh lớn báo 413** — tăng `client_max_body_size` trong
+`/etc/nginx/sites-available/pictures.vaschools.edu.vn.conf` cho khớp
+`UPLOAD_ABSOLUTE_MAX_MB`, rồi `sudo nginx -t && sudo systemctl reload nginx`.
 
+**Certbot thất bại** — DNS chưa trỏ đúng hoặc cổng 80 bị chặn:
 ```bash
-sudo cp deploy/nginx/pictures.vaschools.edu.vn.conf /etc/nginx/sites-available/pictures.vaschools.edu.vn.conf
-sudo ln -sf /etc/nginx/sites-available/pictures.vaschools.edu.vn.conf /etc/nginx/sites-enabled/
-
-# Nếu VPS còn vhost/default nào khác đang chiếm server_name này hoặc default_server
-# trên port 80 (chính là nguyên nhân "giao diện cũ" thường gặp), gỡ hoặc tắt nó:
-#   ls /etc/nginx/sites-enabled/
-#   sudo rm /etc/nginx/sites-enabled/<tên-vhost-cũ>
-
-sudo nginx -t
-sudo systemctl reload nginx
+getent hosts pictures.vaschools.edu.vn   # phải ra IP VPS
+sudo ufw allow 80 && sudo ufw allow 443
 ```
 
-Kiểm tra: mở `http://pictures.vaschools.edu.vn` — phải thấy đúng UI mới (chưa
-có ổ khoá HTTPS, đó là bình thường ở bước này).
+---
 
-Nếu vẫn thấy giao diện cũ ở bước này (không phải lỗi kết nối), gần như chắc chắn
-là do:
-
-- Trình duyệt cache trang cũ → thử tab ẩn danh / hard refresh (Ctrl+Shift+R).
-- Có CDN/proxy trung gian (Cloudflare...) đang cache — cần purge cache ở đó.
-- DNS chưa trỏ đúng VPS này (xem lại bước 0).
-
-## 4. Bật HTTPS bằng Certbot
-
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d pictures.vaschools.edu.vn
-```
-
-Certbot sẽ tự thêm block `listen 443 ssl` + redirect HTTP→HTTPS vào file vhost.
-Sau khi có HTTPS, cập nhật `.env` trên VPS rồi restart app:
-
-```bash
-# trong /opt/s3-upload-tool/.env
-CSRF_SECURE_COOKIE=true
-
-sudo systemctl restart s3-upload-tool
-```
-
-Certbot tự cài cron/timer gia hạn cert — kiểm tra bằng:
-
-```bash
-sudo certbot renew --dry-run
-```
-
-## 5. Checklist cuối cùng
-
-- [ ] `curl https://pictures.vaschools.edu.vn/api/v1/health` → `200 ok`
-- [ ] `.env` trên VPS: `APP_ENV=production`, `API_KEY` đã set thật,
-      `CORS_ORIGINS=https://pictures.vaschools.edu.vn` (không phải `*`),
-      `CSRF_SECURE_COOKIE=true`
-- [ ] Không còn vhost/site nào khác trả lời cho `pictures.vaschools.edu.vn`
-- [ ] Test upload thử 1 ảnh qua UI thật trên domain
-
-## Cập nhật code sau này
+## Rollback thủ công
 
 ```bash
 cd /opt/s3-upload-tool
-git pull
-cd web && npm ci && npm run build && cd ..
-CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o server ./cmd/server
-sudo systemctl restart s3-upload-tool
+sudo git log --oneline -5                  # chọn commit tốt trước đó
+sudo git checkout <commit-hash>
+sudo bash deploy/deploy.sh --no-pull
 ```
 
-Không cần đụng lại Nginx khi chỉ update code app — vhost chỉ cần sửa nếu đổi port,
-domain, hoặc giới hạn upload.
+---
+
+## Đổi domain / đường dẫn
+
+```bash
+cp deploy/config.env.example deploy/config.env
+nano deploy/config.env
+```
+
+Nhớ tạo file vhost tương ứng trong `deploy/nginx/<domain>.conf` (copy từ file
+sẵn có rồi đổi `server_name`).

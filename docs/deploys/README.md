@@ -18,7 +18,8 @@ lo khởi động lại khi lỗi, Nginx lo TLS và giới hạn kích thước 
 
 | Tài liệu | Nội dung |
 |---|---|
-| [01-vps-systemd.md](./01-vps-systemd.md) | Quy trình triển khai đầy đủ, từ VPS trắng đến HTTPS |
+| [00-tu-dau-den-cuoi.md](./00-tu-dau-den-cuoi.md) | **Deploy lần đầu — đọc file này.** Cực chi tiết, từ lúc chưa mua VPS: làm cứng server, cài Go/Node/MySQL, tạo IAM user AWS, OAuth, nghiệm thu, backup |
+| [01-vps-systemd.md](./01-vps-systemd.md) | Quy trình rút gọn cho người đã quen, khi VPS đã có sẵn Go/Node/MySQL/Nginx |
 | [02-configuration.md](./02-configuration.md) | Toàn bộ biến môi trường: ý nghĩa, mặc định, ràng buộc |
 | [03-operations.md](./03-operations.md) | Vận hành hằng ngày: log, backup, sự cố, rollback |
 | [../S3-PUBLIC-READ.md](../S3-PUBLIC-READ.md) | Bucket policy cho ảnh đọc công khai |
