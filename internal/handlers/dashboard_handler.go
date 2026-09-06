@@ -34,3 +34,19 @@ func (h *DashboardHandler) HandleStats(w http.ResponseWriter, r *http.Request) {
 	}
 	h.SendSuccess(w, stats)
 }
+
+// HandleRegionSummary GET /api/v1/admin/dashboard/region-summary
+func (h *DashboardHandler) HandleRegionSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.SendError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Chỉ hỗ trợ GET")
+		return
+	}
+
+	summary, err := h.service.GetRegionSummary(r.Context())
+	if err != nil {
+		log.Printf("[Dashboard] Không lấy được số liệu theo khu vực: %v", err)
+		h.SendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Không tải được số liệu theo khu vực")
+		return
+	}
+	h.SendSuccess(w, summary)
+}

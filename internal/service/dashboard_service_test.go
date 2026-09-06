@@ -66,6 +66,17 @@ func (f *fakeDashboardRepo) Operations(context.Context) (repository.OperationsSn
 	return f.ops, nil
 }
 
+func (f *fakeDashboardRepo) RegionSummaries(context.Context) ([]repository.RegionSummary, error) {
+	if f.failOn == "region_summary" {
+		return nil, errors.New("lỗi giả lập")
+	}
+	return []repository.RegionSummary{
+		{Region: "saigon", Artworks: 30, Students: 35},
+		{Region: "cantho", Artworks: 8, Students: 9},
+		{Region: "vungtau", Artworks: 4, Students: 4},
+	}, nil
+}
+
 // GetStats phải gộp đủ CẢ BẢY nguồn số liệu vào một response. Bài test khoá
 // lại điều này vì thêm một nguồn mới mà quên nối vào DTO là lỗi im lặng:
 // build vẫn xanh, frontend chỉ thấy trường rỗng.
@@ -128,5 +139,44 @@ func TestGetStatsBaoLoiKhiMotNguonHong(t *testing.T) {
 				t.Errorf("có lỗi thì phải trả nil, nhận %+v", stats)
 			}
 		})
+	}
+}
+
+// GetRegionSummary phải trả đúng 3 khu vực theo thứ tự cố định
+// saigon/cantho/vungtau - dải card ở 3 trang quản trị dựa vào thứ tự này để
+// không phải tự sort ở frontend.
+func TestGetRegionSummaryTraDungThuTuVaSoLieu(t *testing.T) {
+	repo := &fakeDashboardRepo{}
+	summary, err := NewDashboardService(repo).GetRegionSummary(context.Background())
+	if err != nil {
+		t.Fatalf("GetRegionSummary trả lỗi ngoài dự kiến: %v", err)
+	}
+
+	want := []repository.RegionSummary{
+		{Region: "saigon", Artworks: 30, Students: 35},
+		{Region: "cantho", Artworks: 8, Students: 9},
+		{Region: "vungtau", Artworks: 4, Students: 4},
+	}
+	if len(summary) != len(want) {
+		t.Fatalf("GetRegionSummary trả %d khu vực, mong đợi %d", len(summary), len(want))
+	}
+	for i, item := range want {
+		if summary[i] != item {
+			t.Errorf("khu vực thứ %d = %+v, mong đợi %+v", i, summary[i], item)
+		}
+	}
+}
+
+// Lỗi từ repository phải nổi lên thành lỗi của GetRegionSummary, kèm ngữ
+// cảnh - cùng nguyên tắc với GetStats: thà báo hỏng còn hơn hiển thị số 0
+// như thể đó là số liệu thật.
+func TestGetRegionSummaryBaoLoiKhiRepoHong(t *testing.T) {
+	repo := &fakeDashboardRepo{failOn: "region_summary"}
+	summary, err := NewDashboardService(repo).GetRegionSummary(context.Background())
+	if err == nil {
+		t.Fatal("repo hỏng nhưng GetRegionSummary vẫn trả thành công")
+	}
+	if summary != nil {
+		t.Errorf("có lỗi thì phải trả nil, nhận %+v", summary)
 	}
 }

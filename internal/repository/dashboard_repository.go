@@ -89,6 +89,17 @@ type OperationsSnapshot struct {
 	TotalReactions int64 `json:"total_reactions"`
 }
 
+// RegionSummary là số tác phẩm + số học sinh của 1 khu vực - dùng cho dải
+// card thống kê nhỏ ở đầu các trang quản trị Tác phẩm/Giải thưởng/Nhóm chủ
+// đề. Tách khỏi DashboardStatsResponse (nặng hơn nhiều: activity,
+// top_schools, top_artworks, school_coverage...) vì 3 trang đó chỉ cần đúng
+// hai con số này.
+type RegionSummary struct {
+	Region   string `json:"region"`
+	Artworks int64  `json:"artworks"`
+	Students int64  `json:"students"`
+}
+
 // DashboardRepository chạy các query tổng hợp cho trang Dashboard - không
 // map 1-1 với 1 bảng nào, luôn JOIN/GROUP BY qua artworks + schools/grade_levels.
 type DashboardRepository interface {
@@ -104,6 +115,9 @@ type DashboardRepository interface {
 	// SchoolCoverageReport trả toàn bộ trường (kể cả trường 0 bài).
 	SchoolCoverageReport(ctx context.Context) ([]SchoolCoverage, error)
 	Operations(ctx context.Context) (OperationsSnapshot, error)
+	// RegionSummaries trả số tác phẩm đã xuất bản + số học sinh của cả 3 khu
+	// vực, theo thứ tự cố định saigon/cantho/vungtau.
+	RegionSummaries(ctx context.Context) ([]RegionSummary, error)
 }
 
 type dashboardRepository struct {
@@ -420,4 +434,68 @@ func (r *dashboardRepository) Operations(ctx context.Context) (OperationsSnapsho
 		return s, fmt.Errorf("failed to get operations snapshot: %w", err)
 	}
 	return s, nil
+}
+
+// countByRegion chạy 1 query "SELECT region, COUNT(*) ... GROUP BY region"
+// và trả về map đã điền sẵn cả 3 khu vực = 0 - dùng chung cho cả hai nhánh
+// đếm (tác phẩm/học sinh) của RegionSummaries để không lặp code Scan.
+func (r *dashboardRepository) countByRegion(ctx context.Context, query string) (map[string]int64, error) {
+	counts := map[string]int64{
+		models.RegionSaigon:  0,
+		models.RegionCanTho:  0,
+		models.RegionVungTau: 0,
+	}
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var region string
+		var count int64
+		if err := rows.Scan(&region, &count); err != nil {
+			return nil, err
+		}
+		counts[region] = count
+	}
+	return counts, rows.Err()
+}
+
+func (r *dashboardRepository) RegionSummaries(ctx context.Context) ([]RegionSummary, error) {
+	artworksByRegion, err := r.countByRegion(ctx, `
+		SELECT s.region, COUNT(*)
+		FROM artworks a
+		JOIN schools s ON s.id = a.school_id
+		WHERE a.is_published = 1
+		GROUP BY s.region
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count artworks by region: %w", err)
+	}
+
+	// Không lọc theo trạng thái nào: students không có cột đó, và theo quy
+	// ước ở docs/detail_design/01-database.md, mỗi lần tạo tác phẩm luôn tạo
+	// 1 bản ghi student mới - KHÔNG dedupe theo tên - nên đếm thẳng COUNT(*).
+	studentsByRegion, err := r.countByRegion(ctx, `
+		SELECT s.region, COUNT(*)
+		FROM students st
+		JOIN schools s ON s.id = st.school_id
+		GROUP BY s.region
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count students by region: %w", err)
+	}
+
+	// Thứ tự cố định để FE không phải tự sort.
+	order := []string{models.RegionSaigon, models.RegionCanTho, models.RegionVungTau}
+	result := make([]RegionSummary, 0, len(order))
+	for _, region := range order {
+		result = append(result, RegionSummary{
+			Region:   region,
+			Artworks: artworksByRegion[region],
+			Students: studentsByRegion[region],
+		})
+	}
+	return result, nil
 }

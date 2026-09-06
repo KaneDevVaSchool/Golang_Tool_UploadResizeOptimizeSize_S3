@@ -90,6 +90,25 @@ const EMPTY_OPERATIONS: OperationsSnapshot = {
   total_reactions: 0,
 };
 
+/** Một dòng của dải card thống kê theo khu vực - xem RegionSummaryStrip. */
+export type RegionSummaryItem = {
+  region: "saigon" | "cantho" | "vungtau";
+  artworks: number;
+  students: number;
+};
+
+/**
+ * fetchRegionSummary: bản nhẹ của fetchDashboardStats, chỉ trả số tác phẩm +
+ * số học sinh mỗi khu vực - dùng cho dải card đầu trang Tác phẩm/Giải
+ * thưởng/Nhóm chủ đề, không kéo theo toàn bộ payload nặng của Dashboard.
+ */
+export async function fetchRegionSummary(signal?: AbortSignal): Promise<RegionSummaryItem[]> {
+  const raw = await adminRequest<RegionSummaryItem[]>("/api/v1/admin/dashboard/region-summary", { signal });
+  // Fallback mảng rỗng nếu backend cũ hơn FE chưa có endpoint này - dải card
+  // phụ này chỉ nên biến mất, không được làm trắng cả trang.
+  return raw ?? [];
+}
+
 export async function fetchDashboardStats(signal?: AbortSignal): Promise<DashboardStats> {
   const raw = await adminRequest<DashboardStats>("/api/v1/admin/dashboard/stats", { signal });
 

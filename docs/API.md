@@ -621,6 +621,31 @@ Ba khối bổ sung phục vụ việc **ra quyết định**, không chỉ mô 
 | `school_coverage` | Mỗi cơ sở đã có bài ở bao nhiêu khối trên tổng số khối. Trường **chưa có tác phẩm nào vẫn xuất hiện** với số 0 — đó chính là nơi ban tổ chức cần nhắc. |
 | `operations` | Các con số cần hành động: bài chờ xuất bản, bình luận đã ẩn, tiến độ trao giải, tác phẩm chưa có tương tác nào. |
 
+### `GET /api/v1/admin/dashboard/region-summary`
+
+```json
+{
+  "success": true,
+  "data": [
+    { "region": "saigon", "artworks": 200, "students": 235 },
+    { "region": "cantho", "artworks": 80, "students": 92 },
+    { "region": "vungtau", "artworks": 70, "students": 78 }
+  ]
+}
+```
+
+Phiên bản nhẹ của `/dashboard/stats`, chỉ trả đúng hai con số mỗi khu vực — dùng cho dải card
+thống kê nhỏ ở đầu trang Tác phẩm/Giải thưởng/Nhóm chủ đề quản trị, không kéo theo
+`activity`/`top_schools`/`top_artworks`/`school_coverage`/`operations` mà ba trang đó không
+dùng tới. Luôn trả đủ 3 khu vực theo thứ tự cố định `saigon`, `cantho`, `vungtau`.
+
+`artworks` đếm như `total_by_region` ở trên (JOIN `artworks`-`schools`, `WHERE is_published =
+1`). `students` đếm **mọi** bản ghi bảng `students` JOIN `schools` theo `region`, **không
+dedupe theo tên** — đúng quy ước ở
+[01-database.md](detail_design/01-database.md#students--học-sinh-migration-006): mỗi lần tạo
+tác phẩm luôn tạo một bản ghi học sinh mới, không có mã định danh học sinh chính thức nên
+không gộp trùng.
+
 ---
 
 # 6. Trang không phải JSON

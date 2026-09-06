@@ -492,6 +492,7 @@ func (c *Container) GetServerHandler() http.Handler {
 		}
 		if c.DashboardHandler != nil {
 			adminAPIMux.HandleFunc("/api/v1/admin/dashboard/stats", c.DashboardHandler.HandleStats)
+			adminAPIMux.HandleFunc("/api/v1/admin/dashboard/region-summary", c.DashboardHandler.HandleRegionSummary)
 		}
 
 		adminAPIHandler := middleware.AdminAuthMiddleware(c.SessionManager)(http.Handler(adminAPIMux))

@@ -1,9 +1,11 @@
-import { LayoutGrid, List, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
+import { Images, LayoutGrid, List, Pencil, Plus, Search, Star, Trash2, Users } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import { ArtworkEditModal } from "../../components/admin/ArtworkEditModal";
 import { ReactionIcons } from "../../components/admin/ReactionIcons";
+import { RegionSummaryStrip } from "../../components/admin/RegionSummaryStrip";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useRegionSummary } from "../../hooks/useRegionSummary";
 import { artworkImageURL } from "../../lib/artworkImage";
 import {
   deleteArtwork,
@@ -19,11 +21,10 @@ import {
 } from "../../lib/artworkApi";
 import { fetchAwards } from "../../lib/awardApi";
 import type { Award } from "../../lib/artworkApi";
+import { REGION_LABEL } from "../../lib/chartTheme";
 import { fetchTopicCategories, type TopicCategory } from "../../lib/topicCategoryApi";
 import type { ArtworkMetaFormValues } from "../../components/admin/ArtworkMetaForm";
 import { toast } from "../../lib/toastBus";
-
-const REGION_LABEL: Record<string, string> = { saigon: "Sài Gòn", cantho: "Cần Thơ", vungtau: "Vũng Tàu" };
 
 // Chế độ xem được nhớ qua localStorage: admin quay lại trang vẫn giữ đúng
 // chế độ đã chọn lần trước, không phải bấm lại mỗi lần vào trang.
@@ -68,6 +69,8 @@ export default function ArtworksListPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ArtworkWithMeta | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const regionSummary = useRegionSummary();
 
   useEffect(() => {
     Promise.all([fetchSchools(), fetchGradeLevels(), fetchTopicCategories(true), fetchAwards(true)])
@@ -219,6 +222,13 @@ export default function ArtworksListPage() {
         title="Thư viện tác phẩm"
         subtitle={totalCount > 0 ? `${totalCount} tác phẩm đang được lưu giữ` : undefined}
         primaryAction={{ label: "Đưa tác phẩm lên", icon: Plus, to: "/admin/artworks/upload", iconOnly: true }}
+      />
+
+      <RegionSummaryStrip
+        data={regionSummary.data}
+        loading={regionSummary.loading}
+        artworkIcon={Images}
+        studentIcon={Users}
       />
 
       <div className="artworks-filter-bar">

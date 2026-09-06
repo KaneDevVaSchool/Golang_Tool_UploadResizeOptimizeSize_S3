@@ -31,6 +31,10 @@ const activityTrendDays = 14
 // response duy nhất cho trang Dashboard.
 type DashboardService interface {
 	GetStats(ctx context.Context) (*DashboardStatsResponse, error)
+	// GetRegionSummary trả số tác phẩm + số học sinh mỗi khu vực - phiên bản
+	// nhẹ của GetStats, dùng cho dải card đầu trang Tác phẩm/Giải thưởng/Nhóm
+	// chủ đề (không cần activity/top_schools/operations...).
+	GetRegionSummary(ctx context.Context) ([]repository.RegionSummary, error)
 }
 
 type dashboardService struct {
@@ -92,4 +96,12 @@ func (s *dashboardService) GetStats(ctx context.Context) (*DashboardStatsRespons
 		SchoolCoverage: coverage,
 		Operations:     ops,
 	}, nil
+}
+
+func (s *dashboardService) GetRegionSummary(ctx context.Context) ([]repository.RegionSummary, error) {
+	summary, err := s.repo.RegionSummaries(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get region summary: %w", err)
+	}
+	return summary, nil
 }
