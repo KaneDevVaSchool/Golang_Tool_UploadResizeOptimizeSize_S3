@@ -35,7 +35,7 @@ async function parseEnvelope<T>(res: Response): Promise<T> {
 }
 
 async function publicGet<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(apiUrl(path), { signal });
+  const res = await fetch(apiUrl(path), { credentials: "same-origin", signal });
   return parseEnvelope<T>(res);
 }
 
@@ -85,6 +85,23 @@ export function fetchFeaturedArtworks(
 ): Promise<{ items: ArtworkWithMeta[]; total_count: number }> {
   const params = region ? `?region=${region}` : "";
   return publicGet(`/api/v1/public/artworks/featured${params}`, signal);
+}
+
+/** Ghi nhận lượt xem (+1 mỗi lần gọi) và trả tác phẩm với view_count mới nhất. */
+const artworkViewInFlight = new Map<number, Promise<ArtworkWithMeta>>();
+
+export function recordArtworkView(id: number): Promise<ArtworkWithMeta> {
+  const pending = artworkViewInFlight.get(id);
+  if (pending) return pending;
+
+  const token = getOrCreateVisitorToken();
+  const request = publicGet<ArtworkWithMeta>(
+    `/api/v1/public/artworks/${id}?visitor_token=${encodeURIComponent(token)}`,
+  ).finally(() => {
+    if (artworkViewInFlight.get(id) === request) artworkViewInFlight.delete(id);
+  });
+  artworkViewInFlight.set(id, request);
+  return request;
 }
 
 export function fetchPublicArtwork(id: number, signal?: AbortSignal): Promise<ArtworkWithMeta> {

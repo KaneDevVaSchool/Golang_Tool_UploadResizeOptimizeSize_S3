@@ -27,7 +27,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Poin
 import { createPortal } from "react-dom";
 import type { ArtworkWithMeta } from "../../lib/artworkApi";
 import { artworkImageURL, artworkPictureSources } from "../../lib/artworkImage";
-import type { ReactionCounts } from "../../lib/publicApi";
+import { recordArtworkView, type ReactionCounts } from "../../lib/publicApi";
 import { toast } from "../../lib/toastBus";
 import { CommentBox } from "./CommentBox";
 import { ReactionPicker } from "./ReactionPicker";
@@ -50,6 +50,17 @@ function safeFileName(value: string): string {
   return value.trim().replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-") || "tac-pham-vas";
 }
 
+function guessDownloadExtension(imageUrl: string): string {
+  try {
+    const pathname = new URL(imageUrl, window.location.origin).pathname;
+    const ext = pathname.slice(pathname.lastIndexOf(".")).toLowerCase();
+    if (/^\.(jpe?g|png|webp|gif)$/.test(ext)) return ext;
+  } catch {
+    // ignore
+  }
+  return ".jpg";
+}
+
 type Point = { x: number; y: number };
 type ImageSize = { width: number; height: number };
 
@@ -67,6 +78,7 @@ export function PublicLightbox({
   const artwork = items[activeIndex];
   const open = Boolean(artwork);
   const [reactionCounts, setReactionCounts] = useState<ReactionCounts | null>(null);
+  const [viewCount, setViewCount] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
@@ -94,12 +106,32 @@ export function PublicLightbox({
 
   useEffect(() => {
     setReactionCounts(artwork?.reaction_counts ?? null);
+    setViewCount(artwork?.view_count ?? 0);
     setZoom(1);
     setRotation(0);
     setPan({ x: 0, y: 0 });
     setNaturalSize({ width: artwork?.width || 1, height: artwork?.height || 1 });
     setSharpLoaded(false);
     setComposeOpen(false);
+  }, [artwork?.id]);
+
+  // Ghi nhận lượt xem — không truyền AbortSignal: StrictMode mount/unmount
+  // mount sẽ abort request giữa chừng, client không cập nhật số và dễ tưởng
+  // là chưa cộng (server có thể đã ghi xong nhưng UI không nhận response).
+  useEffect(() => {
+    if (!artwork?.id) return;
+    let stale = false;
+    recordArtworkView(artwork.id)
+      .then((fresh) => {
+        if (!stale) {
+          setViewCount(fresh.view_count);
+          setReactionCounts(fresh.reaction_counts ?? null);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
   }, [artwork?.id]);
 
   useEffect(() => {
@@ -288,21 +320,29 @@ export function PublicLightbox({
   }
 
   async function downloadArtwork() {
+    const downloadUrl = `/api/v1/public/artworks/${artwork.id}/download`;
+    const suggestedName = `${safeFileName(artwork.title)}${guessDownloadExtension(artwork.image_url)}`;
     try {
-      const response = await fetch(artwork.image_url, { mode: "cors" });
+      const response = await fetch(downloadUrl);
       if (!response.ok) throw new Error("download failed");
       const blobUrl = URL.createObjectURL(await response.blob());
       const anchor = document.createElement("a");
       anchor.href = blobUrl;
-      anchor.download = `${safeFileName(artwork.title)}.jpg`;
+      anchor.download = suggestedName;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(blobUrl);
       toast.success("Ảnh gốc đang được tải xuống.");
     } catch {
-      window.open(artwork.image_url, "_blank", "noopener,noreferrer");
-      toast.info("Ảnh đã được mở ở thẻ mới để bạn lưu về thiết bị.");
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = suggestedName;
+      anchor.rel = "noopener";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      toast.success("Ảnh gốc đang được tải xuống.");
     }
   }
 
@@ -553,7 +593,7 @@ export function PublicLightbox({
                       </dl>
 
                       <div className="public-lightbox-stats">
-                        <span><Eye size={15} /> {artwork.view_count.toLocaleString("vi-VN")} lượt xem</span>
+                        <span><Eye size={15} /> {viewCount.toLocaleString("vi-VN")} lượt xem</span>
                         <span><MessageCircle size={15} /> {artwork.comment_count.toLocaleString("vi-VN")} cảm nhận</span>
                       </div>
 

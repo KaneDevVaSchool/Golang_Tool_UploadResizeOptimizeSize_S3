@@ -95,3 +95,47 @@ export async function adminUpload<T>(path: string, form: FormData, signal?: Abor
   });
   return parseEnvelope<T>(res);
 }
+
+/**
+ * adminDownload: GET 1 endpoint trả file nhị phân (không phải envelope JSON)
+ * - dùng cho tải ảnh gốc tác phẩm. Lỗi vẫn trả envelope JSON chuẩn
+ * ({success:false,...}) nên phải thử parse JSON trước khi coi response là
+ * file nhị phân thành công, không chỉ dựa vào res.ok.
+ */
+export async function adminDownload(path: string, signal?: AbortSignal): Promise<{ blob: Blob; fileName: string }> {
+  const res = await fetch(apiUrl(path), {
+    credentials: "include",
+    headers: authHeaders(false),
+    signal,
+  });
+
+  if (res.status === 401) throw new UnauthorizedError();
+
+  const contentType = res.headers.get("Content-Type") ?? "";
+  if (!res.ok || contentType.includes("application/json")) {
+    // Lỗi (hoặc backend trả nhầm JSON) - parse như envelope thường để lấy
+    // đúng thông điệp tiếng Việt thay vì "Unexpected token" khó hiểu.
+    await parseEnvelope(res);
+    throw new Error(`Request failed (${res.status})`);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const fileName = parseFileNameFromDisposition(disposition) || "artwork";
+  return { blob, fileName };
+}
+
+function parseFileNameFromDisposition(disposition: string): string | null {
+  // Backend dùng mime.FormatMediaType nên luôn quote filename="...". Ưu tiên
+  // filename*= (RFC 5987, UTF-8) nếu có, rồi mới tới filename= thường.
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch {
+      // rơi xuống nhánh filename= thường
+    }
+  }
+  const plainMatch = disposition.match(/filename="([^"]+)"/i);
+  return plainMatch ? plainMatch[1] : null;
+}

@@ -1,4 +1,4 @@
-import { adminRequest, adminUpload } from "./adminApi";
+import { adminRequest, adminUpload, adminDownload } from "./adminApi";
 
 export type BulkUploadItem = {
   temp_key: string;
@@ -137,6 +137,31 @@ export function deleteArtwork(id: number): Promise<{ deleted: boolean }> {
   return adminRequest<{ deleted: boolean }>(`/api/v1/admin/artworks/${id}`, { method: "DELETE" });
 }
 
+/**
+ * deleteArtworkBatch: xoá nhiều tác phẩm cùng lúc (thao tác bulk ở trang
+ * danh sách) - 1 request thay vì lặp deleteArtwork cho từng id. Backend xoá
+ * từng tác phẩm một ở tầng service (ảnh trên S3 không gộp xoá được), nên
+ * response trả `deleted` có thể nhỏ hơn số id gửi lên nếu 1 vài tác phẩm lỗi
+ * xoá S3 - tác phẩm đó vẫn còn nguyên, không mất dữ liệu.
+ */
+export function deleteArtworkBatch(ids: number[]): Promise<{ deleted: number; requested: number }> {
+  return adminRequest<{ deleted: number; requested: number }>("/api/v1/admin/artworks/bulk-delete", {
+    method: "DELETE",
+    body: { ids },
+  });
+}
+
+/**
+ * downloadArtworkOriginal: tải ảnh gốc (không watermark) của 1 tác phẩm qua
+ * proxy backend /admin/artworks/{id}/download - cùng cơ chế endpoint public
+ * dùng cho khách tải ảnh, nhưng nhánh admin không watermark và không đòi
+ * is_published (admin phải tải được cả ảnh đang ẩn). Trả về Blob + tên file
+ * gợi ý từ header Content-Disposition, dùng cho cả tải đơn lẫn gộp zip.
+ */
+export function downloadArtworkOriginal(id: number, signal?: AbortSignal): Promise<{ blob: Blob; fileName: string }> {
+  return adminDownload(`/api/v1/admin/artworks/${id}/download`, signal);
+}
+
 export function toggleFeatured(id: number, featured: boolean): Promise<{ is_featured: boolean }> {
   return adminRequest<{ is_featured: boolean }>(`/api/v1/admin/artworks/${id}/featured`, {
     method: "PATCH",
@@ -161,6 +186,7 @@ export function setFeaturedBatch(
 
 export type ArtworkFilter = {
   search?: string;
+  region?: "saigon" | "cantho" | "vungtau";
   school_id?: number;
   grade_level_id?: number;
   education_level?: "primary" | "secondary";
@@ -181,6 +207,7 @@ export type ArtworkListResult = {
 export function fetchArtworks(filter: ArtworkFilter, signal?: AbortSignal): Promise<ArtworkListResult> {
   const params = new URLSearchParams();
   if (filter.search) params.set("search", filter.search);
+  if (filter.region) params.set("region", filter.region);
   if (filter.school_id) params.set("school_id", String(filter.school_id));
   if (filter.grade_level_id) params.set("grade_level_id", String(filter.grade_level_id));
   if (filter.education_level) params.set("education_level", filter.education_level);
