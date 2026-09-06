@@ -38,12 +38,13 @@ function useIsMobile() {
 
 /** Vị trí/kích thước front-back theo breakpoint - % tính theo .edu-gate-slot
  * (width CSS cố định, xem public.css). Desktop: back nhô ra đủ rộng để đọc
- * nội dung (peeking offset trong EducationLevelCard). Mobile: back chỉ hé
- * một dải mỏng bên phải - đủ thấy có "thứ gì đó" tiếp theo để vuốt qua, thể
- * hiện tinh thần "vẫn thấy tí nội dung bên kia" mà không cần dot/mũi tên. */
+ * nội dung (peeking offset trong EducationLevelCard). Mobile: card front
+ * căn giữa (4% + 92%) và rộng hơn desktop-relative; back chỉ hé một dải
+ * mỏng bên phải - đủ thấy có "thứ gì đó" tiếp theo để vuốt qua, không cần
+ * dot/mũi tên. */
 const STACK_LAYOUT = {
   desktop: { frontLeft: "-6%", backLeft: "40%", backScale: 0.94, backOpacity: 0.85 },
-  mobile: { frontLeft: "0%", backLeft: "84%", backScale: 0.92, backOpacity: 0.9 },
+  mobile: { frontLeft: "4%", backLeft: "90%", backScale: 0.92, backOpacity: 0.9 },
 };
 
 /**

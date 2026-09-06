@@ -1,27 +1,39 @@
 import { ArrowRight, Award as AwardIcon, Crown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { JsonLd } from "../../components/JsonLd";
 import { FeaturedGardenScene } from "../../components/public/FeaturedGardenScene";
 import { FeaturedHero } from "../../components/public/FeaturedHero";
 import { HallArtworkCard } from "../../components/public/HallArtworkCard";
 import { HallFireworks } from "../../components/public/HallFireworks";
 import { HallRail } from "../../components/public/HallRail";
 import { PublicLightbox } from "../../components/public/PublicLightbox";
+import { usePageMeta } from "../../hooks/usePageMeta";
 import { fetchBillboard, type BillboardEntry } from "../../lib/publicApi";
+
+const PAGE_TITLE = "Bảng vàng — Khu vườn nghệ thuật VA Schools";
+const PAGE_DESCRIPTION =
+  "Bảng vinh danh và giải thưởng của hội thi vẽ tranh kỷ niệm 20 năm Trường Việt Mỹ.";
 
 /** Bậc ngoài podium (chuyên đề / khuyến khích) gom chung vào một nhóm. */
 const OTHER_TIER = 99;
 
 /**
- * Nhãn huy chương + banner trên bệ bục, theo từng hạng.
+ * Nhãn huy chương + banner + crest trên bục, theo từng hạng.
  *
  * Banner phải thật ngắn: bệ chỉ rộng khoảng 1/3 bục và mọi dòng chữ trên bệ
  * đều bị khoá một hàng, chữ dài sẽ bị cắt bằng "…" chứ không xuống dòng.
+ *
+ * `crest` dùng nhãn hạng chuẩn hoá ("Hạng Nhất/Nhì/Ba"), KHÔNG phải tên
+ * giải admin đặt (`entry.award.name`) - hai chỗ khác nguồn dữ liệu từng
+ * hiện chữ khác nhau trên cùng một ô nếu admin đặt tên giải không chứa
+ * "Nhất/Nhì/Ba" (vd "Giải Xuất Sắc"). Tên giải thật vẫn hiển thị đầy đủ
+ * trong hall-podium-award ở bệ, chỉ là không còn lặp lại ở crest.
  */
-const TIER_META: Record<number, { medal: string; banner: string }> = {
-  1: { medal: "Vàng", banner: "★ Giải Nhất ★" },
-  2: { medal: "Bạc", banner: "Giải Nhì" },
-  3: { medal: "Đồng", banner: "Giải Ba" },
+const TIER_META: Record<number, { medal: string; banner: string; crest: string }> = {
+  1: { medal: "Vàng", banner: "★ Giải Nhất ★", crest: "Hạng Nhất" },
+  2: { medal: "Bạc", banner: "Giải Nhì", crest: "Hạng Nhì" },
+  3: { medal: "Đồng", banner: "Giải Ba", crest: "Hạng Ba" },
 };
 
 function foldAwardKey(value: string): string {
@@ -31,14 +43,40 @@ function foldAwardKey(value: string): string {
     .replace(/[̀-ͯ]/g, "");
 }
 
+/** Nhãn hạng chuẩn ("Hạng Nhất"...) theo từng bậc, dùng để lọc trùng với tên giải thật. */
+const TIER_CANONICAL_KEY: Record<number, string> = {
+  1: "nhat",
+  2: "nhi",
+  3: "ba",
+};
+
+/**
+ * Tên giải admin đặt có đáng hiển thị thêm không, hay chỉ lặp lại đúng
+ * nghĩa "Nhất/Nhì/Ba" đã có ở banner rồi. Ví dụ admin đặt tên giải đúng là
+ * "Giải Nhất" thì không cần dòng phụ nhắc lại - nhưng "Giải Xuất Sắc Nhất
+ * Khối 5" thì có, vì mang thêm thông tin.
+ */
+function isCanonicalAwardName(rank: number, awardName: string): boolean {
+  const key = foldAwardKey(awardName);
+  const canonical = TIER_CANONICAL_KEY[rank];
+  if (!canonical) return false;
+  return new RegExp(`^giai\\s+${canonical}$`).test(key.trim());
+}
+
 /**
  * Bậc của một tác phẩm. Ưu tiên rank_order do admin đặt; chỉ khi rank nằm
  * ngoài 1..3 mới đoán theo slug/tên - dữ liệu cũ có award chưa gán
  * rank_order chuẩn nhưng tên vẫn là "Giải Nhất/Nhì/Ba".
+ *
+ * rank_order lưu 0-based (đúng vị trí kéo-thả ở trang admin/awards: giải
+ * đầu danh sách rank_order=0) nên phải +1 mới ra bậc 1..3 tương ứng
+ * Nhất/Nhì/Ba - thiếu bước này từng khiến giải Nhì (rank_order=1) bị coi là
+ * Nhất và giải Ba (rank_order=2) bị coi là Nhì.
  */
 function tierOf(entry: BillboardEntry): number {
   const { rank_order: rank, slug, name } = entry.award;
-  if (rank >= 1 && rank <= 3) return rank;
+  const position = rank + 1;
+  if (position >= 1 && position <= 3) return position;
   const key = foldAwardKey(`${slug} ${name}`);
   if (/\bnhat\b|giai-nhat/.test(key)) return 1;
   if (/\bnhi\b|giai-nhi/.test(key)) return 2;
@@ -89,7 +127,7 @@ function LaurelBranch() {
  *  2. Dải giải chuyên đề: mọi giải nằm ngoài podium (Khuyến khích, giải
  *     theo chủ đề...).
  *
- * Card dùng chung HallArtworkCard ở cả hai tầng nên hover/tỉ lệ đồng nhất.
+ * Card dùng chung HallArtworkCard (khung gỗ trang trọng) ở cả hai tầng.
  */
 export default function HallOfFamePage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -97,6 +135,8 @@ export default function HallOfFamePage() {
   const [entries, setEntries] = useState<BillboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  usePageMeta({ title: PAGE_TITLE, description: PAGE_DESCRIPTION, canonicalPath: "/bang-vang" });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -182,6 +222,25 @@ export default function HallOfFamePage() {
 
   return (
     <div className="featured-page hall-page">
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: PAGE_TITLE,
+          description: PAGE_DESCRIPTION,
+          url: window.location.origin + "/bang-vang",
+        }}
+      />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Trang chủ", item: window.location.origin + "/" },
+            { "@type": "ListItem", position: 2, name: "Bảng vàng", item: window.location.origin + "/bang-vang" },
+          ],
+        }}
+      />
       {/* Không có thú/chim ở trang này: bục vinh danh đã có pháo hoa, thêm
           sóc thỏ chạy qua chỉ chia mắt người xem ra hai chỗ. */}
       <FeaturedHero
@@ -230,7 +289,7 @@ export default function HallOfFamePage() {
                           ) : (
                             <AwardIcon size={14} strokeWidth={2.2} aria-hidden />
                           )}
-                          {entry.award.name}
+                          {meta.crest}
                         </span>
 
                         <div className="hall-podium-stage">
@@ -261,9 +320,14 @@ export default function HallOfFamePage() {
                             {rank}
                           </span>
                           <span className="hall-podium-banner">{meta.banner}</span>
+                          {!isCanonicalAwardName(rank, entry.award.name) && (
+                            <span className="hall-podium-award" title={entry.award.name}>
+                              {entry.award.name}
+                            </span>
+                          )}
                           <span className="hall-podium-name" title={entry.title}>{`“${entry.title}”`}</span>
                           <span className="hall-podium-student" title={entry.student_name}>
-                            {entry.student_name}
+                            Họa sĩ nhí {entry.student_name}
                           </span>
                           <span className="hall-podium-school" title={entry.school_name}>
                             {entry.class_name ? `Lớp ${entry.class_name} · ` : ""}

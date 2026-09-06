@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { ArtworkWithMeta } from "../../lib/artworkApi";
 import type { TopicCategory } from "../../lib/topicCategoryApi";
 import { fetchPublicArtworks } from "../../lib/publicApi";
@@ -111,11 +111,34 @@ export function GalleryTopicSection({
       id={`chu-de-${topic.slug}`}
       className="gallery-hall-section gallery-hall-section--topic"
       aria-labelledby={`chu-de-${topic.slug}-title`}
+      style={{ "--topic-color": topic.color_hex } as CSSProperties}
     >
-      <div className="gallery-hall-toolbar">
+      <div className="gallery-hall-toolbar gallery-hall-toolbar--topic">
         <header className="gallery-hall-heading">
           <h2 id={`chu-de-${topic.slug}-title`}>{topic.name}</h2>
-          {!loading && <p className="gallery-hall-count">{totalCount} tác phẩm</p>}
+          {!loading && (
+            <p className="gallery-hall-count">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="1.8" />
+                <circle cx="9" cy="9.5" r="1.7" fill="currentColor" />
+                <path
+                  d="M4.5 16.5L9 12.2C9.6 11.6 10.5 11.6 11.1 12.2L13.4 14.4"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M13 15.8L15.7 13.2C16.3 12.6 17.2 12.6 17.8 13.2L19.5 14.9"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {totalCount} tác phẩm
+            </p>
+          )}
         </header>
       </div>
 

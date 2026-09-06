@@ -1,18 +1,30 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Images } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { FeaturedArtworkFrame } from "../../components/public/FeaturedArtworkFrame";
+import { JsonLd } from "../../components/JsonLd";
+import { FeaturedArtworkCard } from "../../components/public/FeaturedArtworkCard";
 import { FeaturedGardenScene } from "../../components/public/FeaturedGardenScene";
 import { FeaturedHero } from "../../components/public/FeaturedHero";
 import { GalleryPagination } from "../../components/public/GalleryPagination";
 import { PublicLightbox } from "../../components/public/PublicLightbox";
 import { RegionTabs, type Region } from "../../components/public/RegionTabs";
+import { usePageMeta } from "../../hooks/usePageMeta";
 import type { ArtworkWithMeta } from "../../lib/artworkApi";
 import { fetchFeaturedArtworks } from "../../lib/publicApi";
+
+const PAGE_TITLE = "Tác phẩm tiêu biểu — Khu vườn nghệ thuật VA Schools";
+const PAGE_DESCRIPTION =
+  "Những bức tranh nổi bật được chọn giới thiệu từ hội thi vẽ tranh 20 năm Trường Việt Mỹ, theo từng khu vực Sài Gòn, Cần Thơ, Vũng Tàu.";
 
 const VALID_REGIONS: Region[] = ["all", "saigon", "cantho", "vungtau"];
 const PAGE_SIZE = 18;
 const PODIUM_FALLBACK = 99;
+const REGION_LABEL: Record<Region, string> = {
+  all: "Tất cả",
+  saigon: "Sài Gòn",
+  cantho: "Cần Thơ",
+  vungtau: "Vũng Tàu",
+};
 
 function foldAwardKey(value: string): string {
   return value
@@ -21,12 +33,20 @@ function foldAwardKey(value: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-/** 1/2/3 = Giải Nhất/Nhì/Ba. Không thuộc podium thì 99 để xếp sau. */
+/**
+ * 1/2/3 = Giải Nhất/Nhì/Ba. Không thuộc podium thì 99 để xếp sau.
+ *
+ * rank_order lưu 0-based (vị trí kéo-thả ở trang admin/awards: giải đầu
+ * danh sách rank_order=0) nên phải +1 mới ra đúng bậc 1..3 - xem giải thích
+ * đầy đủ ở tierOf() trong HallOfFamePage.tsx, nơi cùng dữ liệu award được
+ * xếp bậc cho trang /bang-vang.
+ */
 function podiumRank(item: ArtworkWithMeta): number {
   let best = PODIUM_FALLBACK;
   for (const award of item.awards ?? []) {
-    if (award.rank_order >= 1 && award.rank_order <= 3) {
-      best = Math.min(best, award.rank_order);
+    const position = award.rank_order + 1;
+    if (position >= 1 && position <= 3) {
+      best = Math.min(best, position);
       continue;
     }
     const key = foldAwardKey(`${award.slug} ${award.name}`);
@@ -39,7 +59,7 @@ function podiumRank(item: ArtworkWithMeta): number {
 
 /**
  * Trang /tac-pham-tieu-bieu - banner khu vườn ôm chữ + tab khu vực + lưới
- * tranh khung bảo tàng (gỗ / gờ vàng / tấm đồng), chia trang.
+ * khung gỗ trang trọng vừa phải (dày hơn phòng triển lãm, nhẹ hơn bảng vàng).
  *
  * Khu vực khởi tạo đọc từ query "?khu-vuc=" (điều hướng từ Hero ở trang
  * chủ); đổi tab cập nhật lại query để có thể chia sẻ/back-forward được.
@@ -59,6 +79,11 @@ export default function FeaturedArtworksPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  // canonicalPath cố định về path gốc, không kèm ?khu-vuc=/?tranh= - các
+  // biến thể lọc theo khu vực hay mở modal tác phẩm đều cùng một nội dung
+  // cơ bản, không nên bị Google index như những trang riêng biệt.
+  usePageMeta({ title: PAGE_TITLE, description: PAGE_DESCRIPTION, canonicalPath: "/tac-pham-tieu-bieu" });
 
   function handleChangeRegion(next: Region) {
     setRegion(next);
@@ -144,6 +169,30 @@ export default function FeaturedArtworksPage() {
 
   return (
     <div className="featured-page">
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: PAGE_TITLE,
+          description: PAGE_DESCRIPTION,
+          url: window.location.origin + "/tac-pham-tieu-bieu",
+        }}
+      />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Trang chủ", item: window.location.origin + "/" },
+            {
+              "@type": "ListItem",
+              position: 2,
+              name: "Tác phẩm tiêu biểu",
+              item: window.location.origin + "/tac-pham-tieu-bieu",
+            },
+          ],
+        }}
+      />
       <FeaturedHero
         kicker="Tác phẩm tiêu biểu"
         title="Những bức tranh khiến ta dừng lại"
@@ -154,16 +203,29 @@ export default function FeaturedArtworksPage() {
         <RegionTabs value={region} onChange={handleChangeRegion} />
 
         {loading ? (
-          <p className="admin-empty-note">Đang treo tranh lên tường…</p>
+          <p className="featured-loading-note">Đang treo tranh lên tường…</p>
         ) : items.length === 0 ? (
-          <p className="admin-empty-note">
-            Khu vực này chưa có tác phẩm tiêu biểu nào. Hãy thử chọn một khu vực khác, hoặc ghé Phòng triển
-            lãm để xem toàn bộ tranh dự thi.
-          </p>
+          <div className="featured-empty-state">
+            <span className="featured-empty-icon" aria-hidden>
+              <Images strokeWidth={1.5} />
+            </span>
+            <p className="featured-empty-title">
+              {region === "all"
+                ? "Chưa có tác phẩm tiêu biểu nào"
+                : `Khu vực ${REGION_LABEL[region]} chưa có tác phẩm tiêu biểu`}
+            </p>
+            <p className="featured-empty-note">
+              Hãy thử chọn một khu vực khác, hoặc ghé Phòng triển lãm để xem toàn bộ tranh dự thi.
+            </p>
+            <Link className="featured-empty-cta" to="/phong-trien-lam">
+              Vào phòng triển lãm
+              <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
+            </Link>
+          </div>
         ) : (
           <>
-            {/* Mọi khung một cỡ, mỗi ô 1 cột - tranh ngang hay dọc đều nằm
-                gọn trong cùng khuôn vuông, khác nhau ở lỗ cắt passe-partout. */}
+            {/* Mọi card một cỡ, mỗi ô 1 cột - lỗ ảnh chữ nhật 4:3 nên hàng
+                không so le dù tranh gốc ngang hay dọc. */}
             <div className="featured-gallery-grid">
               {pageItems.map((item, index) => {
                 const rank = podiumRank(item);
@@ -173,10 +235,10 @@ export default function FeaturedArtworksPage() {
                     className="featured-gallery-cell"
                     data-podium={rank <= 3 ? rank : undefined}
                   >
-                    <FeaturedArtworkFrame
+                    <FeaturedArtworkCard
                       item={item}
+                      award={item.awards?.[0]}
                       index={index}
-                      podium={rank <= 3 ? rank : 0}
                       onClick={() => handleOpenArtwork(index)}
                     />
                   </div>

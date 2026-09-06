@@ -136,7 +136,10 @@ export function FeaturedArtworkFrame({
                   <em className="artwork-frame-title-text">{item.title}</em>
                 </span>
                 <span className="artwork-frame-plaque-rule" aria-hidden />
-                <strong className="artwork-frame-student">{item.student_name}</strong>
+                <span className="artwork-frame-student">
+                  <span className="artwork-frame-student-role">Họa sĩ nhí</span>
+                  <span className="artwork-frame-student-name">{item.student_name}</span>
+                </span>
                 <span className="artwork-frame-byline">
                   <span className="artwork-frame-grade">{gradeLine}</span>
                 </span>

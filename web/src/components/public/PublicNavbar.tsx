@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { to: "/tac-pham-tieu-bieu", label: "Tác phẩm tiêu biểu" },
   { to: "/phong-trien-lam", label: "Phòng triển lãm" },
   { to: "/bang-vang", label: "Bảng vàng" },
+  { to: "/thu-ngo", label: "Thư ngỏ" },
 ];
 
 /**
@@ -39,6 +40,9 @@ export function PublicNavbar() {
       <div className="public-navbar-inner">
         <NavLink to="/" className="public-navbar-brand" onClick={() => setOpen(false)}>
           <img className="public-navbar-brand-mark" src="/images/vas-wordmark-stacked.png" alt="Vietnam America Schools" />
+          <span className="public-navbar-title">
+            <span className="public-navbar-title-text">Sắc Màu VASchools</span>
+          </span>
         </NavLink>
 
         <nav className="public-navbar-links" aria-label="Điều hướng triển lãm">

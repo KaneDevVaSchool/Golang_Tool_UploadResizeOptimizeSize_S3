@@ -726,11 +726,11 @@
 /* ---------------------------------------------------------------------- */
 /* Public page shell                                                       */
 /* ---------------------------------------------------------------------- */
-/* index.css khoá html/body/#root ở height:100%+overflow:hidden cho
-   UploadTool (1 màn hình cố định). useScrollableBody gắn class này để mở
-   khoá. Rule phải nằm TRONG public.css: khu public chỉ import public.css,
-   không import admin.css - đặt nhờ ở đó thì trang public vào thẳng "/" sẽ
-   không có rule nào khớp và mất cuộn hoàn toàn. */
+/* index.css khoá html/body/#root ở height:100%+overflow:hidden mặc định.
+   useScrollableBody gắn class này để mở khoá. Rule phải nằm TRONG
+   public.css: khu public chỉ import public.css, không import admin.css -
+   đặt nhờ ở đó thì trang public vào thẳng "/" sẽ không có rule nào khớp và
+   mất cuộn hoàn toàn. */
 html.scrollable-page,
 body.scrollable-page,
 body.scrollable-page #root {
@@ -888,11 +888,12 @@ html.scrollable-page {
   gap: 0.2rem;
 }
 /* 768px khớp breakpoint chuẩn dùng chung toàn public.css (trước là 860px,
-   lệch với Gate/Gallery) - đã đo thực tế bằng screenshot tại 768/800/859px:
-   4 nhãn + logo vẫn vừa 1 hàng, không bọc dòng, không tràn. Nếu sau này
-   thêm nhãn menu mới thì phải đo lại, vì --vas-navbar-h là hằng số cố định
-   (không tự tính lại theo JS) - navbar bọc dòng sẽ đè lên nội dung thay vì
-   đẩy nó xuống. */
+   lệch với Gate/Gallery). 5 nhãn (đã thêm "Thư ngỏ") + logo vẫn vừa 1 hàng ở
+   768-1023px nhờ padding link hẹp hơn trong dải đó (xem media 1024px ngay
+   dưới) - từ 1024px trở lên nới rộng lại cho thoáng. Nếu sau này thêm nhãn
+   menu mới thì phải đo lại bằng screenshot, vì --vas-navbar-h là hằng số cố
+   định (không tự tính lại theo JS) - navbar bọc dòng sẽ đè lên nội dung
+   thay vì đẩy nó xuống. */
 @media (min-width: 768px) {
   .public-navbar-links {
     display: flex;
@@ -901,18 +902,29 @@ html.scrollable-page {
 
 .public-navbar-link {
   position: relative;
-  padding: 0.5rem 0.9rem;
-  font-size: 0.88rem;
+  padding: 0.5rem 0.55rem;
+  font-size: 0.86rem;
   font-weight: 600;
   color: var(--vas-text-muted);
   text-decoration: none;
+  white-space: nowrap;
   transition: color 0.2s ease;
+}
+@media (min-width: 1024px) {
+  .public-navbar-link {
+    padding: 0.5rem 0.9rem;
+    font-size: 0.88rem;
+  }
+  .public-navbar-link::after {
+    left: 0.9rem;
+    right: 0.9rem;
+  }
 }
 .public-navbar-link::after {
   content: "";
   position: absolute;
-  left: 0.9rem;
-  right: 0.9rem;
+  left: 0.55rem;
+  right: 0.55rem;
   bottom: 0.25rem;
   height: 2px;
   border-radius: 999px;
@@ -1408,20 +1420,27 @@ html.scrollable-page {
 /* Section 1 - Hero                                                        */
 /* ---------------------------------------------------------------------- */
 .hero-section {
+  /* plant.png 1366×778, tán lá thật y=51–100% → tỉ lệ cao/rộng ≈ 378/1366.
+     Chiều cao khung ≥ 100vw × 0.29 thì object-fit:cover không cắt ngọn
+     dương xỉ; 48vh giữ dải tiền cảnh đủ lớn trên màn cao. */
+  --hero-plant-h: min(68vh, max(46vh, calc(100vw * 0.28)));
+  --hero-grass-line: 16%;
   position: relative;
-  /* Navbar là fixed (không chiếm chỗ trong dòng chảy layout) nên Hero chạy
-     full viewport; padding-top riêng của section thừa đủ để nội dung
-     không bị thanh navbar kính mờ phía trên che mất. */
-  min-height: min(46rem, 100vh);
+  /* Sân khấu full viewport: navbar fixed nên Hero phủ đúng 1 màn hình
+     (100dvh, fallback 100svh) - đồi/cỏ/lá được crop vào đúng vùng có hình
+     thay vì kẹp 46rem/92vh rồi để lộ dải section kế. */
+  min-height: 100svh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   overflow: hidden;
-  background: radial-gradient(ellipse 80% 60% at 50% 0%, #fdf3e2 0%, #f4fbf7 55%, #fff 100%);
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 0%, #fff6e6 0%, #eef8f3 48%, #d9efe6 100%);
   background-size: 160% 160%;
   animation: forest-shimmer 18s ease-in-out infinite;
-  padding: 5rem 1.5rem 4rem;
+  padding: calc(var(--vas-navbar-h) + 1.15rem) 1.5rem 0;
   text-align: center;
 }
 
@@ -1435,9 +1454,13 @@ html.scrollable-page {
    không đổi màu. */
 .hero-parallax-hills {
   position: absolute;
-  inset: auto 0 0 0;
-  height: 60%;
-  min-height: 12rem;
+  /* Neo từ giữa trời xuống quá đáy một chút: PNG 1366x768, phần đồi thật
+     nằm y=25–83% (far) / 27–100% (mid) / 44–100% (near). Khung cao gần
+     full Hero + object-position vào dải đó thì đỉnh cây không bị cover
+     cắt, đáy cũng không lộ dải đặc. */
+  inset: 6% 0 -8% 0;
+  height: auto;
+  min-height: 0;
   display: grid;
   pointer-events: none;
   overflow: hidden;
@@ -1446,7 +1469,7 @@ html.scrollable-page {
   grid-area: 1 / 1;
   position: absolute;
   inset: auto 0 -2px 0;
-  height: 100%;
+  height: 118%;
   will-change: transform;
 }
 .hero-hill {
@@ -1454,30 +1477,30 @@ html.scrollable-page {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: bottom;
+  object-position: center 58%;
   /* Mờ dần ở mép trên thay vì cắt cứng theo hình chữ nhật của <img> - hoà
      đỉnh đồi vào nền trời pastel của .hero-section phía sau thay vì tạo
      một đường ngang rõ rệt giữa 2 vùng. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 34%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 34%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 18%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 18%);
 }
-/* hill1 (far) trải toàn chiều rộng đều; hill3 (mid) và hill4 (near) trong
-   ảnh gốc chỉ vẽ 1 bên - object-position lệch trái/phải để phần đồi có
-   hình dáng rõ luôn nằm trong khung nhìn, phần còn lại crop mượt ra mép. */
+/* hill1 (far) trải toàn chiều rộng, opaque y=25–83%; hill3/hill4 chỉ vẽ
+   1 bên - object-position lệch để cụm cây trên đỉnh nằm trong khung. */
 .hero-hill--far {
-  opacity: 0.55;
+  opacity: 0.62;
+  object-position: center 52%;
 }
 .hero-hill--mid {
-  object-position: right bottom;
-  opacity: 0.75;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 42%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 42%);
+  object-position: 78% 56%;
+  opacity: 0.82;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 22%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 22%);
 }
 .hero-hill--near {
-  object-position: left bottom;
-  opacity: 0.92;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 50%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 50%);
+  object-position: 18% 68%;
+  opacity: 0.96;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 28%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 28%);
 }
 
 /* Giá đỡ parallax cho hoa lá/rồng/mascot/cây cỏ: phủ toàn Hero, chỉ dịch
@@ -1491,46 +1514,93 @@ html.scrollable-page {
   will-change: transform;
 }
 
-/* Cây cọ đơn - neo giữa-phải trên gờ đồi (không trùng vị trí mascot ở góc
-   trái lẫn rồng ở góc phải xa). */
+/* Cây cọ: PNG 1366x768 nhưng silhouette thật chỉ x=36–52% / y=39–92%.
+   Crop cover vào đúng ô đó rồi phóng lớn - contain cả canvas sẽ làm cây
+   teo thành một chấm giữa khoảng trống. */
 .hero-parallax-tree {
   position: absolute;
-  left: 46%;
-  bottom: 32%;
-  width: min(11vw, 6rem);
-  height: auto;
-  object-fit: contain;
-  object-position: bottom;
-  filter: drop-shadow(0 6px 14px rgba(36, 20, 23, 0.15));
+  left: auto;
+  right: 3%;
+  bottom: var(--hero-grass-line, 26%);
+  width: min(22vw, 12.5rem);
+  height: min(34vh, 18rem);
+  object-fit: cover;
+  object-position: 44% 68%;
+  filter: drop-shadow(0 10px 18px rgba(36, 20, 23, 0.2));
 }
-/* Dải cỏ/dương xỉ - viền đáy toàn chiều rộng, lớp tiền cảnh gần nhất -
-   brightness/contrast nhẹ để nổi rõ trên nền đồi "near" đã khá đậm màu,
-   tránh bị chìm lẫn vào nhau. */
+/* index.css có `img { max-width: 100% }` — nếu width > 100% hoặc left âm
+   thì ảnh bị kẹp rồi lệch, hở một dải dọc ở mép phải/trái. Mọi lớp
+   parallax phải max-width:none và neo 0–100% khung cha. */
+.hero-section img,
+.featured-hero img {
+  max-width: none;
+}
 .hero-parallax-plant {
   position: absolute;
-  inset: auto 0 0 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
-  height: auto;
-  max-height: 16%;
+  height: var(--hero-plant-h);
+  max-width: none;
+  max-height: none;
+  translate: none;
   object-fit: cover;
-  object-position: bottom;
-  filter: brightness(1.6) saturate(1.3) drop-shadow(0 -2px 6px rgba(0, 0, 0, 0.15));
+  object-position: center 100%;
+  filter: brightness(1.28) saturate(1.18) drop-shadow(0 -8px 18px rgba(0, 20, 12, 0.18));
 }
-/* Lá dương xỉ lớn - rơi vào góc trên phải khung Hero. */
+/* Lá dương xỉ: chỉ vẽ góc phải-trên (x=66–100%, y=0–69%). Cover +
+   object-position top right để không kéo theo 2/3 canvas trống. */
 .hero-parallax-leaf {
   position: absolute;
-  right: -1%;
-  top: -1%;
-  width: min(20vw, 11rem);
-  height: auto;
-  object-fit: contain;
-  object-position: top right;
-  filter: drop-shadow(0 6px 14px rgba(36, 20, 23, 0.12));
+  right: -2%;
+  top: calc(var(--vas-navbar-h) * -0.15);
+  width: min(34vw, 20rem);
+  height: min(30vh, 16rem);
+  object-fit: cover;
+  object-position: 100% 0%;
+  filter: drop-shadow(0 8px 16px rgba(36, 20, 23, 0.14));
+  opacity: 0.92;
+}
+.hero-decor-layer--tree {
+  z-index: 1;
+}
+.hero-decor-layer--plant {
+  z-index: 2;
+  overflow: visible;
+}
+.hero-decor-layer--leaf {
+  z-index: 3;
+}
+.hero-decor-layer--flora {
+  z-index: 3;
 }
 @media (max-width: 640px) {
-  .hero-parallax-tree,
-  .hero-parallax-leaf {
+  .hero-section {
+    --hero-plant-h: min(36vh, max(28vh, calc(100vw * 0.28)));
+    --hero-grass-line: 14%;
+    /* Căn khối chữ giữa khoảng trời: padding-top = navbar, padding-bottom
+       ≈ nửa dải cỏ để tâm flex nằm đúng giữa navbar và mép lá. */
+    justify-content: center;
+    padding: calc(var(--vas-navbar-h) + 0.35rem) 1.1rem calc(var(--hero-plant-h) * 0.38);
+  }
+  .hero-parallax-tree {
     display: none;
+  }
+  .hero-parallax-leaf {
+    display: block;
+    width: min(42vw, 10rem);
+    height: min(18vh, 8.5rem);
+    right: -8%;
+    top: calc(var(--vas-navbar-h) - 0.15rem);
+    opacity: 0.72;
+  }
+  .hero-parallax-plant {
+    left: 0;
+    right: 0;
+    width: 100%;
+    translate: none;
+    object-position: center 100%;
   }
 }
 
@@ -1566,14 +1636,14 @@ html.scrollable-page {
    DOM nên mặc định vẽ đè lên - đúng dải đáy nơi thú đang chạy, khiến thú
    bị cắt mất chân/nửa dưới. Nâng riêng lớp thú lên trên dải cỏ. */
 .hero-decor-layer--critters {
-  z-index: 1;
+  z-index: 4;
 }
 .hero-critter {
   position: absolute;
-  /* Đứng trên mép cỏ (dải .hero-parallax-plant cao tối đa 16% Hero) thay vì
-     lọt vào trong nó - cộng thêm biên độ nảy 8% chiều cao của chính con
-     thú, nên chân luôn nằm ngoài vùng cỏ. */
-  bottom: 17%;
+  /* Đứng trên mép cỏ (--hero-grass-line khớp dải plant đã phóng) thay vì
+     lọt vào trong tán lá - cộng thêm biên độ nảy 8% chiều cao của chính
+     con thú, nên chân luôn nằm ngoài vùng cỏ. */
+  bottom: var(--hero-grass-line, 26%);
   left: 0;
   width: var(--critter-w, 3rem);
   height: auto;
@@ -1588,21 +1658,20 @@ html.scrollable-page {
   --run-dur: 12s;
   --run-delay: -2s;
   --hop-dur: 0.32s;
-  bottom: 20%;
+  bottom: calc(var(--hero-grass-line, 26%) + 3%);
 }
 .hero-critter--rabbit {
   --critter-w: 2.6rem;
   --run-dur: 15s;
   --run-delay: -8s;
   --hop-dur: 0.38s;
-  bottom: 17%;
 }
 .hero-critter--elephant {
   --critter-w: 4.4rem;
   --run-dur: 24s;
   --run-delay: -15s;
   --hop-dur: 0.9s;
-  bottom: 16%;
+  bottom: calc(var(--hero-grass-line, 26%) - 1%);
   opacity: 0.9;
 }
 @media (max-width: 640px) {
@@ -1611,28 +1680,24 @@ html.scrollable-page {
   }
 }
 
-/* Vòm lá + hoa trang trí quanh viền Hero - thuần CSS, đứng dưới nội dung */
+/* Vignette + bóng đáy: thay emoji 🌿 góc (rẻ hơn asset PNG thật) bằng
+   quầng chiều sâu để sân khấu đọc sang hơn, chữ không chìm vào đồi. */
 .hero-section::before,
 .hero-section::after {
-  content: "🌿";
+  content: "";
   position: absolute;
-  font-size: clamp(3rem, 8vw, 5.5rem);
-  opacity: 0.35;
   pointer-events: none;
-  filter: drop-shadow(0 8px 16px rgba(36, 20, 23, 0.1));
-  animation: forest-sway 5s ease-in-out infinite;
-  transform-origin: bottom center;
+  z-index: 1;
 }
 .hero-section::before {
-  top: -1rem;
-  left: -1rem;
-  transform: scaleX(-1) rotate(-8deg);
+  inset: 0;
+  background:
+    radial-gradient(ellipse 78% 62% at 50% 36%, transparent 42%, rgba(18, 42, 36, 0.12) 100%);
 }
 .hero-section::after {
-  bottom: -1rem;
-  right: -1rem;
-  animation-delay: 1.5s;
-  rotate: -8deg;
+  inset: auto 0 0 0;
+  height: 14%;
+  background: linear-gradient(to top, rgba(12, 36, 28, 0.1), transparent);
 }
 
 .hero-flora {
@@ -1893,17 +1958,19 @@ html.scrollable-page {
 
 .hero-content {
   position: relative;
-  z-index: 1;
-  max-width: 46rem;
+  z-index: 5;
+  max-width: 44rem;
   width: 100%;
+  margin-top: clamp(0.25rem, 2.4vh, 1.75rem);
+  margin-bottom: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* Nhịp dọc không đều: gap chung siết lại còn 0.75rem để wordmark →
-     huy hiệu → tiêu đề dính thành một cụm, rồi nới riêng trước/sau phần
-     mô tả (margin bên dưới). Gap đều 0.9rem cho cả 6 khối khiến mọi thứ
-     trôi thành một danh sách phẳng, không phân cụm. */
-  gap: 0.75rem;
+  gap: 0.7rem;
+  padding: 0 0 0.25rem;
+  background: none;
+  border: 0;
+  box-shadow: none;
 }
 
 .hero-wordmark {
@@ -1973,6 +2040,7 @@ html.scrollable-page {
   background-clip: text;
   color: transparent;
   animation: forest-shimmer 8s ease-in-out infinite;
+  filter: drop-shadow(0 8px 22px rgba(255, 255, 255, 0.55));
 }
 /* Bậc thang cỡ chữ trong cùng tiêu đề: dòng dẫn nhỏ và thưa chữ, dòng nhấn
    to hẳn - thay cho một khối chữ đồng cỡ chiếm trọn chiều ngang. */
@@ -1997,6 +2065,7 @@ html.scrollable-page {
   font-weight: 500;
   line-height: 1.6;
   max-width: 38rem;
+  text-shadow: 0 1px 12px rgba(255, 255, 255, 0.7), 0 0 28px rgba(255, 255, 255, 0.45);
 }
 
 .hero-region-cta {
@@ -2121,33 +2190,94 @@ html.scrollable-page {
 /* Màn hình hẹp: huy hiệu và nút cơ sở siết lại để 3 nút còn đứng được 1
    hàng (hoặc xuống dòng gọn), tránh khối Hero cao vống lên đẩy nút ra
    ngoài màn hình đầu tiên. */
-@media (max-width: 480px) {
-  .hero-kicker {
-    padding: 0.35rem 0.8rem 0.35rem 0.6rem;
+@media (max-width: 640px) {
+  .hero-content {
+    margin-top: 0;
+    margin-bottom: 0;
+    gap: 0.42rem;
+    max-width: 22.5rem;
+  }
+  .hero-wordmark {
+    height: 2.15rem;
+  }
+  .hero-title {
+    margin-top: 0.15rem;
+  }
+  .hero-title-lead {
+    font-size: 1.18rem;
+  }
+  .hero-title-main {
+    font-size: clamp(2.15rem, 11vw, 2.55rem);
+  }
+  .hero-subtitle {
+    margin-top: 0.2rem;
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+  .hero-region-cta {
+    margin-top: 0.7rem;
     gap: 0.5rem;
-  }
-  .hero-kicker-num {
-    font-size: 1.55rem;
-  }
-  .hero-kicker-text {
-    font-size: 0.64rem;
   }
   .hero-region-label {
-    gap: 0.6rem;
-    font-size: 0.74rem;
-  }
-  .hero-region-buttons {
+    font-size: 0.72rem;
     gap: 0.5rem;
   }
+  .hero-region-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 0.4rem;
+  }
   .hero-region-btn {
-    padding: 0.65rem 1.05rem;
-    font-size: 0.86rem;
+    justify-content: center;
+    padding: 0.58rem 0.35rem;
+    font-size: 0.78rem;
+    gap: 0.28rem;
+  }
+  .hero-scroll-hint {
+    bottom: calc(var(--hero-plant-h) * 0.58);
+  }
+}
+@media (max-width: 480px) {
+  .hero-kicker {
+    padding: 0.32rem 0.75rem 0.32rem 0.55rem;
+    gap: 0.45rem;
+  }
+  .hero-kicker-num {
+    font-size: 1.45rem;
+  }
+  .hero-kicker-text {
+    font-size: 0.62rem;
+  }
+  .hero-region-btn-icon {
+    font-size: 0.92rem;
+  }
+}
+@media (max-width: 640px) and (max-height: 740px) {
+  .hero-wordmark {
+    height: 1.85rem;
+  }
+  .hero-subtitle {
+    font-size: 0.78rem;
+    line-height: 1.4;
+  }
+  .hero-region-cta {
+    margin-top: 0.45rem;
+  }
+}
+@media (max-height: 540px) {
+  .hero-subtitle {
+    display: none;
+  }
+  .hero-section {
+    --hero-plant-h: max(24vh, calc(100vw * 0.28));
   }
 }
 
 .hero-scroll-hint {
   position: absolute;
-  bottom: 1.5rem;
+  bottom: calc(var(--hero-plant-h, 11rem) * 0.42);
+  z-index: 6;
   font-size: 1.4rem;
   color: var(--vas-tri-thuc);
   /* --scroll-hint-fade ghi bởi HeroSection (rAF, theo scroll) - nhân với
@@ -2157,6 +2287,10 @@ html.scrollable-page {
      nhau (transform vs opacity) để không tranh chấp thứ tự ghi. */
   opacity: calc(0.6 * var(--scroll-hint-fade, 1));
   text-shadow: 0 0 12px rgba(154, 0, 54, 0.35);
+}
+
+.hero-horizon-wave {
+  display: none;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -2218,6 +2352,11 @@ html.scrollable-page {
   color: #fff;
   box-shadow: none;
   backdrop-filter: blur(8px);
+}
+/* .section-heading dùng chung margin-bottom 2.5rem cho mọi trang - riêng
+   section này cần gọn hơn để vừa 1 màn hình (xem .edu-gate-section). */
+.edu-gate-wrap .section-heading {
+  margin-bottom: 1.75rem;
 }
 /* Dải đồi SVG thật (HillDivider.tsx) thay cho dải ::before/::after cũ
    (radial-gradient + chuỗi emoji) - 2 lớp path núi nối chân trời Hero
@@ -2283,10 +2422,17 @@ html.scrollable-page {
   }
 }
 
+/* padding-top/bottom giữ ở mức vừa đủ cách Hero và đáy trang - trước đây
+   7.25rem/4.5rem cộng với chiều cao stage khiến cả section (heading +
+   carousel + dots) cao hơn viewport khả dụng ~50-180px ở các độ phân giải
+   laptop phổ biến (1280x800, 1366x768, 1440x900), buộc phải cuộn thêm để
+   thấy hết dot chọn khối dù đã cuộn qua khỏi Hero. Giảm padding + heading
+   margin (bên dưới) + stage/card height (xem .edu-gate-stage, .edu-card)
+   để toàn section vừa gọn trong 1 màn hình sau khi cuộn qua Hero. */
 .edu-gate-section {
   position: relative;
   z-index: 1;
-  padding: 7.25rem 1.5rem 4.5rem;
+  padding: 5rem 1.5rem 3.5rem;
   max-width: 84rem;
   margin: 0 auto;
 }
@@ -2313,7 +2459,7 @@ html.scrollable-page {
 }
 .edu-gate-stage {
   position: relative;
-  height: clamp(24rem, 46vw, 32rem);
+  height: clamp(20rem, 38vw, 27rem);
 }
 .edu-gate-slot {
   position: absolute;
@@ -2336,12 +2482,17 @@ html.scrollable-page {
    "Khám phá ngay" phía dưới. min-height cho stage/slot/card giãn theo nội
    dung thực tế, tránh cắt chữ. */
 @media (max-width: 768px) {
+  /* Mũi tên ẩn ở mobile nên bỏ padding chừa chỗ mũi tên - card được rộng hơn
+     và căn giữa sân khấu (frontLeft 4% + width 92% trong EducationLevelGate). */
+  .edu-gate-carousel {
+    padding: 0;
+  }
   .edu-gate-stage {
     height: auto;
     min-height: clamp(20rem, 88vw, 26rem);
   }
   .edu-gate-slot {
-    width: 88%;
+    width: 92%;
     height: auto;
     min-height: 100%;
   }
@@ -2396,7 +2547,7 @@ html.scrollable-page {
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  margin-top: 2rem;
+  margin-top: 1.5rem;
 }
 /* Ẩn ở mobile - dải "peek" hẹp của card back (xem .edu-gate-slot ở trên) đã
    tự gợi ý vuốt/kéo, nên bỏ luôn chấm chỉ dẫn để đỡ rối màn hình nhỏ. */
@@ -2498,7 +2649,7 @@ html.scrollable-page {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: clamp(24rem, 46vw, 32rem);
+  min-height: clamp(20rem, 38vw, 27rem);
   box-shadow: var(--vas-shadow-md);
   transition: box-shadow 0.35s ease, border-color 0.35s ease;
   background-size: 200% 200%;
@@ -2537,7 +2688,10 @@ html.scrollable-page {
   isolation: isolate;
   background-image: linear-gradient(165deg, #020617 0%, #0b1224 48%, #0c2744 100%);
   color: #fff;
-  min-height: 24rem;
+  /* Khớp đúng clamp của .edu-gate-stage/.edu-card ở trên - một con số cứng
+     ở đây từng lớn hơn cận dưới của clamp khi thu nhỏ chiều cao stage, làm
+     card này bị overflow:hidden cắt mất ở khoảng 769-1011px viewport. */
+  min-height: clamp(20rem, 38vw, 27rem);
   transform-style: preserve-3d;
 }
 .edu-card--secondary:hover {
@@ -2963,6 +3117,9 @@ html.scrollable-page {
   height: 155%;
   min-height: 0;
 }
+.featured-hero .hero-parallax-layer {
+  height: 100%;
+}
 .featured-hero .hero-hill {
   -webkit-mask-image: none;
   mask-image: none;
@@ -3013,19 +3170,34 @@ html.scrollable-page {
 .featured-hero .hero-critter--elephant {
   bottom: 2.15rem;
 }
+/* Banner ngắn: cover full-width sẽ cắt ngọn dương xỉ. Thu nhỏ + contain
+   để hiện đủ silhouette, neo giữa đáy. */
 .featured-hero .hero-parallax-plant {
-  max-height: 28%;
-  bottom: 0.35rem;
+  left: 50%;
+  right: auto;
+  width: min(28rem, 52%);
+  height: 4.1rem;
+  bottom: 0.15rem;
+  translate: -50% 0;
   opacity: 0.95;
+  object-fit: contain;
+  object-position: center bottom;
 }
 .featured-hero .hero-parallax-tree {
-  left: 2%;
-  bottom: 10%;
-  width: min(10vw, 5.25rem);
+  left: auto;
+  right: auto;
+  left: 3%;
+  bottom: 8%;
+  width: min(7vw, 3.6rem);
+  height: min(11vh, 5rem);
+  object-fit: cover;
+  object-position: 44% 70%;
 }
 .featured-hero .hero-parallax-leaf {
-  width: min(16vw, 8.5rem);
-  opacity: 0.88;
+  width: min(12vw, 6.25rem);
+  height: min(12vh, 5.5rem);
+  top: 0;
+  opacity: 0.82;
 }
 .featured-hero-content {
   position: relative;
@@ -3097,9 +3269,22 @@ html.scrollable-page {
 .featured-hero-wave path {
   fill: var(--featured-soil);
 }
+@media (max-width: 640px) {
+  .featured-hero {
+    justify-content: center;
+    padding: calc(var(--vas-navbar-h) + 1.15rem) 1rem 1.6rem;
+  }
+  .featured-hero .hero-parallax-plant {
+    width: min(16.5rem, 72%);
+    height: 3rem;
+  }
+  .featured-hero-content {
+    width: min(22.5rem, calc(100% - 0.5rem));
+  }
+}
 @media (max-width: 480px) {
   .featured-hero {
-    padding: calc(var(--vas-navbar-h) + 1.5rem) 1rem 2rem;
+    padding: calc(var(--vas-navbar-h) + 1.1rem) 0.85rem 1.4rem;
   }
   .featured-hero-card {
     padding: 0.65rem 1rem 0.8rem;
@@ -8234,89 +8419,74 @@ html.scrollable-page {
   }
 }
 
-@keyframes mascot-ring-pulse {
-  0% {
-    transform: scale(0.85);
-    opacity: 0.55;
-  }
-  70% {
-    transform: scale(1.35);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1.35);
-    opacity: 0;
-  }
+.mascot-dock {
+  position: relative;
 }
 
-.mascot-fab {
-  position: relative;
-  width: 4.75rem;
-  height: 4.75rem;
-  border: none;
-  border-radius: 50%;
-  padding: 0;
-  cursor: pointer;
-  background: radial-gradient(circle at 32% 28%, #ffe4d6 0%, #ffc9b0 28%, var(--vas-tri-thuc, #9a0036) 78%);
-  box-shadow: var(--vas-shadow-lg, 0 20px 48px rgba(36, 20, 23, 0.16)), 0 0 0 4px rgba(255, 255, 255, 0.8);
+/* Nút gọi lại sau khi thu nhỏ trợ lý — ép sát góc, chỉ còn icon tròn nhỏ để không che nội dung. */
+.mascot-restore {
   display: grid;
   place-items: center;
-  transition: box-shadow 0.25s ease;
+  width: 2.35rem;
+  height: 2.35rem;
+  margin: 0 -0.4rem -0.4rem 0;
+  border: 1px solid var(--vas-border, #ece5e2);
+  border-radius: 999px;
+  padding: 0;
+  cursor: pointer;
+  background: #fff;
+  box-shadow: var(--vas-shadow-lg, 0 12px 28px rgba(36, 20, 23, 0.16));
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.15s ease;
+}
+.mascot-restore:hover {
+  background: var(--vas-tri-thuc-100, #fbe6ec);
+  transform: translateY(-2px);
+}
+.mascot-restore-avatar {
+  width: 1.6rem;
+  height: 1.6rem;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.mascot-restore-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  filter: drop-shadow(0 1px 2px rgba(36, 20, 23, 0.22));
+}
+.mascot-fab {
+  position: relative;
+  width: 5.6rem;
+  height: 6.5rem;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  display: grid;
+  place-items: center;
 }
 .mascot-fab--active {
-  box-shadow: var(--vas-shadow-lg, 0 20px 48px rgba(36, 20, 23, 0.16)), 0 0 0 4px var(--vas-tri-thuc-100, #fbe6ec);
-}
-
-/* Quầng sáng lan ra rồi tan - báo hiệu "có thể bấm vào đây", chạy độc lập
-   với hoạt cảnh lắc lư của chính nút (khác layer, không cộng dồn transform). */
-.mascot-fab-ring {
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 2px solid var(--vas-tri-thuc, #9a0036);
-  pointer-events: none;
-  animation: mascot-ring-pulse 2.6s ease-out infinite;
-}
-.mascot-fab--active .mascot-fab-ring {
-  display: none;
+  filter: drop-shadow(0 0 10px rgba(154, 0, 54, 0.28));
 }
 
 .mascot-fab-img {
-  width: 78%;
-  height: 78%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
-  object-position: top center;
+  object-position: center bottom;
   pointer-events: none;
-  filter: drop-shadow(0 4px 6px rgba(36, 20, 23, 0.25));
+  filter: drop-shadow(0 8px 12px rgba(36, 20, 23, 0.28));
 }
 
-.mascot-fab-badge {
-  position: absolute;
-  right: -0.2rem;
-  bottom: -0.2rem;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 50%;
-  background: var(--vas-trach-nhiem, #c49c57);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 2px 6px rgba(36, 20, 23, 0.25);
-  border: 2px solid #fff;
-}
-.mascot-fab--active .mascot-fab-badge {
-  background: var(--vas-tri-thuc, #9a0036);
-}
-
-/* Panel trượt lên từ góc, KHÔNG đẩy layout trang (position: absolute trong
-   .mascot-assistant, vốn đã fixed) - không bao giờ che nội dung chính vì
-   trang vẫn cuộn/đọc bình thường phía sau, panel chỉ phủ đúng góc màn hình. */
+/* Panel trượt lên từ góc, không đẩy layout trang. */
 .mascot-panel {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 0.85rem);
-  width: min(24rem, calc(100vw - 3.5rem));
-  max-height: min(34rem, calc(100vh - 8rem));
+  bottom: calc(100% + 0.65rem);
+  width: min(21.5rem, calc(100vw - 3.5rem));
+  max-height: min(30rem, calc(100vh - 8rem));
   display: flex;
   flex-direction: column;
   background: var(--vas-surface, #fff);
@@ -8329,72 +8499,48 @@ html.scrollable-page {
 
 .mascot-panel-header {
   display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.9rem 1rem;
-  background: linear-gradient(135deg, var(--vas-tri-thuc-100, #fbe6ec), #fff 70%);
-  border-bottom: 1px solid var(--vas-border, #ece5e2);
-}
-
-.mascot-panel-avatar {
-  flex-shrink: 0;
-  width: 2.6rem;
-  height: 2.6rem;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: var(--vas-shadow-sm, 0 2px 8px rgba(36, 20, 23, 0.06));
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-}
-.mascot-panel-avatar img {
-  width: 130%;
-  height: 130%;
-  object-fit: contain;
-  object-position: top center;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.85rem 0.95rem 0.15rem;
 }
 
 .mascot-panel-heading {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.2rem;
   flex: 1;
   min-width: 0;
 }
 
 .mascot-panel-heading-label {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--vas-tri-thuc, #9a0036);
 }
 
 .mascot-panel-heading-greeting {
-  font-size: 0.86rem;
+  font-size: 0.92rem;
   font-weight: 600;
   color: var(--vas-text, #241417);
   line-height: 1.35;
 }
 
-.mascot-panel-close {
+.mascot-panel-dismiss {
   flex-shrink: 0;
+  margin-top: 0.1rem;
   border: none;
-  background: rgba(36, 20, 23, 0.06);
+  background: none;
+  padding: 0.1rem 0;
   color: var(--vas-text-muted, #6b5a5d);
-  width: 1.7rem;
-  height: 1.7rem;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease;
 }
-.mascot-panel-close:hover {
-  background: rgba(36, 20, 23, 0.12);
+.mascot-panel-dismiss:hover {
   color: var(--vas-text, #241417);
 }
 
@@ -8403,8 +8549,8 @@ html.scrollable-page {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin: 0.85rem 1rem 0;
-  padding: 0.65rem 0.9rem;
+  margin: 0.7rem 0.95rem 0;
+  padding: 0.55rem 0.8rem;
   border-radius: var(--vas-radius-md, 1rem);
   border: 1.5px solid var(--vas-border, #ece5e2);
   color: var(--vas-text-muted, #6b5a5d);
@@ -8445,10 +8591,10 @@ html.scrollable-page {
 .mascot-panel-body {
   flex: 1;
   overflow-y: auto;
-  padding: 0.85rem 1rem 0.5rem;
+  padding: 0.7rem 0.95rem 0.95rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.55rem;
 }
 
 .mascot-inspire {
@@ -8577,32 +8723,548 @@ html.scrollable-page {
   text-decoration: underline;
 }
 
-.mascot-panel-hide {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  border: none;
-  border-top: 1px solid var(--vas-border, #ece5e2);
-  background: var(--vas-surface-muted, #f7f5f4);
-  color: var(--vas-text-muted, #6b5a5d);
-  font-size: 0.78rem;
-  padding: 0.55rem;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.mascot-panel-hide:hover {
-  color: var(--vas-text, #241417);
-  background: #efe9e7;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .mascot-fab-ring {
-    animation: none;
-    display: none;
-  }
   .mascot-search-spinner {
     animation: none;
     border-top-color: var(--vas-border, #ece5e2);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Trang /thu-ngo - Thư ngỏ Chủ tịch HĐQT (OpenLetterPage.tsx)              */
+/*                                                                          */
+/* NGUYÊN TẮC BỐ CỤC: cả trang nằm trọn MỘT khung nhìn, trang không cuộn.   */
+/* .letter-stage cao đúng 100dvh trừ navbar; tờ thư co theo chiều cao còn    */
+/* lại; chỉ .letter-body được cuộn khi chữ dài hơn tờ giấy. Bản cũ xếp ba    */
+/* section cao gần cả màn hình nên phải cuộn ba lần mới đọc hết một lá thư   */
+/* ngắn.                                                                     */
+/*                                                                          */
+/* Dùng dvh chứ không vh: trên iOS Safari và Chrome Android, thanh địa chỉ   */
+/* co lại khi cuộn nên 100vh LỚN HƠN vùng nhìn thấy thật - đúng thứ sinh ra  */
+/* thanh cuộn thừa mà bố cục này phải tránh. Có fallback vh ngay trên cho    */
+/* trình duyệt cũ không hiểu dvh.                                            */
+/* ---------------------------------------------------------------------- */
+
+.letter-stage {
+  --letter-paper: #fdf8ee;
+  --letter-paper-edge: #f0e4cd;
+  --letter-ink: #2c2118;
+  --letter-ink-soft: #6f6152;
+  --letter-rule: rgba(114, 81, 57, 0.16);
+
+  position: relative;
+  display: grid;
+  place-items: center;
+  /* Cao ĐÚNG một khung nhìn, KHÔNG trừ navbar: padding-top bên dưới đã chừa
+     chỗ cho navbar rồi, mà box-sizing: border-box tính padding NẰM TRONG
+     height. Trừ ở đây nữa là trừ hai lần - sân khấu lùn đi một nhịp navbar
+     nhưng tổng chiều cao lại dôi ra đúng bấy nhiêu, sinh ra thanh cuộn thừa. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* Đệm đáy dày hơn đệm đỉnh: tờ thư phải hở ra một quãng trước khi chạm
+     footer teal, dính sát vào nhau thì hai khối đọc thành một mảng liền. */
+  padding: calc(var(--vas-navbar-h) + 0.75rem) 1.5rem 2.5rem;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 60% 55% at 12% 8%, rgba(0, 144, 130, 0.1) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 55% at 90% 96%, rgba(196, 156, 87, 0.14) 0%, transparent 60%),
+    linear-gradient(165deg, #fbf6ec 0%, #f4ede0 100%);
+}
+
+/* ---------------- Nền sân khấu ---------------- */
+.letter-stage-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.letter-glow {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.45;
+  /* Trôi rất chậm (18s) và biên độ nhỏ: nền phải "sống" mà không kéo mắt
+     khỏi chữ đang đọc ngay phía trên nó. */
+  animation: letter-drift 18s ease-in-out infinite alternate;
+}
+.letter-glow--teal {
+  top: -14%;
+  left: -10%;
+  width: min(40vw, 32rem);
+  height: min(40vw, 32rem);
+  background: radial-gradient(circle, var(--vas-nhan-ai) 0%, transparent 70%);
+}
+.letter-glow--gold {
+  right: -12%;
+  bottom: -18%;
+  width: min(44vw, 36rem);
+  height: min(44vw, 36rem);
+  background: radial-gradient(circle, var(--vas-trach-nhiem) 0%, transparent 70%);
+  animation-delay: -9s;
+}
+@keyframes letter-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(2.5rem, -1.75rem, 0) scale(1.08);
+  }
+}
+
+/* ---------------- Cảnh: phong bì + tờ thư ---------------- */
+.letter-scene {
+  position: relative;
+  z-index: 1;
+  width: min(84rem, 100%);
+  height: 100%;
+  display: grid;
+  place-items: center;
+  /* perspective: nắp phong bì lật quanh trục X và tờ thư dựng lên từ mặt bàn
+     - không có phối cảnh thì cả hai chỉ là hình bẹt co giãn theo chiều dọc. */
+  perspective: 1400px;
+}
+
+.letter-envelope {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 2;
+  height: min(38%, 16rem);
+  margin: auto;
+  width: min(34rem, 82%);
+  pointer-events: none;
+  /* Phong bì chỉ sống trong hoạt cảnh mở đầu rồi tan hẳn. */
+  opacity: 1;
+  transition: opacity 0.5s ease 0.5s, transform 0.7s cubic-bezier(0.16, 0.84, 0.28, 1) 0.4s;
+}
+.letter-scene.is-opened .letter-envelope {
+  opacity: 0;
+  transform: translateY(2.5rem) scale(0.96);
+}
+.letter-envelope-body {
+  position: absolute;
+  inset: 0;
+  border-radius: 0.35rem 0.35rem 0.5rem 0.5rem;
+  background: linear-gradient(170deg, #f6ecd8 0%, #e9d9ba 100%);
+  box-shadow: var(--vas-shadow-lg);
+}
+/* Nắp phong bì: một tam giác dựng bằng clip-path, lật quanh cạnh trên. */
+.letter-envelope-flap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 62%;
+  z-index: 3;
+  background: linear-gradient(180deg, #f1e2c6 0%, #e3cfa8 100%);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  transform-origin: top center;
+  transform: rotateX(0deg);
+  transition: transform 0.75s cubic-bezier(0.5, 0, 0.2, 1);
+}
+.letter-scene.is-opened .letter-envelope-flap {
+  transform: rotateX(-172deg);
+}
+
+/* ---------------- Tờ thư ---------------- */
+.letter-sheet {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  /* max-height chứ không height: thư ngắn thì tờ giấy ôm sát chữ, thư dài
+     thì kịch trần khung nhìn rồi phần chữ bên trong tự cuộn. */
+  max-height: 100%;
+  /* Đệm dọc mỏng hơn đệm ngang khá nhiều: chiều dọc là thứ khan hiếm (quyết
+     định có phải cuộn hay không), chiều ngang thì dư - và lề ngang rộng mới
+     ra dáng một tờ thư. */
+  padding: clamp(1.1rem, 1.8vw, 1.75rem) clamp(1.75rem, 4.5vw, 4rem);
+  color: var(--letter-ink);
+  background:
+    /* Vân giấy: hai lớp gradient lặp rất mảnh, cộng lại thành hạt nhiễu nhẹ.
+       Rẻ hơn ảnh texture và sắc nét ở mọi độ phân giải. */
+    repeating-linear-gradient(112deg, rgba(114, 81, 57, 0.022) 0 2px, transparent 2px 5px),
+    repeating-linear-gradient(22deg, rgba(114, 81, 57, 0.018) 0 3px, transparent 3px 7px),
+    /* Ngả vàng dồn về mép, giữa tờ sáng hơn - đúng cách giấy cũ bạc màu. */
+    radial-gradient(ellipse 120% 100% at 50% 45%, var(--letter-paper) 40%, var(--letter-paper-edge) 100%);
+  box-shadow:
+    0 32px 64px rgba(44, 33, 24, 0.18),
+    0 4px 12px rgba(44, 33, 24, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  /* Mép răng cưa (deckled edge) của giấy thủ công: đường gấp khúc biên độ
+     rất nhỏ (~4px) chạy quanh 4 cạnh. Đủ để cạnh không còn là đường thẳng
+     máy cắt, chưa đủ để trông như tờ giấy rách. */
+  clip-path: polygon(
+    0.35% 0.6%, 12% 0%, 26% 0.7%, 41% 0.1%, 58% 0.8%, 73% 0.1%, 88% 0.7%, 99.7% 0.2%,
+    100% 12%, 99.3% 27%, 100% 43%, 99.4% 60%, 100% 76%, 99.5% 90%, 99.8% 99.5%,
+    88% 100%, 73% 99.3%, 57% 100%, 42% 99.2%, 27% 100%, 12% 99.4%, 0.3% 99.8%,
+    0% 88%, 0.6% 72%, 0% 56%, 0.7% 40%, 0% 25%, 0.5% 11%
+  );
+  transform-style: preserve-3d;
+}
+
+/* Đường kẻ lề dọc mép trái - dấu hiệu quen thuộc nhất của giấy viết thư.
+   Đặt bằng ::before của chính tờ giấy (không thêm phần tử vào DOM) và nằm
+   trong phần đệm ngang nên không bao giờ chạm vào chữ. Ẩn ở mobile cùng lúc
+   với clip-path, nơi lề ngang đã hẹp. */
+.letter-sheet::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: clamp(0.9rem, 2.4vw, 2.1rem);
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent 0,
+    rgba(154, 0, 54, 0.14) 8%,
+    rgba(154, 0, 54, 0.14) 92%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+/* Nếp gấp: lá thư từng được gấp làm ba. Một vệt sáng mảnh (mặt lồi bắt sáng)
+   kề một vệt tối (rãnh gấp) - hai đường liền nhau mới đọc ra là nếp gấp, một
+   đường đơn chỉ trông như kẻ ngang.
+   Nhạt hơn hẳn bản trước và mờ dần về hai đầu: nếp gấp cắt NGANG dòng chữ,
+   đậm một chút là mắt vấp phải nó ở giữa câu. Ở đây nó chỉ còn là vân giấy
+   thoáng qua, đủ gợi tờ thư từng gấp mà không chen vào lúc đọc. */
+.letter-fold {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.5) 50%,
+    rgba(114, 81, 57, 0.06) 50%,
+    rgba(114, 81, 57, 0.06) 100%
+  );
+  /* Đậm nhất ở giữa tờ, tan hẳn ở hai mép - nếp gấp thật không bao giờ hằn
+     đều tăm tắp từ mép này sang mép kia. */
+  mask-image: linear-gradient(90deg, transparent 0, #000 18%, #000 82%, transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18%, #000 82%, transparent 100%);
+}
+.letter-fold--top {
+  top: 33.3%;
+}
+.letter-fold--bottom {
+  top: 66.6%;
+}
+
+/* ---------------- Đầu thư ---------------- */
+.letter-head {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+  padding-bottom: clamp(0.55rem, 1.1vw, 0.85rem);
+  border-bottom: 1px solid var(--letter-rule);
+  flex-shrink: 0;
+}
+.letter-wordmark {
+  /* Wordmark giờ là dấu nhận diện DUY NHẤT ở đầu thư (con dấu "20 năm" đã bỏ),
+     nên được phép chiếm chỗ tương xứng - lớn hơn hẳn tiêu đề bên cạnh. */
+  height: clamp(2.9rem, 5vw, 4.1rem);
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.letter-head-text {
+  flex: 1;
+  min-width: 0;
+}
+.letter-kicker {
+  margin: 0 0 0.15rem;
+  font-size: clamp(0.65rem, 1.2vw, 0.75rem);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--vas-trach-nhiem);
+}
+.letter-title {
+  margin: 0;
+  font-family: var(--vas-display);
+  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+  line-height: 1.05;
+  color: var(--vas-tri-thuc);
+}
+
+/* ---------------- Thân thư (vùng cuộn duy nhất) ---------------- */
+.letter-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(0.7rem, 1.4vw, 1.1rem) 0;
+  /* Cột chữ vẫn hẹp hơn tờ giấy, nhưng rộng hơn bản trước (58rem): mỗi dòng
+     chứa nhiều chữ hơn nên cùng một đoạn văn chiếm ít dòng hơn - đây là cách
+     giảm chiều cao thân thư mà không phải thu nhỏ cỡ chữ. ~90 ký tự/dòng là
+     trần trên của vùng đọc thoải mái; bù lại bằng line-height 1.8 bên dưới,
+     vì dòng càng dài thì khoảng cách dòng càng phải nới để mắt không nhảy
+     nhầm hàng khi vắt sang dòng mới. */
+  max-width: 68rem;
+  margin: 0 auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(114, 81, 57, 0.35) transparent;
+  /* Chữ mờ dần ở mép trên/dưới thay vì bị cắt phựt - báo cho mắt biết còn
+     nội dung phía sau mà không cần thêm nút hay bóng đổ. */
+  mask-image: linear-gradient(180deg, transparent 0, #000 1.25rem, #000 calc(100% - 1.25rem), transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 1.25rem, #000 calc(100% - 1.25rem), transparent 100%);
+}
+.letter-body::-webkit-scrollbar {
+  width: 6px;
+}
+.letter-body::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgba(114, 81, 57, 0.3);
+}
+.letter-body:focus-visible {
+  outline: 2px solid var(--vas-khai-phong);
+  outline-offset: 4px;
+  border-radius: 0.25rem;
+}
+
+.letter-salutation {
+  margin: 0 0 0.85rem;
+  font-family: var(--vas-display);
+  font-size: clamp(1.02rem, 1.6vw, 1.2rem);
+  font-weight: 600;
+  color: var(--vas-tri-thuc);
+}
+.letter-paragraph {
+  /* Cách đoạn bằng khoảng trắng vừa đủ để thấy ranh giới đoạn, không rộng tới
+     mức mỗi đoạn thành một khối rời rạc. */
+  margin: 0 0 0.85rem;
+  font-size: clamp(0.92rem, 0.55vw + 0.72rem, 1.05rem);
+  /* 1.8 với dòng dài ~90 ký tự: dòng càng dài, mắt càng cần khoảng hở lớn để
+     bắt đúng đầu dòng kế khi vắt hàng. */
+  line-height: 1.8;
+  /* KHÔNG justify. Tiếng Việt nhiều từ ghép hai âm tiết và không ngắt từ
+     được, nên căn đều hai biên phải giãn khoảng trắng rất thô - sinh ra
+     "dòng sông" trắng chạy dọc đoạn văn, đúng thứ gây rối mắt. Căn trái giữ
+     khoảng cách từ đều tăm tắp, chỉ biên phải so le.
+     hyphens cũng tắt: trình duyệt không có từ điển ngắt âm tiết tiếng Việt
+     nên nó cắt sai chỗ. */
+  text-align: left;
+  text-wrap: pretty;
+  hyphens: none;
+}
+/* Chữ cái đầu thả xuống (drop cap) ở đoạn mở - dấu hiệu thư tay quen thuộc,
+   và là mỏ neo cho mắt biết bắt đầu đọc từ đâu. */
+.letter-paragraph:first-of-type::first-letter {
+  float: left;
+  /* 2.6em ≈ đúng 3 dòng chữ ở line-height 1.8 - drop cap phải khớp bội số
+     dòng, lệch một chút là chữ quanh nó trông như bị xô. */
+  margin: 0.28rem 0.5rem 0 0;
+  font-family: var(--vas-display);
+  font-size: 2.9em;
+  line-height: 0.82;
+  font-weight: 700;
+  color: var(--vas-trach-nhiem);
+}
+.letter-signoff {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  margin: 1rem 0 0;
+  text-align: right;
+}
+.letter-signoff-role {
+  font-size: 0.82rem;
+  color: var(--letter-ink-soft);
+}
+.letter-signoff-org {
+  font-family: var(--vas-display);
+  font-style: italic;
+  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  font-weight: 700;
+  color: var(--vas-tri-thuc);
+}
+
+/* ---------------- Chân thư: 5 giá trị cốt lõi ---------------- */
+/* Thu từ dải huy hiệu tròn cao ~10rem xuống hàng nhãn chữ có chấm màu: bố cục
+   một khung nhìn không còn chỗ cho huy hiệu, mà 5 giá trị vẫn cần có mặt. */
+.letter-values {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem clamp(0.75rem, 2.5vw, 1.75rem);
+  padding-top: clamp(0.55rem, 1.1vw, 0.8rem);
+  border-top: 1px solid var(--letter-rule);
+  flex-shrink: 0;
+}
+.letter-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: clamp(0.68rem, 1.2vw, 0.78rem);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--letter-ink-soft);
+}
+.letter-value-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--value-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--value-color) 18%, transparent);
+}
+
+/* ---------------- Dấu hiệu còn footer bên dưới ---------------- */
+.letter-scroll-cue {
+  position: absolute;
+  left: 50%;
+  bottom: 0.5rem;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  margin-left: -0.95rem;
+  border-radius: 50%;
+  color: var(--vas-tri-thuc);
+  opacity: 0.5;
+  pointer-events: none;
+  animation: letter-cue-bob 2.4s ease-in-out infinite;
+}
+@keyframes letter-cue-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(0.3rem);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Responsive - cùng breakpoint chuẩn dùng xuyên suốt public.css            */
+/* ---------------------------------------------------------------------- */
+
+/* Tablet: lề ngang thu lại cho cột chữ dài thêm được vài từ mỗi dòng. */
+@media (max-width: 768px) {
+  .letter-stage {
+    padding: calc(var(--vas-navbar-h) + 0.6rem) 1rem 1.75rem;
+  }
+  .letter-sheet {
+    padding: 1.1rem 1.5rem;
+  }
+  .letter-head {
+    gap: 0.85rem;
+  }
+  .letter-envelope {
+    width: min(26rem, 88%);
+  }
+}
+
+/* Điện thoại: tờ giấy chiếm gần trọn bề ngang. Bỏ nếp gấp và drop cap - ở
+   khổ này chúng chỉ còn là nhiễu chứ không đọc ra là chi tiết của lá thư. */
+@media (max-width: 480px) {
+  .letter-stage {
+    padding: calc(var(--vas-navbar-h) + 0.4rem) 0.55rem 1.4rem;
+  }
+  .letter-sheet {
+    padding: 0.9rem 1.05rem;
+    /* Mép răng cưa co lại còn ~1px trên màn nhỏ, không đáng công vẽ mà lại
+       ăn mất viền chữ ở hai bên. */
+    clip-path: none;
+    border-radius: 0.5rem;
+  }
+  .letter-fold,
+  .letter-sheet::before {
+    display: none;
+  }
+  .letter-head {
+    flex-wrap: wrap;
+    gap: 0.6rem 0.75rem;
+  }
+  .letter-wordmark {
+    height: 2.5rem;
+  }
+  .letter-title {
+    font-size: 1.5rem;
+  }
+  .letter-paragraph {
+    font-size: 0.9rem;
+    /* Dòng ngắn lại trên màn hẹp nên nới line-height không còn cần thiết -
+       thu về 1.7 để nhiều chữ lọt trong một khung nhìn hơn. */
+    line-height: 1.7;
+  }
+  .letter-paragraph:first-of-type::first-letter {
+    float: none;
+    margin: 0;
+    font-size: inherit;
+    line-height: inherit;
+    font-weight: inherit;
+    color: inherit;
+  }
+  .letter-values {
+    gap: 0.35rem 0.9rem;
+  }
+}
+
+/* Laptop màn thấp (~700-850px - phổ biến nhất trong nhóm máy của trường):
+   đây là khổ hay phải cuộn nhất. Siết đều mọi khoảng đệm và cỡ chữ trang trí,
+   giữ nguyên cỡ chữ THÂN THƯ - phần phải đọc thì không được nhỏ đi. */
+@media (max-height: 850px) and (min-width: 769px) {
+  .letter-sheet {
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
+  }
+  .letter-wordmark {
+    height: 2.6rem;
+  }
+  .letter-title {
+    font-size: 1.5rem;
+  }
+  .letter-body {
+    padding: 0.6rem 0;
+  }
+  .letter-salutation {
+    margin-bottom: 0.6rem;
+    font-size: 1rem;
+  }
+  .letter-paragraph {
+    margin-bottom: 0.7rem;
+    line-height: 1.72;
+  }
+  .letter-signoff {
+    margin-top: 0.75rem;
+  }
+}
+
+/* Màn hình rất thấp (điện thoại nằm ngang, cửa sổ desktop bị bóp): giữ đúng
+   cam kết "trọn một khung nhìn" bằng cách hy sinh phần trang trí, không phải
+   bằng cách cho trang cuộn. */
+@media (max-height: 560px) {
+  .letter-values,
+  .letter-scroll-cue {
+    display: none;
+  }
+  /* Wordmark vẫn nhỏ ở khổ này dù đã phóng to ở mọi khổ khác: chiều dọc
+     560px là thứ khan hiếm nhất, logo lớn ăn thẳng vào phần chữ. */
+  .letter-wordmark {
+    height: 2.1rem;
+  }
+  .letter-sheet {
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .letter-glow,
+  .letter-scroll-cue {
+    animation: none;
+  }
+  .letter-envelope,
+  .letter-envelope-flap {
+    transition: none;
   }
 }

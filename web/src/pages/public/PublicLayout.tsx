@@ -1,4 +1,5 @@
 import { Outlet, useLocation } from "react-router-dom";
+import { MascotAssistant } from "../../components/public/MascotAssistant";
 import { PublicFooter } from "../../components/public/PublicFooter";
 import { PublicNavbar } from "../../components/public/PublicNavbar";
 import { useDeviceTier } from "../../hooks/useDeviceTier";
@@ -54,6 +55,7 @@ export default function PublicLayout() {
         <Outlet />
       </main>
       <PublicFooter />
+      <MascotAssistant />
     </div>
   );
 }

@@ -149,13 +149,13 @@ export function HeroSection({ onSelectRegion }: { onSelectRegion: (region: Regio
 
       {/* Cây/cỏ/lá tiền cảnh (ảnh thật từ mẫu tham chiếu) - trôi nhanh nhất
           trong các lớp trang trí vì đứng gần "máy quay" nhất. */}
-      <div className="hero-decor-layer" ref={treeRef}>
+      <div className="hero-decor-layer hero-decor-layer--tree" ref={treeRef}>
         <HeroTree />
       </div>
-      <div className="hero-decor-layer" ref={plantRef}>
+      <div className="hero-decor-layer hero-decor-layer--plant" ref={plantRef}>
         <HeroPlant />
       </div>
-      <div className="hero-decor-layer" ref={leafRef}>
+      <div className="hero-decor-layer hero-decor-layer--leaf" ref={leafRef}>
         <HeroLeaf />
       </div>
 

@@ -20,14 +20,12 @@ function totalReactions(item: ArtworkWithMeta): number {
 }
 
 /**
- * Card tác phẩm bo tròn cho trang Bảng vàng: ảnh bo góc, badge giải nổi ở
- * góc trên ảnh, số lượt thích ở góc dưới, chân card là tên tác phẩm + học
- * sinh + lớp.
+ * Card khung gỗ trang trọng nhất — trang Bảng vàng.
  *
- * Dùng chung cho cả 3 ô podium (variant="podium", chỉ ảnh + huy chương +
- * lượt thích, phần chữ do bệ bục đảm nhiệm) lẫn lưới bên dưới
- * (variant="grid", đầy đủ chân card). Một component cho cả hai chỗ để card
- * ở mọi khu vực của trang co giãn và hover giống hệt nhau.
+ * Dày hơn Tác phẩm tiêu biểu: khuôn walnut kép → gờ vàng → ốc góc →
+ * passe-partout → lỗ ảnh. Dùng chung cho bục (variant="podium", chỉ khung
+ * ảnh; chữ do bệ bục đảm nhiệm) và dải chuyên đề (variant="grid"). Có giải
+ * thì khung mạ và quầng sáng theo màu giải.
  */
 export function HallArtworkCard({
   item,
@@ -37,6 +35,7 @@ export function HallArtworkCard({
   variant = "grid",
   medalLabel,
   accent,
+  className,
 }: {
   item: ArtworkWithMeta;
   award?: HallCardAward;
@@ -47,6 +46,8 @@ export function HallArtworkCard({
   medalLabel?: string;
   /** Màu nhấn của card (viền + badge) khi không lấy theo màu giải. */
   accent?: string;
+  /** Class thêm (vd. featured-card) để trang khác nhuộm tông riêng. */
+  className?: string;
 }) {
   const [loaded, setLoaded] = useState(false);
   const likes = totalReactions(item);
@@ -57,73 +58,79 @@ export function HallArtworkCard({
   return (
     <motion.button
       type="button"
-      className={`hall-card hall-card--${variant}`}
+      className={`hall-card hall-card--${variant}${award ? " hall-card--awarded" : ""}${className ? ` ${className}` : ""}`}
       style={badgeColor ? ({ "--hall-accent": badgeColor } as CSSProperties) : undefined}
       onClick={onClick}
-      initial={{ opacity: 0, y: 22 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 22, rotate: index % 2 === 0 ? -0.8 : 0.8 }}
+      whileInView={{ opacity: 1, y: 0, rotate: 0 }}
       viewport={{ once: true, margin: "-40px" }}
-      transition={{ duration: 0.5, delay: Math.min(index, 6) * 0.06, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -8 }}
+      transition={{ duration: 0.55, delay: Math.min(index, 6) * 0.06, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -10, rotate: 0 }}
       whileTap={{ scale: 0.985 }}
       aria-label={ariaBits.join(", ")}
     >
-      <span className="hall-card-media">
-        {!loaded && <span className="hall-card-skeleton" aria-hidden />}
-        <picture>
-          {artworkPictureSources(item, "thumb").map((s) => (
-            <source key={s.type} srcSet={s.srcSet} type={s.type} />
-          ))}
-          <img
-            src={artworkImageURL(item, "thumb")}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            width={item.width}
-            height={item.height}
-            onLoad={() => setLoaded(true)}
-            onError={() => setLoaded(true)}
-            data-loaded={loaded ? "true" : "false"}
-          />
-        </picture>
+      <span className="hall-card-fillet">
+        <span className="hall-card-key hall-card-key--tl" aria-hidden />
+        <span className="hall-card-key hall-card-key--tr" aria-hidden />
+        <span className="hall-card-key hall-card-key--bl" aria-hidden />
+        <span className="hall-card-key hall-card-key--br" aria-hidden />
+        <span className="hall-card-mat">
+          <span className="hall-card-media">
+            {!loaded && <span className="hall-card-skeleton" aria-hidden />}
+            <picture>
+              {artworkPictureSources(item, "thumb").map((s) => (
+                <source key={s.type} srcSet={s.srcSet} type={s.type} />
+              ))}
+              <img
+                src={artworkImageURL(item, "thumb")}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                width={item.width}
+                height={item.height}
+                onLoad={() => setLoaded(true)}
+                onError={() => setLoaded(true)}
+                data-loaded={loaded ? "true" : "false"}
+              />
+            </picture>
 
-        {/* Lớp phủ tối dần về đáy: giữ cho nhãn nổi trên ảnh luôn đọc
-            được, kể cả khi tranh có vùng sáng trắng ngay dưới đó. */}
-        <span className="hall-card-scrim" aria-hidden />
-        {/* Dải sáng quét chéo khi rê chuột. */}
-        <span className="hall-card-sheen" aria-hidden />
+            {/* Lớp phủ tối dần về đáy: giữ cho nhãn nổi trên ảnh luôn đọc
+                được, kể cả khi tranh có vùng sáng trắng ngay dưới đó. */}
+            <span className="hall-card-scrim" aria-hidden />
+            {/* Dải sáng quét chéo khi rê chuột. */}
+            <span className="hall-card-sheen" aria-hidden />
 
-        {medalLabel && (
-          <span className="hall-card-medal">
-            <Trophy size={13} strokeWidth={2.4} aria-hidden />
-            {medalLabel}
+            {medalLabel && (
+              <span className="hall-card-medal">
+                <Trophy size={13} strokeWidth={2.4} aria-hidden />
+                {medalLabel}
+              </span>
+            )}
+
+            <span className="hall-card-likes">
+              <Heart size={13} strokeWidth={2.2} aria-hidden />
+              {likes}
+            </span>
           </span>
-        )}
-
-        {/* Ở lưới, tên giải nằm trên ảnh (podium đã có badge riêng nổi
-            trên đỉnh bục nên không lặp lại ở đây). */}
-        {variant === "grid" && award && (
-          <span className="hall-card-award">
-            <Sparkles size={13} strokeWidth={2.4} aria-hidden />
-            {award.name}
-          </span>
-        )}
-
-        <span className="hall-card-likes">
-          <Heart size={13} strokeWidth={2.2} aria-hidden />
-          {likes}
         </span>
       </span>
 
       {variant === "grid" && (
         <span className="hall-card-body">
-          <strong className="hall-card-title">{item.title}</strong>
-          <span className="hall-card-student">
-            {item.student_name} · {gradeLine}
-          </span>
+          {award && (
+            <span className="hall-card-award-line">
+              <Sparkles size={13} strokeWidth={2.2} aria-hidden />
+              {award.name}
+            </span>
+          )}
+          <span className="hall-card-label">Tác phẩm</span>
+          <span className="hall-card-title">{item.title}</span>
+          <span className="hall-card-label">Họa sĩ nhí</span>
+          <span className="hall-card-student">{item.student_name}</span>
+          <span className="hall-card-label">Lớp</span>
+          <span className="hall-card-grade">{gradeLine}</span>
           <span className="hall-card-foot">
             <span className="hall-card-region">{item.school_name}</span>
-            <span className="hall-card-more">Xem chi tiết →</span>
           </span>
         </span>
       )}

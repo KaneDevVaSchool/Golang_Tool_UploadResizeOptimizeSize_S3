@@ -14,8 +14,8 @@ import HomePage from "./pages/public/HomePage";
  * - "/admin/login" trang đăng nhập Google OAuth.
  * - "/admin/*" khu vực quản trị, bảo vệ bởi AdminLayout (redirect login nếu
  *   chưa đăng nhập).
- * - "/tac-pham-tieu-bieu", "/phong-trien-lam", "/bang-vang" các trang con
- *   của khu vực public, dùng chung PublicLayout (navbar cố định).
+ * - "/tac-pham-tieu-bieu", "/phong-trien-lam", "/bang-vang", "/thu-ngo" các
+ *   trang con của khu vực public, dùng chung PublicLayout (navbar cố định).
  *
  * Tách bundle theo route (React.lazy):
  * PublicLayout + HomePage nạp tĩnh vì đó là điểm vào của gần như mọi khách
@@ -28,6 +28,7 @@ import HomePage from "./pages/public/HomePage";
 const FeaturedArtworksPage = lazy(() => import("./pages/public/FeaturedArtworksPage"));
 const GalleryPage = lazy(() => import("./pages/public/GalleryPage"));
 const HallOfFamePage = lazy(() => import("./pages/public/HallOfFamePage"));
+const OpenLetterPage = lazy(() => import("./pages/public/OpenLetterPage"));
 
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminLogin = lazy(() => import("./pages/admin/Login"));
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="tac-pham-tieu-bieu" element={<FeaturedArtworksPage />} />
             <Route path="phong-trien-lam" element={<GalleryPage />} />
             <Route path="bang-vang" element={<HallOfFamePage />} />
+            <Route path="thu-ngo" element={<OpenLetterPage />} />
             {/* Mọi đường dẫn lạ dưới layout public rơi vào đây, thay vì hiện
                 nhầm HomePage - xem P2.4 trong docs/plan/02-roadmap.md. */}
             <Route path="*" element={<NotFoundPage />} />

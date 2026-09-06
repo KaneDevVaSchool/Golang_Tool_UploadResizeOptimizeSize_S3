@@ -8,8 +8,8 @@ import type { BillboardEntry } from "../../lib/publicApi";
  *
  * Cuộn snap từng card, có nút mũi tên hai bên và mép mờ báo còn tranh phía
  * sau. Dùng chung cơ chế cuộn với ArtworkRail qua useRailScroll, nhưng
- * markup/CSS riêng vì card ở đây là card bo tròn chứ không phải khung
- * tranh bảo tàng.
+ * markup/CSS riêng vì card ở đây là khung gỗ trang trọng của Bảng vàng,
+ * không phải khung mỏng của phòng triển lãm.
  */
 export function HallRail({
   entries,
