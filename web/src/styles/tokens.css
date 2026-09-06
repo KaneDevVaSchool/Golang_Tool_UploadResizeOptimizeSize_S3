@@ -285,3 +285,153 @@
 .toast-warning .toast-progress {
   color: var(--vas-warning, #d98c00);
 }
+
+/* ---------------------------------------------------------------------- */
+/* Thanh tiến trình chuyển trang - dùng chung public + admin              */
+/* Xem web/src/components/RouteProgress.tsx cho phần logic.               */
+/* ---------------------------------------------------------------------- */
+.route-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 10000; /* trên cả toast (9999) - chỉ 3px ở rìa, không che gì */
+  pointer-events: none;
+  /* Rãnh mờ chạy hết bề ngang: cho thấy quãng đường CÒN LẠI, và giữ tương
+     phản cho thanh trên cả nền trắng (navbar public) lẫn nền màu. */
+  background: rgba(154, 0, 54, 0.1);
+}
+
+.route-progress-bar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  /* Dải chuyển sắc theo 3 màu giá trị VAS thay vì một màu phẳng: ở bề dày
+     3px thì gradient là thứ duy nhất còn đọc được như một chi tiết có chủ ý. */
+  background: linear-gradient(
+    90deg,
+    var(--vas-tri-thuc, #9a0036) 0%,
+    var(--vas-trach-nhiem, #c49c57) 55%,
+    var(--vas-nhan-ai, #009082) 100%
+  );
+  /* Quầng sáng ở đầu thanh - mượn từ mẫu thanh tải của trình duyệt, giúp
+     mắt bắt được đầu thanh đang chạy tới đâu. */
+  box-shadow:
+    0 0 8px rgba(154, 0, 54, 0.45),
+    0 0 3px rgba(154, 0, 54, 0.6);
+  /* Chỉ transform + opacity: hai thuộc tính duy nhất trình duyệt chạy được
+     trên compositor, không đụng tới layout hay repaint mỗi khung hình. */
+  will-change: transform, opacity;
+  transform: scaleX(0);
+}
+
+/*
+   Giai đoạn chạy: một hoạt cảnh 10 giây, giảm tốc rất mạnh.
+
+   Vì sao dài tới 10s cho một quãng chờ thường chỉ vài trăm ms: các mốc dồn
+   hết về đoạn đầu (0.4s đã tới 45%, 1.2s tới 72%), phần đuôi gần như đứng
+   yên quanh 92%. Nghĩa là lần chuyển trang bình thường chỉ chạy đúng đoạn
+   đầu mượt mà, còn nếu mạng thật sự chậm thì thanh vẫn nhích chứ không chết
+   cứng. Không có nhịp nào bị cắt ngang vì đây là MỘT hoạt cảnh liên tục.
+*/
+@keyframes route-progress-run {
+  0%   { transform: scaleX(0.02); }
+  8%   { transform: scaleX(0.28); }
+  16%  { transform: scaleX(0.45); }
+  30%  { transform: scaleX(0.62); }
+  50%  { transform: scaleX(0.76); }
+  75%  { transform: scaleX(0.86); }
+  100% { transform: scaleX(0.94); }
+}
+
+/* Mờ dần lúc vào, để thanh "hiện ra" chứ không bật ra đột ngột. */
+@keyframes route-progress-appear {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.route-progress.is-running .route-progress-bar {
+  animation:
+    route-progress-run 10s cubic-bezier(0.12, 0.78, 0.28, 1) forwards,
+    route-progress-appear 0.28s ease-out both;
+}
+
+/*
+   Giai đoạn đóng: chạy nốt tới 100% rồi mới tan.
+
+   animation-play-state không giữ được vị trí đang dở, nên đoạn kết bắt đầu
+   từ chính giá trị hiện hành nhờ `animation-composition: accumulate` không
+   khả dụng rộng rãi - thay vào đó chạy một hoạt cảnh riêng từ 94% (mốc cuối
+   của giai đoạn chạy) lên 100%. Lệch tối đa vài phần trăm, mắt không thấy.
+*/
+@keyframes route-progress-finish {
+  from { transform: scaleX(0.94); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes route-progress-fade {
+  to { opacity: 0; }
+}
+
+.route-progress.is-finishing .route-progress-bar {
+  animation:
+    route-progress-finish 0.32s cubic-bezier(0.32, 0.72, 0.35, 1) forwards,
+    /* Tan SAU khi đã đầy: tan ngay lúc chạm 100% thì vẫn là cảm giác
+       "đứt giữa chừng" chứ không phải "xong". */
+    route-progress-fade 0.26s ease-in 0.32s forwards;
+}
+
+/* Rãnh mờ đi cùng thanh, nếu không sẽ đọng lại một vệt hồng vắt ngang đỉnh
+   màn hình sau khi chuyển trang xong. */
+.route-progress.is-finishing {
+  animation: route-progress-fade 0.26s ease-in 0.32s forwards;
+}
+
+/* Người đã tắt chuyển động: thanh đứng yên ở một vị trí đọc được, chỉ hiện
+   và tắt. Vẫn báo được "đang chờ" mà không có gì chuyển động. */
+@media (prefers-reduced-motion: reduce) {
+  .route-progress.is-running .route-progress-bar {
+    animation: route-progress-appear 0.28s ease-out both;
+    transform: scaleX(0.6);
+  }
+  .route-progress.is-finishing .route-progress-bar {
+    animation: route-progress-fade 0.26s ease-in forwards;
+    transform: scaleX(1);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Hoạt cảnh vào trang - dùng chung public + admin                        */
+/* ---------------------------------------------------------------------- */
+
+/* Trượt lên ngắn (14px) kèm fade. Quãng ngắn là có chủ ý: chuyển trang xảy
+   ra hàng chục lần mỗi phiên, hoạt cảnh dài chỉ làm chậm người dùng sau lần
+   thứ ba. Đủ để mắt biết "nội dung này mới", không hơn.
+
+   Chỉ chuyển động opacity + transform để chạy trên compositor: bất cứ thứ
+   gì đụng tới layout (height, margin, top) sẽ giật, vì đúng lúc này trình
+   duyệt còn đang dựng cả trang mới. */
+@keyframes route-enter-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.route-enter {
+  /* Đường cong giảm tốc mạnh: đi nhanh lúc đầu rồi từ từ đặt xuống, thay vì
+     ease-out đều - cùng thời lượng nhưng cảm giác nhẹ và "êm" hơn hẳn. */
+  animation: route-enter-in 0.52s cubic-bezier(0.16, 0.84, 0.28, 1) both;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-enter {
+    animation: none;
+  }
+}

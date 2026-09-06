@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { RouteFallback } from "./components/RouteFallback";
+import { RouteProgress } from "./components/RouteProgress";
 import { ToastHost } from "./components/ToastHost";
 import PublicLayout from "./pages/public/PublicLayout";
 import HomePage from "./pages/public/HomePage";
@@ -39,11 +40,19 @@ const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
 const ArtworksListPage = lazy(() => import("./pages/admin/ArtworksListPage"));
 const ArtworksUploadPage = lazy(() => import("./pages/admin/ArtworksUploadPage"));
 const AwardsPage = lazy(() => import("./pages/admin/AwardsPage"));
+const AdminNotFoundPage = lazy(() => import("./pages/admin/NotFoundPage"));
+
+const NotFoundPage = lazy(() => import("./pages/public/NotFoundPage"));
 
 export default function App() {
   return (
     <>
       <ToastHost />
+      {/* Thanh tiến trình đỉnh màn hình. Đặt NGOÀI Suspense: điều hướng bằng
+          <Link> chạy trong startTransition nên trang cũ được giữ lại và
+          fallback không hiện - lúc đó đây là chỉ báo duy nhất cho người dùng
+          biết cú bấm đã được nhận. */}
+      <RouteProgress />
       {/* Một Suspense bọc ngoài toàn bộ Routes là đủ: mỗi lần chỉ có một
           route đang khớp, nên không có hai chunk cùng treo fallback. */}
       <Suspense fallback={<RouteFallback />}>
@@ -53,6 +62,9 @@ export default function App() {
             <Route path="tac-pham-tieu-bieu" element={<FeaturedArtworksPage />} />
             <Route path="phong-trien-lam" element={<GalleryPage />} />
             <Route path="bang-vang" element={<HallOfFamePage />} />
+            {/* Mọi đường dẫn lạ dưới layout public rơi vào đây, thay vì hiện
+                nhầm HomePage - xem P2.4 trong docs/plan/02-roadmap.md. */}
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route path="/trien-lam" element={<Navigate to="/" replace />} />
           <Route path="/upload" element={<UploadTool />} />
@@ -62,6 +74,9 @@ export default function App() {
             <Route path="artworks" element={<ArtworksListPage />} />
             <Route path="artworks/upload" element={<ArtworksUploadPage />} />
             <Route path="awards" element={<AwardsPage />} />
+            {/* 404 riêng cho khu quản trị: giữ nguyên sidebar/header thay vì
+                rơi ra ngoài layout public. */}
+            <Route path="*" element={<AdminNotFoundPage />} />
           </Route>
         </Routes>
       </Suspense>

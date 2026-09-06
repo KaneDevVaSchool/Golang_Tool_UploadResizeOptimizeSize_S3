@@ -203,6 +203,66 @@ html.scrollable-page {
   50% { transform: translateY(-10px); }
 }
 
+/* Bóng đổ dưới chân mascot, co giãn ngược pha với cú nảy - không có nó thì
+   mascot trông như trôi lơ lửng chứ không phải đang nhún. */
+.admin-loading-shadow {
+  width: 2.6rem;
+  height: 0.45rem;
+  margin-top: -0.6rem;
+  border-radius: 50%;
+  background: rgba(36, 20, 23, 0.16);
+  filter: blur(2px);
+  animation: admin-loading-shadow 1.4s ease-in-out infinite;
+}
+@keyframes admin-loading-shadow {
+  0%, 100% { transform: scaleX(1); opacity: 0.5; }
+  50% { transform: scaleX(0.68); opacity: 0.28; }
+}
+
+.admin-loading-screen p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* Thanh chạy vô hạn: khác thanh chuyển trang ở chỗ đây là chờ MẠNG (xác
+   thực phiên), không đoán được bao lâu - nên một vệt chạy qua lại trung
+   thực hơn là một thanh giả vờ tiến tới đích. */
+.admin-loading-track {
+  position: relative;
+  overflow: hidden;
+  width: min(220px, 60vw);
+  height: 3px;
+  border-radius: var(--radius-full, 9999px);
+  background: rgba(154, 0, 54, 0.12);
+}
+.admin-loading-track::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--vas-tri-thuc, #9a0036), var(--vas-trach-nhiem, #c49c57));
+  animation: admin-loading-sweep 1.25s ease-in-out infinite;
+}
+@keyframes admin-loading-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-loading-screen img,
+  .admin-loading-shadow,
+  .admin-loading-track::after {
+    animation: none;
+  }
+  /* Không hoạt ảnh thì vệt phải đứng ở vị trí đọc được, không nấp ngoài lề. */
+  .admin-loading-track::after {
+    transform: translateX(0);
+    width: 100%;
+    opacity: 0.5;
+  }
+}
+
 /* ---------------------------------------------------------------------- */
 /* Shell layout - port AppLayout.vue (va-workspace)                         */
 /* ---------------------------------------------------------------------- */

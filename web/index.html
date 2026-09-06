@@ -11,9 +11,164 @@
       href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,800&display=swap"
       rel="stylesheet"
     />
+    <!--
+      Splash lúc khởi động, viết thẳng vào HTML.
+
+      Vì sao không đặt trong React: đây chính là quãng người dùng chưa có
+      React - từ lúc HTML về tới lúc bundle tải xong và mount. Trước đây
+      quãng đó là một trang trắng trơn, dài nhất trong mọi khoảng chờ của app
+      (tải JS + CSS + font), và trắng trơn thì không phân biệt được với
+      "trang hỏng". Style inline luôn vì stylesheet cũng chưa chắc đã tới.
+
+      React tự dọn: #root được điền thì lớp này mờ đi rồi bị gỡ khỏi DOM (xem
+      script ở cuối body).
+    -->
+    <style>
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 10001;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.1rem;
+        background: #f7f5f4;
+        font-family: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+        color: #6b5a5d;
+        transition: opacity 0.35s ease;
+      }
+      #app-splash.is-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .app-splash-art {
+        width: 5.5rem;
+        height: 5.5rem;
+        overflow: visible;
+      }
+      /* Phần màu trong khung lộ dần từ trái sang, như đang được tô. Dùng
+         clip-path chứ không scaleX: co giãn sẽ bóp méo mặt trời và các ngọn
+         đồi, còn cắt thì hình giữ nguyên tỉ lệ, chỉ hiện thêm ra. */
+      .app-splash-paint {
+        animation: app-splash-paint 3.2s cubic-bezier(0.5, 0, 0.2, 1) infinite;
+      }
+      #app-splash p {
+        margin: 0;
+        font-size: 0.95rem;
+        letter-spacing: 0.01em;
+      }
+      .app-splash-track {
+        position: relative;
+        overflow: hidden;
+        width: min(220px, 60vw);
+        height: 3px;
+        border-radius: 9999px;
+        background: rgba(154, 0, 54, 0.12);
+      }
+      .app-splash-track::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        width: 40%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #9a0036, #c49c57);
+        animation: app-splash-sweep 1.25s ease-in-out infinite;
+      }
+      /* Tô xong thì giữ nguyên một nhịp trước khi bắt đầu lại - không có
+         quãng nghỉ đó thì bức tranh cứ chớp liên hồi, mệt mắt. */
+      @keyframes app-splash-paint {
+        0% { clip-path: inset(0 100% 0 0); }
+        60%, 100% { clip-path: inset(0 0 0 0); }
+      }
+      @keyframes app-splash-sweep {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(250%); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .app-splash-paint,
+        .app-splash-track::after {
+          animation: none;
+        }
+        .app-splash-track::after {
+          transform: translateX(0);
+          width: 100%;
+          opacity: 0.5;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="app-splash" role="status" aria-live="polite">
+      <!--
+        Khung tranh vẽ bằng SVG inline, KHÔNG dùng ảnh mascot.
+
+        Lý do: splash phải hiện ngay từ byte HTML đầu tiên, mà mascot là file
+        PNG 620KB - trên mạng chậm nó về sau cả nội dung thật, nên người dùng
+        chỉ thấy một ô vỡ đúng vào lúc cần trấn an nhất. SVG inline không tốn
+        thêm một request nào nên luôn hiện đủ.
+      -->
+      <svg class="app-splash-art" viewBox="0 0 96 84" aria-hidden="true">
+        <rect x="8" y="4" width="80" height="58" rx="3" fill="#fff" stroke="#d6c6b5" stroke-width="2.5" />
+        <!-- "Bức tranh" tự tô màu dần: mặt trời, hai ngọn đồi, dải đất - vài
+             nét đủ để đọc ra là một bức vẽ mà không thành hình minh hoạ nặng
+             nề. clipPath giữ màu nằm gọn trong khung khi hoạt cảnh chạy. -->
+        <clipPath id="app-splash-canvas">
+          <rect x="10" y="6" width="76" height="54" rx="2" />
+        </clipPath>
+        <g clip-path="url(#app-splash-canvas)">
+          <g class="app-splash-paint">
+            <circle cx="70" cy="20" r="8" fill="#c49c57" />
+            <path d="M10 52 L34 22 L56 52 Z" fill="#009082" />
+            <path d="M40 52 L62 28 L86 52 Z" fill="#9a0036" opacity="0.85" />
+            <rect x="10" y="50" width="76" height="10" fill="#725139" opacity="0.32" />
+          </g>
+        </g>
+        <!-- Giá đỡ, để khung đứng chứ không lơ lửng giữa không trung. -->
+        <path d="M48 62 L48 72 M33 78 L48 72 L63 78" stroke="#d6c6b5" stroke-width="2.5" fill="none" stroke-linecap="round" />
+      </svg>
+      <p>Đang mở phòng tranh…</p>
+      <div class="app-splash-track" aria-hidden="true"></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      /*
+        Gỡ splash khi React đã vẽ xong nội dung đầu tiên.
+
+        Dùng MutationObserver chứ không phải sự kiện load: load bắn khi tài
+        nguyên tải xong, còn cái ta cần là lúc MÀN HÌNH có nội dung - hai mốc
+        này lệch nhau đúng bằng thời gian React mount.
+
+        Có chốt chặn 8 giây: nếu bundle lỗi và React không bao giờ mount thì
+        splash phải tự nhường chỗ, để người dùng còn thấy được trang trắng
+        (và trình duyệt báo lỗi) thay vì kẹt vĩnh viễn ở màn hình chờ.
+      */
+      (function () {
+        var splash = document.getElementById("app-splash");
+        var root = document.getElementById("root");
+        if (!splash || !root) return;
+
+        var removed = false;
+        function dismiss() {
+          if (removed) return;
+          removed = true;
+          observer.disconnect();
+          clearTimeout(bailout);
+          splash.classList.add("is-hidden");
+          setTimeout(function () {
+            splash.remove();
+          }, 400);
+        }
+
+        var observer = new MutationObserver(function () {
+          if (root.childElementCount > 0) dismiss();
+        });
+        observer.observe(root, { childList: true });
+
+        var bailout = setTimeout(dismiss, 8000);
+        if (root.childElementCount > 0) dismiss();
+      })();
+    </script>
   </body>
 </html>

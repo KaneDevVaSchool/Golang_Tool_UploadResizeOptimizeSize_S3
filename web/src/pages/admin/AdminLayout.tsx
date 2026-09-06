@@ -77,9 +77,14 @@ export default function AdminLayout() {
 
   if (loading) {
     return (
-      <div className="admin-loading-screen">
+      <div className="admin-loading-screen" role="status" aria-live="polite">
         <img src="/images/vas-mascot-wave.png" alt="" aria-hidden />
-        <p>Đang tải…</p>
+        <div className="admin-loading-shadow" aria-hidden />
+        {/* Nói rõ đang chờ CÁI GÌ: màn hình này đợi API xác thực phiên, có
+            thể lâu hơn hẳn một lần tải trang, và "Đang tải…" trơ ra vài giây
+            khiến người dùng tưởng hỏng. */}
+        <p>Đang kiểm tra phiên đăng nhập…</p>
+        <div className="admin-loading-track" aria-hidden />
       </div>
     );
   }
@@ -111,7 +116,10 @@ export default function AdminLayout() {
             {/* Watermark logo: cố định trong khung nội dung, không cuộn
                 theo, nằm dưới mọi card (z-index 0 + card position:relative). */}
             <div className="admin-content-watermark" aria-hidden />
-            <div className="admin-content-inner">
+            {/* key theo pathname: mỗi trang admin vào bằng hoạt cảnh ngắn
+                thay vì bụp một cái sau quãng chờ chunk. Đặt ở lớp trong
+                cùng - sidebar, header và watermark không nhấp nháy theo. */}
+            <div className="admin-content-inner route-enter" key={location.pathname}>
               <Outlet />
             </div>
           </main>

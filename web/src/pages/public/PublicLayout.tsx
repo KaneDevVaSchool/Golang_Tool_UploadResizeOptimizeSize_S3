@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { PublicFooter } from "../../components/public/PublicFooter";
 import { PublicNavbar } from "../../components/public/PublicNavbar";
 import { useDeviceTier } from "../../hooks/useDeviceTier";
@@ -29,6 +29,7 @@ const LEAF_BUDGET: Record<string, number> = {
 export default function PublicLayout() {
   useScrollableBody();
   const tier = useDeviceTier();
+  const location = useLocation();
   const leafCount = LEAF_BUDGET[tier] ?? FOREST_LEAVES.length;
 
   return (
@@ -45,7 +46,11 @@ export default function PublicLayout() {
         ))}
       </div>
       <PublicNavbar />
-      <main className="public-page-main">
+      {/* key theo pathname để mỗi trang con vào bằng một hoạt cảnh fade+trượt
+          ngắn: sau quãng chờ chunk, nội dung "hiện ra" thay vì bụp một cái.
+          Đặt key ở <main> chứ không ở layout - navbar, footer và lớp lá nền
+          giữ nguyên, không nhấp nháy theo. */}
+      <main className="public-page-main route-enter" key={location.pathname}>
         <Outlet />
       </main>
       <PublicFooter />
