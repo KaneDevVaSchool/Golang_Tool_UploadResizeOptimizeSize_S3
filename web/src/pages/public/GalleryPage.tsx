@@ -3,10 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import { FeaturedGardenScene } from "../../components/public/FeaturedGardenScene";
 import { FeaturedHero } from "../../components/public/FeaturedHero";
 import { GalleryLevelSection } from "../../components/public/GalleryLevelSection";
+import { GalleryTopicSection } from "../../components/public/GalleryTopicSection";
 import { GallerySearch } from "../../components/public/GallerySearch";
 import { PublicLightbox } from "../../components/public/PublicLightbox";
 import type { ArtworkWithMeta, GradeLevel } from "../../lib/artworkApi";
 import { fetchGradeLevels } from "../../lib/artworkApi";
+import { fetchTopicCategories, type TopicCategory } from "../../lib/topicCategoryApi";
 
 type EduLevel = "primary" | "secondary";
 
@@ -35,11 +37,15 @@ export default function GalleryPage() {
   const [searchInput, setSearchInput] = useState(searchQuery);
   const [grades, setGrades] = useState<GradeLevel[]>([]);
   const [selectedGradeId, setSelectedGradeId] = useState<number | null>(null);
+  const [topics, setTopics] = useState<TopicCategory[]>([]);
   const [lightbox, setLightbox] = useState<{ items: ArtworkWithMeta[]; index: number } | null>(null);
   const didInitFromUrl = useRef(false);
 
   useEffect(() => {
     fetchGradeLevels().then(setGrades).catch(() => setGrades([]));
+    fetchTopicCategories(false)
+      .then((list) => setTopics([...(list ?? [])].sort((a, b) => a.display_order - b.display_order)))
+      .catch(() => setTopics([]));
   }, []);
 
   function patchParams(patch: Record<string, string | null>, options?: { replace?: boolean }) {
@@ -146,6 +152,19 @@ export default function GalleryPage() {
             />
           ))}
         </div>
+
+        {!searchQuery && topics.length > 0 && (
+          <div className="gallery-hall gallery-hall--topics">
+            {topics.map((topic) => (
+              <GalleryTopicSection
+                key={topic.id}
+                topic={topic}
+                sharedArtworkId={Number.isInteger(sharedArtworkId) ? sharedArtworkId : undefined}
+                onOpenArtwork={handleOpenArtwork}
+              />
+            ))}
+          </div>
+        )}
 
         {lightbox && (
           <PublicLightbox

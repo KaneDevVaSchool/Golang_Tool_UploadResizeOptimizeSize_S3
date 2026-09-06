@@ -59,6 +59,7 @@ export type PublicArtworkFilter = {
   school_id?: number;
   grade_level_id?: number;
   education_level?: "primary" | "secondary";
+  topic_category_id?: number;
   search?: string;
   page?: number;
   page_size?: number;
@@ -71,6 +72,7 @@ export function fetchPublicArtworks(filter: PublicArtworkFilter, signal?: AbortS
   if (filter.school_id) params.set("school_id", String(filter.school_id));
   if (filter.grade_level_id) params.set("grade_level_id", String(filter.grade_level_id));
   if (filter.education_level) params.set("education_level", filter.education_level);
+  if (filter.topic_category_id) params.set("topic_category_id", String(filter.topic_category_id));
   if (filter.search) params.set("search", filter.search);
   params.set("page", String(filter.page ?? 1));
   params.set("page_size", String(filter.page_size ?? 24));
