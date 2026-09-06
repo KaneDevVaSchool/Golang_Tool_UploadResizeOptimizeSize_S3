@@ -47,6 +47,7 @@ type Artwork struct {
 type ArtworkFilter struct {
 	Search          string // khớp title hoặc tên học sinh (LIKE, có thể đổi FULLTEXT sau)
 	SchoolID        *int64
+	Region          *string // saigon | cantho | vungtau — lọc qua schools.region
 	GradeLevelID    *int64
 	EducationLevel  string // "primary" | "secondary" | "" (không lọc)
 	TopicCategoryID *int64

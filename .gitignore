@@ -48,6 +48,8 @@ web/dist/
 web/shot*.cjs
 web/tmp-verify*/
 web/tmp-verify*.cjs
+# Ảnh chụp màn hình tạm khi đối chiếu giao diện — nặng vài trăm KB mỗi tấm
+web/_tmp_*
 
 # IDE
 .vscode/

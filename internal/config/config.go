@@ -11,8 +11,8 @@ type Config struct {
 	RateLimit   RateLimitConfig
 	CSRF        CSRFConfig
 	Concurrency ConcurrencyConfig
+	Security    SecurityConfig
 	API         APIConfig
-	WordPress   WordPressConfig
 	Auth        AuthConfig
 }
 
@@ -29,6 +29,35 @@ type RateLimitConfig struct {
 	Requests        int           // requests per window
 	Window          time.Duration // time window
 	CleanupInterval time.Duration
+	// DownloadRequests là trần riêng cho đường tải ảnh gốc
+	// (/api/v1/public/artworks/{id}/download). Tách khỏi bộ đếm chung vì tải
+	// ảnh là thao tác đắt (đọc S3, ghi log) và là mục tiêu chính của việc thu
+	// thập hàng loạt, trong khi người xem thật hiếm khi tải quá vài tấm.
+	DownloadRequests int
+	// DownloadWindow là window của bộ đếm tải ảnh.
+	DownloadWindow time.Duration
+}
+
+// SecurityConfig gom các lựa chọn phòng thủ không thuộc rate limit.
+type SecurityConfig struct {
+	// TrustedProxies là dải CIDR được phép đặt X-Forwarded-For/X-Real-IP.
+	// Rỗng nghĩa là không tin proxy nào (dùng thẳng RemoteAddr).
+	TrustedProxies []string
+	// BotGuardEnabled bật lớp nhận diện công cụ tải site hàng loạt.
+	BotGuardEnabled bool
+	// BotGuardMaxRequests / BotGuardMaxPaths là ngưỡng nhịp bị coi là máy quét.
+	BotGuardMaxRequests int
+	BotGuardMaxPaths    int
+	// BotGuardBlockMinutes là thời gian giữ hình phạt sau khi vượt ngưỡng.
+	BotGuardBlockMinutes int
+	// EnableHSTS chỉ bật khi site đã chạy HTTPS hoàn toàn.
+	EnableHSTS bool
+	// CSPImageSources / CSPConnectSources khai báo origin ngoài (S3/CDN) được
+	// phép tải ảnh và gọi API - thiếu thì CSP chặn chính ảnh tác phẩm.
+	CSPImageSources   []string
+	CSPConnectSources []string
+	// MaxJSONBodyBytes là trần body cho endpoint không phải upload.
+	MaxJSONBodyBytes int64
 }
 
 type ConcurrencyConfig struct {
@@ -56,34 +85,16 @@ type AWSConfig struct {
 }
 
 type UploadConfig struct {
-	MaxSize         int64         // max size per request / chunk (default 20MB)
-	AbsoluteMaxSize int64         // max total file size via chunked upload
-	UploadTimeout   time.Duration // timeout for S3 upload operations
+	// MaxSize là trần mặc định cho một request upload (mặc định 20MB).
+	MaxSize int64
+	// AbsoluteMaxSize là trần cứng cho một file, dùng cho đường upload ảnh
+	// tác phẩm vốn cho phép file lớn hơn MaxSize.
+	AbsoluteMaxSize int64
+	UploadTimeout   time.Duration // timeout cho thao tác upload lên S3
 }
 
 type DirectoriesConfig struct {
-	UploadDir    string
-	WPUploadsDir string // WordPress uploads directory
-}
-
-type WordPressConfig struct {
-	Enabled      bool
-	BaseURL      string // Base URL for WordPress site (e.g., https://example.com)
-	ImageSizes   []ImageSizeConfig
-	Optimization ImageOptimizationConfig
-}
-
-type ImageOptimizationConfig struct {
-	Enabled     bool
-	JPEGQuality int // 0-100, 0 means auto
-	PNGQuality  int // 0-100, 0 means auto
-	EnableWebP  bool
-}
-
-type ImageSizeConfig struct {
-	Name   string
-	Width  int
-	Height int
+	UploadDir string
 }
 
 type APIConfig struct {

@@ -8,9 +8,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"s3-upload-tool/internal/database"
 	"s3-upload-tool/internal/models"
 	"s3-upload-tool/internal/repository"
 	"s3-upload-tool/internal/utils"
@@ -18,7 +18,6 @@ import (
 
 type UploadService interface {
 	UploadImage(ctx context.Context, filename string, file io.Reader, fileSize int64, maxSize int64) (*models.UploadResponse, error)
-	UploadImageWithTransaction(ctx context.Context, filename string, file io.Reader, fileSize int64, maxSize int64) (*models.UploadResponse, *models.UploadRecord, error)
 	// UploadDerived đẩy một file dẫn xuất (biến thể ảnh đã resize) lên S3 tại
 	// key cho trước và trả URL công khai.
 	//
@@ -27,12 +26,14 @@ type UploadService interface {
 	// ra chứ không phải người dùng gửi lên, nên mọi bước xác thực đầu vào ở
 	// đó đều thừa. Key do phía gọi đặt để bám theo key của ảnh gốc.
 	UploadDerived(ctx context.Context, key string, data []byte, contentType string) (string, error)
+	// ObjectKeyFromURL trích S3 key từ URL object (variants, thumbnail).
+	ObjectKeyFromURL(objectURL string) string
+	// DeleteObject xoá một object khỏi bucket đã cấu hình.
+	DeleteObject(ctx context.Context, key string) error
 }
 
 type uploadService struct {
 	s3Repo             repository.S3Repository
-	uploadRepo         repository.UploadRepository
-	db                 *database.DB
 	bucketName         string
 	basePath           string
 	region             string
@@ -46,11 +47,9 @@ type uploadService struct {
 	presignedURLExpiry int
 }
 
-func NewUploadService(s3Repo repository.S3Repository, uploadRepo repository.UploadRepository, db *database.DB, bucketName, region, uploadDir string, maxSize int64, uploadTimeout time.Duration, useACL bool, usePresignedURL bool, presignedURLExpiry int, endpoint string, forcePathStyle bool, basePath string) UploadService {
+func NewUploadService(s3Repo repository.S3Repository, bucketName, region, uploadDir string, maxSize int64, uploadTimeout time.Duration, useACL bool, usePresignedURL bool, presignedURLExpiry int, endpoint string, forcePathStyle bool, basePath string) UploadService {
 	return &uploadService{
 		s3Repo:             s3Repo,
-		uploadRepo:         uploadRepo,
-		db:                 db,
 		bucketName:         bucketName,
 		basePath:           basePath,
 		region:             region,
@@ -82,6 +81,18 @@ func (s *uploadService) UploadDerived(ctx context.Context, key string, data []by
 	// thể được lưu vào DB y như s3_url, mà presigned URL thì hết hạn - đúng
 	// cái bẫy đã khiến ảnh trả 403 sau vài giờ (xem docs/S3-PUBLIC-READ.md).
 	return s.objectURL(key), nil
+}
+
+func (s *uploadService) ObjectKeyFromURL(objectURL string) string {
+	return utils.ParseS3ObjectKey(objectURL, s.bucketName)
+}
+
+func (s *uploadService) DeleteObject(ctx context.Context, key string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return nil
+	}
+	return s.s3Repo.Delete(ctx, s.bucketName, key)
 }
 
 func (s *uploadService) UploadImage(ctx context.Context, filename string, file io.Reader, fileSize int64, maxSize int64) (*models.UploadResponse, error) {
@@ -237,137 +248,4 @@ func (s *uploadService) UploadImage(ctx context.Context, filename string, file i
 		URL: url,
 		Key: key,
 	}, nil
-}
-
-// UploadImageWithTransaction upload image với database transaction support
-func (s *uploadService) UploadImageWithTransaction(ctx context.Context, filename string, file io.Reader, fileSize int64, maxSize int64) (resp *models.UploadResponse, record *models.UploadRecord, err error) {
-	if s.db == nil || s.uploadRepo == nil {
-		return nil, nil, fmt.Errorf("database is not enabled")
-	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-
-	// ! Dùng named return variables để đảm bảo rollback đúng
-	var txErr error
-	defer func() {
-		// ! Xử lý panic: rollback trước khi re-panic
-		if p := recover(); p != nil {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				log.Printf("[UploadService] Failed to rollback on panic: %v", rollbackErr)
-			}
-			panic(p)
-		}
-
-		// ! Rollback nếu có bất kỳ lỗi nào
-		if err != nil || txErr != nil {
-			if rollbackErr := tx.Rollback(); rollbackErr != nil {
-				log.Printf("[UploadService] Failed to rollback transaction: %v (original error: %v)", rollbackErr, err)
-			}
-		}
-	}()
-
-	uploadRecord := &models.UploadRecord{
-		Filename:     filename,
-		OriginalName: filename,
-		FileSize:     fileSize,
-		ContentType:  utils.GetContentType(filename),
-		Status:       string(models.UploadStatusPending),
-	}
-
-	record, err = s.uploadRepo.CreateUpload(ctx, tx, uploadRecord)
-	if err != nil {
-		txErr = err
-		return nil, nil, fmt.Errorf("failed to create upload record: %w", err)
-	}
-
-	uploadCtx := ctx
-	if s.uploadTimeout > 0 {
-		var cancel context.CancelFunc
-		uploadCtx, cancel = context.WithTimeout(ctx, s.uploadTimeout)
-		defer cancel()
-	}
-
-	log.Printf("[UploadService] Starting upload with transaction: record_id=%d, filename=%s", record.ID, filename)
-
-	key := utils.GenerateS3Key(filename, s.basePath)
-	contentType := utils.GetContentType(filename)
-
-	tempFile, err := os.CreateTemp(s.uploadDir, "upload-*"+filepath.Ext(filename))
-	if err != nil {
-		txErr = err
-		s.uploadRepo.UpdateUploadStatus(ctx, tx, record.ID, models.UploadStatusFailed, "", "", err)
-		return nil, record, fmt.Errorf("failed to create temp file: %w", err)
-	}
-	tempFileName := tempFile.Name()
-	defer func() {
-		tempFile.Close()
-		if removeErr := os.Remove(tempFileName); removeErr != nil {
-			log.Printf("[UploadService] Warning: Failed to remove temp file %s: %v", tempFileName, removeErr)
-		}
-	}()
-
-	limitedReader := io.LimitReader(file, maxSize+1)
-	bytesWritten, err := io.Copy(tempFile, limitedReader)
-	if err != nil {
-		txErr = err
-		s.uploadRepo.UpdateUploadStatus(ctx, tx, record.ID, models.UploadStatusFailed, "", "", err)
-		return nil, record, fmt.Errorf("failed to copy file: %w", err)
-	}
-
-	if bytesWritten > maxSize {
-		err = NewFileSizeError(bytesWritten, maxSize, fmt.Sprintf("file quá lớn: %s (giới hạn: %s)", utils.FormatFileSize(bytesWritten), utils.FormatFileSize(maxSize)))
-		txErr = err
-		s.uploadRepo.UpdateUploadStatus(ctx, tx, record.ID, models.UploadStatusFailed, "", "", err)
-		return nil, record, err
-	}
-
-	if _, err := tempFile.Seek(0, 0); err != nil {
-		txErr = err
-		s.uploadRepo.UpdateUploadStatus(ctx, tx, record.ID, models.UploadStatusFailed, "", "", err)
-		return nil, record, fmt.Errorf("failed to seek file: %w", err)
-	}
-
-	_, uploadErr := s.s3Repo.Upload(uploadCtx, s.bucketName, key, tempFile, contentType, s.useACL)
-	if uploadErr != nil {
-		txErr = uploadErr
-		s.uploadRepo.UpdateUploadStatus(ctx, tx, record.ID, models.UploadStatusFailed, key, "", uploadErr)
-		return nil, record, fmt.Errorf("failed to upload to S3: %w", uploadErr)
-	}
-
-	var url string
-	if s.usePresignedURL {
-		expiry := time.Duration(s.presignedURLExpiry) * time.Minute
-		if expiry == 0 {
-			expiry = 60 * time.Minute
-		}
-		presignedURL, err := s.s3Repo.GeneratePresignedURL(uploadCtx, s.bucketName, key, expiry)
-		if err != nil {
-			txErr = err
-			s.uploadRepo.UpdateUploadStatus(ctx, tx, record.ID, models.UploadStatusFailed, key, "", err)
-			return nil, record, fmt.Errorf("failed to generate presigned URL: %w", err)
-		}
-		url = presignedURL
-	} else {
-		url = s.objectURL(key)
-	}
-
-	if err = s.uploadRepo.UpdateUploadStatus(ctx, tx, record.ID, models.UploadStatusCompleted, key, url, nil); err != nil {
-		txErr = err
-		return nil, record, fmt.Errorf("failed to update upload status: %w", err)
-	}
-
-	if err = tx.Commit(); err != nil {
-		txErr = err
-		return nil, record, fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	log.Printf("[UploadService] Upload completed successfully with transaction: record_id=%d, url=%s", record.ID, url)
-
-	resp = &models.UploadResponse{
-		URL: url,
-		Key: key,
-	}
-	return resp, record, nil
 }

@@ -26,19 +26,17 @@ import (
 )
 
 type Container struct {
-	Config             *config.Config
-	DB                 *database.DB
-	S3Client           *s3.Client
-	Uploader           *manager.Uploader
-	S3Repository       repository.S3Repository
-	UploadRepository   repository.UploadRepository
-	UploadService      service.UploadService
-	ChunkUploadService service.ChunkUploadService
-	APIHandler         *handlers.APIHandler
-	WPHandler          *handlers.WPHandler
-	RepoFactory        *repository.RepositoryFactory
-	ServiceFactory     *service.ServiceFactory
-	RateLimiters       []*middleware.RateLimiter
+	Config         *config.Config
+	DB             *database.DB
+	S3Client       *s3.Client
+	Uploader       *manager.Uploader
+	S3Repository   repository.S3Repository
+	UploadService  service.UploadService
+	APIHandler     *handlers.APIHandler
+	RepoFactory    *repository.RepositoryFactory
+	ServiceFactory *service.ServiceFactory
+	RateLimiters   []*middleware.RateLimiter
+	BotGuard       *middleware.BotGuard
 
 	// Admin auth (Google OAuth + session) - chỉ khởi tạo đầy đủ khi DB bật,
 	// vì session/admin_users đều cần bảng MySQL. AdminAuthHandler vẫn được
@@ -51,16 +49,17 @@ type Container struct {
 
 	// Domain: artwork/award/dashboard/meta - chỉ khởi tạo đầy đủ khi DB bật
 	// (cùng điều kiện với admin auth ở trên, vì mọi bảng domain đều ở MySQL).
-	SchoolRepository        repository.SchoolRepository
-	GradeLevelRepository    repository.GradeLevelRepository
-	TopicCategoryRepository repository.TopicCategoryRepository
-	StudentRepository       repository.StudentRepository
-	ArtworkRepository       repository.ArtworkRepository
-	AwardRepository         repository.AwardRepository
-	ReactionRepository      repository.ReactionRepository
-	CommentRepository       repository.CommentRepository
-	ArtworkViewRepository   repository.ArtworkViewRepository
-	DashboardRepository     repository.DashboardRepository
+	SchoolRepository          repository.SchoolRepository
+	GradeLevelRepository      repository.GradeLevelRepository
+	TopicCategoryRepository   repository.TopicCategoryRepository
+	StudentRepository         repository.StudentRepository
+	ArtworkRepository         repository.ArtworkRepository
+	AwardRepository           repository.AwardRepository
+	ReactionRepository        repository.ReactionRepository
+	CommentRepository         repository.CommentRepository
+	ArtworkViewRepository     repository.ArtworkViewRepository
+	ArtworkDownloadRepository repository.ArtworkDownloadRepository
+	DashboardRepository       repository.DashboardRepository
 
 	ArtworkService       service.ArtworkService
 	AwardService         service.AwardService
@@ -85,10 +84,15 @@ func NewContainer() (*Container, error) {
 		return nil, err
 	}
 
-	if cfg.WordPress.Enabled {
-		if err := os.MkdirAll(cfg.Directories.WPUploadsDir, 0755); err != nil {
-			return nil, err
-		}
+	// Đặt dải proxy tin cậy TRƯỚC khi bất kỳ request nào được phục vụ: mọi
+	// bộ đếm rate limit và nhật ký IP đều phụ thuộc vào nó. Giá trị sai chỉ
+	// ghi cảnh báo chứ không chặn khởi động - phần hợp lệ vẫn có tác dụng, và
+	// một dòng cấu hình gõ nhầm không đáng làm cả hệ thống không lên được.
+	if invalid := middleware.SetTrustedProxies(cfg.Security.TrustedProxies); len(invalid) > 0 {
+		log.Printf("[Container] WARNING: TRUSTED_PROXIES có giá trị không hợp lệ, đã bỏ qua: %s", strings.Join(invalid, ", "))
+	}
+	if len(cfg.Security.TrustedProxies) == 0 {
+		log.Println("[Container] TRUSTED_PROXIES rỗng - bỏ qua header X-Forwarded-For, rate limit tính theo địa chỉ kết nối trực tiếp")
 	}
 
 	// HTTP client for AWS SDK: no client-level Timeout (multipart uploads can exceed 60s).
@@ -148,7 +152,6 @@ func NewContainer() (*Container, error) {
 
 	// Initialize database if enabled
 	var db *database.DB
-	var uploadRepo repository.UploadRepository
 	if cfg.Database.Enabled && cfg.Database.DataSource != "" {
 		dbConfig := database.Config{
 			Driver:      cfg.Database.Driver,
@@ -170,11 +173,6 @@ func NewContainer() (*Container, error) {
 			if migrateErr != nil {
 				return nil, fmt.Errorf("failed to run database migrations: %w", migrateErr)
 			}
-		}
-
-		uploadRepo, err = repository.NewUploadRepository(db)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create upload repository: %w", err)
 		}
 	}
 
@@ -219,11 +217,10 @@ func NewContainer() (*Container, error) {
 		log.Printf("[Container] S3 base path: %s/", cfg.AWS.BasePath)
 	}
 
-	serviceFactory := service.NewServiceFactory(repoFactory, db)
+	serviceFactory := service.NewServiceFactory(repoFactory)
 	uploadService, err := serviceFactory.CreateService(
 		service.ServiceTypeUpload,
 		s3Repo,
-		uploadRepo,
 		cfg.AWS.BucketName,
 		cfg.AWS.Region,
 		cfg.Directories.UploadDir,
@@ -240,25 +237,8 @@ func NewContainer() (*Container, error) {
 		return nil, err
 	}
 
-	chunkService := service.NewChunkUploadService(
-		s3Repo,
-		cfg.AWS.BucketName,
-		cfg.AWS.Region,
-		cfg.Directories.UploadDir,
-		cfg.Upload.MaxSize,
-		cfg.Upload.AbsoluteMaxSize,
-		cfg.Upload.UploadTimeout,
-		cfg.AWS.UseACL,
-		cfg.AWS.UsePresignedURL,
-		cfg.AWS.PresignedURLExpiry,
-		cfg.AWS.Endpoint,
-		cfg.AWS.ForcePathStyle || cfg.AWS.Endpoint != "",
-		cfg.AWS.BasePath,
-	)
-
 	apiHandler := handlers.NewAPIHandler(
 		uploadService,
-		chunkService,
 		s3Repo,
 		cfg.Upload.MaxSize,
 		cfg.Upload.AbsoluteMaxSize,
@@ -279,6 +259,7 @@ func NewContainer() (*Container, error) {
 		reactionRepo      repository.ReactionRepository
 		commentRepo       repository.CommentRepository
 		viewRepo          repository.ArtworkViewRepository
+		downloadRepo      repository.ArtworkDownloadRepository
 		dashboardRepo     repository.DashboardRepository
 		artworkSvc        service.ArtworkService
 		awardSvc          service.AwardService
@@ -301,55 +282,24 @@ func NewContainer() (*Container, error) {
 		reactionRepo = repository.NewReactionRepository(db)
 		commentRepo = repository.NewCommentRepository(db)
 		viewRepo = repository.NewArtworkViewRepository(db)
+		downloadRepo = repository.NewArtworkDownloadRepository(db)
 		dashboardRepo = repository.NewDashboardRepository(db)
 
 		artworkSvc = service.NewArtworkService(
-			db, uploadService, artworkRepo, studentRepo, schoolRepo, gradeRepo, topicCategoryRepo, awardRepo, reactionRepo, commentRepo,
+			db, uploadService, artworkRepo, studentRepo, schoolRepo, gradeRepo, topicCategoryRepo, awardRepo, reactionRepo, commentRepo, downloadRepo,
 		)
 		awardSvc = service.NewAwardService(awardRepo)
 		topicCategorySvc = service.NewTopicCategoryService(topicCategoryRepo)
 		dashboardSvc = service.NewDashboardService(dashboardRepo)
 
-		artworkHandler = handlers.NewArtworkHandler(artworkSvc, cfg.Upload.MaxSize)
+		artworkHandler = handlers.NewArtworkHandler(artworkSvc, cfg.Upload.MaxSize, s3Repo, cfg.AWS.BucketName)
 		awardHandler = handlers.NewAwardHandler(awardSvc)
 		topicCategoryHdlr = handlers.NewTopicCategoryHandler(topicCategorySvc)
 		dashboardHdlr = handlers.NewDashboardHandler(dashboardSvc)
 		metaHandler = handlers.NewMetaHandler(schoolRepo, gradeRepo)
-		publicHandler = handlers.NewPublicHandler(artworkSvc, reactionRepo, commentRepo, viewRepo, awardRepo)
+		publicHandler = handlers.NewPublicHandler(artworkSvc, reactionRepo, commentRepo, viewRepo, awardRepo, s3Repo, cfg.AWS.BucketName)
 	} else {
 		log.Println("[Container] Database chưa bật - quản lý tác phẩm/giải thưởng/dashboard sẽ không khả dụng cho tới khi DATABASE_ENABLED=true")
-	}
-
-	// WordPress handler with image resize and optimization
-	var wpHandler *handlers.WPHandler
-	if cfg.WordPress.Enabled {
-		// Convert config image sizes to service image sizes
-		imageSizes := make([]service.ImageSizeConfig, len(cfg.WordPress.ImageSizes))
-		for i, size := range cfg.WordPress.ImageSizes {
-			imageSizes[i] = service.ImageSizeConfig{
-				Name:   size.Name,
-				Width:  size.Width,
-				Height: size.Height,
-			}
-		}
-
-		// Create image optimizer if enabled
-		var optimizer *service.ImageOptimizer
-		if cfg.WordPress.Optimization.Enabled {
-			optimizer = service.NewImageOptimizer(
-				cfg.WordPress.Optimization.JPEGQuality,
-				cfg.WordPress.Optimization.PNGQuality,
-				cfg.WordPress.Optimization.EnableWebP,
-			)
-		}
-
-		imageResizeService := service.NewImageResizeService(
-			cfg.Directories.WPUploadsDir,
-			cfg.WordPress.BaseURL,
-			imageSizes,
-			optimizer,
-		)
-		wpHandler = handlers.NewWPHandler(imageResizeService, cfg.Upload.MaxSize, cfg.Directories.UploadDir)
 	}
 
 	c := &Container{
@@ -358,11 +308,8 @@ func NewContainer() (*Container, error) {
 		S3Client:            s3Client,
 		Uploader:            uploader,
 		S3Repository:        s3Repo,
-		UploadRepository:    uploadRepo,
 		UploadService:       uploadService,
-		ChunkUploadService:  chunkService,
 		APIHandler:          apiHandler,
-		WPHandler:           wpHandler,
 		RepoFactory:         repoFactory,
 		ServiceFactory:      serviceFactory,
 		AdminUserRepository: adminUserRepo,
@@ -370,26 +317,27 @@ func NewContainer() (*Container, error) {
 		SessionManager:      sessionMgr,
 		AdminAuthHandler:    adminAuthHandler,
 
-		SchoolRepository:        schoolRepo,
-		GradeLevelRepository:    gradeRepo,
-		TopicCategoryRepository: topicCategoryRepo,
-		StudentRepository:       studentRepo,
-		ArtworkRepository:       artworkRepo,
-		AwardRepository:         awardRepo,
-		ReactionRepository:      reactionRepo,
-		CommentRepository:       commentRepo,
-		ArtworkViewRepository:   viewRepo,
-		DashboardRepository:     dashboardRepo,
-		ArtworkService:          artworkSvc,
-		AwardService:            awardSvc,
-		TopicCategoryService:    topicCategorySvc,
-		DashboardService:        dashboardSvc,
-		ArtworkHandler:          artworkHandler,
-		AwardHandler:            awardHandler,
-		TopicCategoryHandler:    topicCategoryHdlr,
-		DashboardHandler:        dashboardHdlr,
-		MetaHandler:             metaHandler,
-		PublicHandler:           publicHandler,
+		SchoolRepository:          schoolRepo,
+		GradeLevelRepository:      gradeRepo,
+		TopicCategoryRepository:   topicCategoryRepo,
+		StudentRepository:         studentRepo,
+		ArtworkRepository:         artworkRepo,
+		AwardRepository:           awardRepo,
+		ReactionRepository:        reactionRepo,
+		CommentRepository:         commentRepo,
+		ArtworkViewRepository:     viewRepo,
+		ArtworkDownloadRepository: downloadRepo,
+		DashboardRepository:       dashboardRepo,
+		ArtworkService:            artworkSvc,
+		AwardService:              awardSvc,
+		TopicCategoryService:      topicCategorySvc,
+		DashboardService:          dashboardSvc,
+		ArtworkHandler:            artworkHandler,
+		AwardHandler:              awardHandler,
+		TopicCategoryHandler:      topicCategoryHdlr,
+		DashboardHandler:          dashboardHdlr,
+		MetaHandler:               metaHandler,
+		PublicHandler:             publicHandler,
 	}
 
 	if sessionRepo != nil {
@@ -431,11 +379,6 @@ func (c *Container) GetServerHandler() http.Handler {
 	// API routes only (API is always enabled for API-only service)
 	apiMux := http.NewServeMux()
 	apiMux.HandleFunc("/api/v1/upload", c.APIHandler.HandleUpload)
-	apiMux.HandleFunc("/api/v1/upload-transaction", c.APIHandler.HandleUploadWithTransaction)
-	apiMux.HandleFunc("/api/v1/upload/init", c.APIHandler.HandleChunkInit)
-	apiMux.HandleFunc("/api/v1/upload/chunk", c.APIHandler.HandleChunkUpload)
-	apiMux.HandleFunc("/api/v1/upload/complete", c.APIHandler.HandleChunkComplete)
-	apiMux.HandleFunc("/api/v1/upload/abort", c.APIHandler.HandleChunkAbort)
 	apiMux.HandleFunc("/api/v1/health", c.APIHandler.HandleHealth)
 
 	// Metrics endpoint with rate limiting (if enabled) to prevent abuse
@@ -454,11 +397,6 @@ func (c *Container) GetServerHandler() http.Handler {
 		apiMux.HandleFunc("/api/v1/metrics", metricsHandler.HandleMetrics)
 	}
 
-	// WordPress upload endpoint (with resize)
-	if c.Config.WordPress.Enabled && c.WPHandler != nil {
-		apiMux.HandleFunc("/api/v1/wp-upload", c.WPHandler.HandleWPUpload)
-	}
-
 	// Admin API routes: session-based auth (không dùng API key) - toàn bộ
 	// /api/v1/admin/* đi qua AdminAuthMiddleware. Chỉ mount khi DB bật vì
 	// AdminAuthHandler/SessionManager cần bảng admin_users/admin_sessions.
@@ -474,7 +412,9 @@ func (c *Container) GetServerHandler() http.Handler {
 			adminAPIMux.HandleFunc("GET /api/v1/admin/artworks", c.ArtworkHandler.HandleList)
 			adminAPIMux.HandleFunc("GET /api/v1/admin/artworks/{id}", c.ArtworkHandler.HandleGet)
 			adminAPIMux.HandleFunc("PUT /api/v1/admin/artworks/{id}", c.ArtworkHandler.HandleUpdate)
+			adminAPIMux.HandleFunc("DELETE /api/v1/admin/artworks/bulk-delete", c.ArtworkHandler.HandleDeleteBatch)
 			adminAPIMux.HandleFunc("DELETE /api/v1/admin/artworks/{id}", c.ArtworkHandler.HandleDelete)
+			adminAPIMux.HandleFunc("GET /api/v1/admin/artworks/{id}/download", c.ArtworkHandler.HandleDownload)
 			adminAPIMux.HandleFunc("PATCH /api/v1/admin/artworks/{id}/featured", c.ArtworkHandler.HandleSetFeatured)
 			adminAPIMux.HandleFunc("PATCH /api/v1/admin/artworks/bulk-featured", c.ArtworkHandler.HandleSetFeaturedBatch)
 		}
@@ -527,6 +467,7 @@ func (c *Container) GetServerHandler() http.Handler {
 		publicMux := http.NewServeMux()
 		publicMux.HandleFunc("GET /api/v1/public/artworks", c.PublicHandler.HandleListArtworks)
 		publicMux.HandleFunc("GET /api/v1/public/artworks/featured", c.PublicHandler.HandleListFeatured)
+		publicMux.HandleFunc("GET /api/v1/public/artworks/{id}/download", c.PublicHandler.HandleDownloadArtwork)
 		publicMux.HandleFunc("GET /api/v1/public/artworks/{id}", c.PublicHandler.HandleGetArtwork)
 		publicMux.HandleFunc("GET /api/v1/public/artworks/{id}/comments", c.PublicHandler.HandleListComments)
 		publicMux.HandleFunc("GET /api/v1/public/billboard", c.PublicHandler.HandleBillboard)
@@ -540,7 +481,28 @@ func (c *Container) GetServerHandler() http.Handler {
 			publicRateLimiter := middleware.NewRateLimiter(20, time.Minute, c.Config.RateLimit.CleanupInterval)
 			c.RateLimiters = append(c.RateLimiters, publicRateLimiter)
 			strictLimit := middleware.RateLimitMiddleware(publicRateLimiter)(publicMux)
+
+			// Tải ảnh gốc có bộ đếm RIÊNG, chặt hơn hẳn: đây là thao tác đắt
+			// nhất trên trang public (đọc trọn object từ S3, ghi nhật ký tải)
+			// và là đích ngắm chính của việc thu thập tranh hàng loạt. Người
+			// xem thật hiếm khi tải quá vài tấm trong một phút.
+			downloadRate := c.Config.RateLimit.DownloadRequests
+			if downloadRate <= 0 {
+				downloadRate = 30
+			}
+			downloadWindow := c.Config.RateLimit.DownloadWindow
+			if downloadWindow <= 0 {
+				downloadWindow = time.Minute
+			}
+			downloadRateLimiter := middleware.NewRateLimiter(downloadRate, downloadWindow, c.Config.RateLimit.CleanupInterval)
+			c.RateLimiters = append(c.RateLimiters, downloadRateLimiter)
+			downloadLimit := middleware.RateLimitMiddleware(downloadRateLimiter)(publicMux)
+
 			publicHandlerChain = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/download") {
+					downloadLimit.ServeHTTP(w, r)
+					return
+				}
 				if r.Method == http.MethodPost || r.Method == http.MethodDelete {
 					strictLimit.ServeHTTP(w, r)
 					return
@@ -577,14 +539,12 @@ func (c *Container) GetServerHandler() http.Handler {
 
 	// Trang chia sẻ có Open Graph render phía server để Facebook lấy được
 	// title/description/ảnh của đúng tác phẩm trước khi chuyển vào SPA.
+	// sitemap.xml/robots.txt cùng nhóm "server-rendered non-SPA response phục
+	// vụ crawler/bot" - phải mount TRƯỚC catch-all SPA bên dưới.
 	if c.PublicHandler != nil {
 		mux.HandleFunc("GET /chia-se/tac-pham/{id}", c.PublicHandler.HandleArtworkSharePage)
-	}
-
-	// Serve WordPress uploads directory (with security)
-	if c.Config.WordPress.Enabled {
-		wpFs := secureFileServer(http.Dir(c.Config.Directories.WPUploadsDir))
-		mux.Handle("/wp-content/uploads/", http.StripPrefix("/wp-content/uploads/", wpFs))
+		mux.HandleFunc("GET /sitemap.xml", c.PublicHandler.HandleSitemap)
+		mux.HandleFunc("GET /robots.txt", c.PublicHandler.HandleRobotsTxt)
 	}
 
 	// SPA / static UI from web/dist when built; otherwise JSON API info
@@ -596,6 +556,15 @@ func (c *Container) GetServerHandler() http.Handler {
 	// đặt, và đặt trong cùng thì các middleware ngoài vẫn đo/ghi log bình thường.
 	// Bundle SPA ~950KB JS + ~180KB CSS trước đây gửi thô hoàn toàn.
 	handler = middleware.GzipMiddleware(handler)
+
+	// Security headers bọc sát mux (chỉ ngoài gzip): đặt ở đây thì mọi phản
+	// hồi đều mang header, kể cả phản hồi lỗi do các middleware bên ngoài trả
+	// về sau này không đi qua đây.
+	handler = middleware.SecurityHeadersMiddleware(middleware.SecurityHeadersConfig{
+		EnableHSTS:          c.Config.Security.EnableHSTS,
+		ExtraImageSources:   c.Config.Security.CSPImageSources,
+		ExtraConnectSources: c.Config.Security.CSPConnectSources,
+	})(handler)
 
 	// Apply middleware in order (last applied is outermost)
 	// Request ID middleware should be first to ensure all logs have request ID
@@ -611,6 +580,13 @@ func (c *Container) GetServerHandler() http.Handler {
 		handler = csrfProtection.CSRFMiddleware(handler)
 	}
 
+	// Giới hạn kích thước body: đặt NGOÀI CSRF để thân request quá khổ bị cắt
+	// trước khi bất kỳ lớp nào đọc nó, kể cả lớp đọc form của CSRF.
+	handler = middleware.BodyLimitMiddleware(
+		c.Config.Security.MaxJSONBodyBytes,
+		c.Config.Upload.AbsoluteMaxSize,
+	)(handler)
+
 	// Apply rate limiting if enabled
 	var rateLimiter *middleware.RateLimiter
 	if c.Config.RateLimit.Enabled {
@@ -621,6 +597,24 @@ func (c *Container) GetServerHandler() http.Handler {
 		)
 		c.RateLimiters = append(c.RateLimiters, rateLimiter)
 		handler = middleware.RateLimitMiddleware(rateLimiter)(handler)
+	}
+
+	// Chống tải trọn site: đặt NGOÀI rate limit để công cụ quét bị loại trước
+	// khi kịp tiêu tốn hạn mức chung của những người dùng khác cùng đi ra từ
+	// một IP NAT (trường học dùng chung một IP - xem plan/03-risks.md R6).
+	if c.Config.Security.BotGuardEnabled {
+		guardCfg := middleware.DefaultBotGuardConfig()
+		if v := c.Config.Security.BotGuardMaxRequests; v > 0 {
+			guardCfg.MaxRequests = v
+		}
+		if v := c.Config.Security.BotGuardMaxPaths; v > 0 {
+			guardCfg.MaxDistinctPaths = v
+		}
+		if v := c.Config.Security.BotGuardBlockMinutes; v > 0 {
+			guardCfg.BlockDuration = time.Duration(v) * time.Minute
+		}
+		c.BotGuard = middleware.NewBotGuard(guardCfg)
+		handler = middleware.BotGuardMiddleware(c.BotGuard)(handler)
 	}
 
 	// Apply concurrency limiting if enabled
@@ -640,9 +634,9 @@ func (c *Container) Shutdown() {
 	}
 	log.Println("[Container] All rate limiters stopped")
 
-	if c.ChunkUploadService != nil {
-		c.ChunkUploadService.Stop()
-		log.Println("[Container] Chunk upload sessions cleaned")
+	if c.BotGuard != nil {
+		c.BotGuard.Stop()
+		log.Println("[Container] Bot guard stopped")
 	}
 
 	if c.sessionCleanupStop != nil {
@@ -658,19 +652,6 @@ func (c *Container) Shutdown() {
 			log.Println("[Container] Database connection closed")
 		}
 	}
-}
-
-// secureFileServer wraps http.FileServer to disable directory listing
-func secureFileServer(dir http.Dir) http.Handler {
-	fs := http.FileServer(dir)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Disable directory listing - return 404 for directory requests
-		if strings.HasSuffix(r.URL.Path, "/") {
-			http.NotFound(w, r)
-			return
-		}
-		fs.ServeHTTP(w, r)
-	})
 }
 
 func warnPlaceholderAWSCredentials() {
@@ -707,7 +688,7 @@ func resolveBucketRegion(ctx context.Context, awsCfg aws.Config, bucket, endpoin
 	return region
 }
 
-const apiInfoJSON = `{"service":"s3-upload-api","version":"1.0","endpoints":["/api/v1/upload","/api/v1/upload/init","/api/v1/upload/chunk","/api/v1/upload/complete","/api/v1/upload/abort","/api/v1/upload-transaction","/api/v1/health","/api/v1/metrics","/api/v1/wp-upload"]}`
+const apiInfoJSON = `{"service":"s3-upload-api","version":"1.0","endpoints":["/api/v1/upload","/api/v1/health","/api/v1/metrics"]}`
 
 // spaFileServer serves a Vite/React build with index.html fallback.
 // If the dist directory is missing, returns API info JSON (dev-friendly).

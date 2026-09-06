@@ -3,7 +3,6 @@ package service
 import (
 	"time"
 
-	"s3-upload-tool/internal/database"
 	"s3-upload-tool/internal/repository"
 )
 
@@ -15,19 +14,16 @@ const (
 
 type ServiceFactory struct {
 	repoFactory *repository.RepositoryFactory
-	db          *database.DB
 }
 
-func NewServiceFactory(repoFactory *repository.RepositoryFactory, db *database.DB) *ServiceFactory {
+func NewServiceFactory(repoFactory *repository.RepositoryFactory) *ServiceFactory {
 	return &ServiceFactory{
 		repoFactory: repoFactory,
-		db:          db,
 	}
 }
 
 func (f *ServiceFactory) CreateUploadService(
 	s3Repo repository.S3Repository,
-	uploadRepo repository.UploadRepository,
 	bucketName, region, uploadDir string,
 	maxSize int64,
 	uploadTimeout time.Duration,
@@ -38,7 +34,7 @@ func (f *ServiceFactory) CreateUploadService(
 	basePath string,
 ) UploadService {
 	return NewUploadService(
-		s3Repo, uploadRepo, f.db,
+		s3Repo,
 		bucketName, region, uploadDir,
 		maxSize, uploadTimeout,
 		useACL, usePresignedURL, presignedURLExpiry,
@@ -50,7 +46,6 @@ func (f *ServiceFactory) CreateUploadService(
 func (f *ServiceFactory) CreateService(
 	serviceType ServiceType,
 	s3Repo repository.S3Repository,
-	uploadRepo repository.UploadRepository,
 	bucketName, region, uploadDir string,
 	maxSize int64,
 	uploadTimeout time.Duration,
@@ -63,7 +58,7 @@ func (f *ServiceFactory) CreateService(
 	switch serviceType {
 	case ServiceTypeUpload:
 		return f.CreateUploadService(
-			s3Repo, uploadRepo,
+			s3Repo,
 			bucketName, region, uploadDir,
 			maxSize, uploadTimeout,
 			useACL, usePresignedURL, presignedURLExpiry,

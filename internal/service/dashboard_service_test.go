@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"s3-upload-tool/internal/repository"
 )
 
-// fakeDashboardRepo trả số liệu dựng sẵn, và ghi lại tham số `days` mà
+// fakeDashboardRepo trả số liệu dựng sẵn, và ghi lại khoảng [from, to] mà
 // service truyền xuống cho ActivityTrend.
 type fakeDashboardRepo struct {
-	activityDays int
+	activityFrom time.Time
+	activityTo   time.Time
 	failOn       string
 
 	activity []repository.ActivityPoint
@@ -44,8 +46,9 @@ func (f *fakeDashboardRepo) TopArtworksByEngagement(context.Context, int) ([]rep
 	return nil, nil
 }
 
-func (f *fakeDashboardRepo) ActivityTrend(_ context.Context, days int) ([]repository.ActivityPoint, error) {
-	f.activityDays = days
+func (f *fakeDashboardRepo) ActivityTrend(_ context.Context, from, to time.Time) ([]repository.ActivityPoint, error) {
+	f.activityFrom = from
+	f.activityTo = to
 	if f.failOn == "activity" {
 		return nil, errors.New("lỗi giả lập")
 	}
@@ -89,7 +92,7 @@ func TestGetStatsGomDuMoiNguonSoLieu(t *testing.T) {
 		ops: repository.OperationsSnapshot{PendingArtworks: 4, TotalViews: 900, ActiveAwards: 3},
 	}
 
-	stats, err := NewDashboardService(repo).GetStats(context.Background())
+	stats, err := NewDashboardService(repo).GetStats(context.Background(), time.Time{}, time.Time{})
 	if err != nil {
 		t.Fatalf("GetStats trả lỗi ngoài dự kiến: %v", err)
 	}
@@ -111,16 +114,82 @@ func TestGetStatsGomDuMoiNguonSoLieu(t *testing.T) {
 	}
 }
 
-// Cửa sổ xu hướng phải đúng bằng activityTrendDays. Frontend cắt đôi chuỗi
-// này để tính biến động 7 ngày, nên đổi con số ở service mà không có gì
-// canh chừng sẽ làm phần trăm so sánh sai lệch âm thầm.
-func TestGetStatsDungDungCuaSoXuHuong(t *testing.T) {
+// Không truyền from/to (cả hai zero-value, tức FE không lọc theo tháng/
+// khoảng ngày) thì cửa sổ xu hướng phải đúng bằng activityTrendDays ngày gần
+// nhất. Frontend cắt đôi chuỗi này để tính biến động 7 ngày, nên đổi con số
+// ở service mà không có gì canh chừng sẽ làm phần trăm so sánh sai lệch âm
+// thầm.
+func TestGetStatsMacDinhDungCuaSoXuHuong(t *testing.T) {
 	repo := &fakeDashboardRepo{}
-	if _, err := NewDashboardService(repo).GetStats(context.Background()); err != nil {
+	if _, err := NewDashboardService(repo).GetStats(context.Background(), time.Time{}, time.Time{}); err != nil {
 		t.Fatalf("GetStats trả lỗi ngoài dự kiến: %v", err)
 	}
-	if repo.activityDays != activityTrendDays {
-		t.Errorf("ActivityTrend nhận days = %d, mong đợi %d", repo.activityDays, activityTrendDays)
+	gotDays := int(repo.activityTo.Sub(repo.activityFrom).Hours()/24) + 1
+	if gotDays != activityTrendDays {
+		t.Errorf("ActivityTrend nhận khoảng %d ngày, mong đợi %d", gotDays, activityTrendDays)
+	}
+}
+
+// Truyền from/to tường minh thì phải đi thẳng xuống ActivityTrend, không bị
+// ép về mặc định 14 ngày - đây là đường cho bộ lọc "theo tháng"/"theo khoảng
+// ngày" ở FE.
+func TestGetStatsTruyenDungKhoangNgayTuyChinh(t *testing.T) {
+	repo := &fakeDashboardRepo{}
+	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
+	if _, err := NewDashboardService(repo).GetStats(context.Background(), from, to); err != nil {
+		t.Fatalf("GetStats trả lỗi ngoài dự kiến: %v", err)
+	}
+	if !repo.activityFrom.Equal(from) || !repo.activityTo.Equal(to) {
+		t.Errorf("ActivityTrend nhận [%v, %v], mong đợi [%v, %v]", repo.activityFrom, repo.activityTo, from, to)
+	}
+}
+
+// Khoảng ngày quá dài (vd lọc nhầm) phải bị cắt về đúng maxActivityRangeDays,
+// tính lùi từ `to` - chặn query UNION ALL quét toàn bộ 4 bảng qua nhiều năm.
+func TestGetStatsChanKhoangNgayQuaDai(t *testing.T) {
+	repo := &fakeDashboardRepo{}
+	from := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)
+	if _, err := NewDashboardService(repo).GetStats(context.Background(), from, to); err != nil {
+		t.Fatalf("GetStats trả lỗi ngoài dự kiến: %v", err)
+	}
+	gotDays := int(repo.activityTo.Sub(repo.activityFrom).Hours()/24) + 1
+	if gotDays != maxActivityRangeDays {
+		t.Errorf("ActivityTrend nhận khoảng %d ngày, mong đợi bị chặn về %d", gotDays, maxActivityRangeDays)
+	}
+	if !repo.activityTo.Equal(to) {
+		t.Errorf("`to` phải giữ nguyên khi cắt khoảng, nhận %v", repo.activityTo)
+	}
+}
+
+// Cắt điểm 0 hoạt động ở đầu/cuối chuỗi, nhưng GIỮ NGUYÊN điểm 0 xen giữa hai
+// ngày có dữ liệu - đó là tín hiệu thật (ngày đó không ai thao tác gì), khác
+// với phần đầu/cuối tháng chưa/không còn dữ liệu để đếm.
+func TestGetStatsCatDauCuoiGiuNguyenXenGiua(t *testing.T) {
+	repo := &fakeDashboardRepo{
+		activity: []repository.ActivityPoint{
+			{Date: "2026-08-01"}, // đầu tháng, chưa có gì - phải bị cắt
+			{Date: "2026-08-02"}, // đầu tháng, chưa có gì - phải bị cắt
+			{Date: "2026-08-03", Uploads: 2},
+			{Date: "2026-08-04"}, // xen giữa - phải GIỮ NGUYÊN
+			{Date: "2026-08-05", Views: 5},
+			{Date: "2026-08-06"}, // cuối tháng, hết hoạt động - phải bị cắt
+		},
+	}
+	stats, err := NewDashboardService(repo).GetStats(context.Background(), time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatalf("GetStats trả lỗi ngoài dự kiến: %v", err)
+	}
+
+	wantDates := []string{"2026-08-03", "2026-08-04", "2026-08-05"}
+	if len(stats.Activity) != len(wantDates) {
+		t.Fatalf("Activity còn %d điểm, mong đợi %d: %+v", len(stats.Activity), len(wantDates), stats.Activity)
+	}
+	for i, want := range wantDates {
+		if stats.Activity[i].Date != want {
+			t.Errorf("điểm thứ %d có ngày %q, mong đợi %q", i, stats.Activity[i].Date, want)
+		}
 	}
 }
 
@@ -131,7 +200,7 @@ func TestGetStatsBaoLoiKhiMotNguonHong(t *testing.T) {
 	for _, nguon := range []string{"total", "activity", "coverage", "ops"} {
 		t.Run(nguon, func(t *testing.T) {
 			repo := &fakeDashboardRepo{failOn: nguon}
-			stats, err := NewDashboardService(repo).GetStats(context.Background())
+			stats, err := NewDashboardService(repo).GetStats(context.Background(), time.Time{}, time.Time{})
 			if err == nil {
 				t.Fatalf("nguồn %q hỏng nhưng GetStats vẫn trả thành công", nguon)
 			}

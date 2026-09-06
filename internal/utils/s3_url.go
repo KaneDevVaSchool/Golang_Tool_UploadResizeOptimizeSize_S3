@@ -34,3 +34,46 @@ func escapeS3Key(key string) string {
 	}
 	return strings.Join(parts, "/")
 }
+
+// ParseS3ObjectKey trích S3 object key từ URL công khai (đối chiếu bucket).
+// Trả chuỗi rỗng nếu URL không khớp dạng virtual-host, path-style, hoặc endpoint tuỳ chỉnh.
+func ParseS3ObjectKey(objectURL, bucket string) string {
+	objectURL = strings.TrimSpace(objectURL)
+	bucket = strings.TrimSpace(bucket)
+	if objectURL == "" || bucket == "" {
+		return ""
+	}
+
+	u, err := url.Parse(objectURL)
+	if err != nil {
+		return ""
+	}
+
+	path := strings.TrimPrefix(u.Path, "/")
+	if path == "" {
+		return ""
+	}
+
+	if i := strings.Index(path, "/"); i >= 0 && path[:i] == bucket {
+		return unescapeS3KeySegments(path[i+1:])
+	}
+
+	host := strings.ToLower(u.Hostname())
+	bucketHostPrefix := strings.ToLower(bucket) + ".s3"
+	if strings.HasPrefix(host, bucketHostPrefix) {
+		return unescapeS3KeySegments(path)
+	}
+
+	return ""
+}
+
+func unescapeS3KeySegments(keyPath string) string {
+	parts := strings.Split(keyPath, "/")
+	for i, p := range parts {
+		decoded, err := url.PathUnescape(p)
+		if err == nil {
+			parts[i] = decoded
+		}
+	}
+	return strings.Join(parts, "/")
+}

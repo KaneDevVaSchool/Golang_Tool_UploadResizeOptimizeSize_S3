@@ -90,6 +90,14 @@ type ArtworkListResult struct {
 	PageSize   int
 }
 
+// SitemapArtwork là dạng rút gọn của một tác phẩm, chỉ đủ dữ liệu để build
+// sitemap.xml (URL + lastmod) - không kéo theo tên học sinh/trường/giải vì
+// sitemap không cần tới.
+type SitemapArtwork struct {
+	ID        int64
+	UpdatedAt time.Time
+}
+
 // ArtworkService là business logic cho quản lý tác phẩm - tái dùng
 // UploadService.UploadImage nguyên bản cho phần đẩy file lên S3, không viết
 // lại logic S3 (validate/temp-file/multipart).
@@ -101,16 +109,34 @@ type ArtworkService interface {
 
 	CreateArtworkFromUpload(ctx context.Context, req CreateArtworkRequest) (*models.Artwork, error)
 	UpdateArtwork(ctx context.Context, id int64, req UpdateArtworkRequest) (*models.Artwork, error)
-	// DeleteArtwork xoá DB record. Mặc định KHÔNG xoá S3 object (an toàn
-	// hơn, tránh mất dữ liệu do bấm nhầm - dọn rác S3 định kỳ là việc ngoài
-	// phạm vi service này, xem plan Phase 3 mục rủi ro #4).
+	// DeleteArtwork xoá bản ghi DB (CASCADE reaction/comment/view/giải) và
+	// object S3 (ảnh gốc + biến thể/thumbnail lưu trong variants).
 	DeleteArtwork(ctx context.Context, id int64) error
+	// DeleteArtworkBatch xoá nhiều tác phẩm cùng lúc (thao tác bulk ở trang
+	// quản trị). Lỗi xoá S3 của một tác phẩm không chặn việc xoá các tác phẩm
+	// còn lại - chỉ ghi log, vì bản ghi DB mới là thứ người dùng cần thấy biến
+	// mất ngay; ảnh mồ côi trên S3 xử lý bằng công cụ dọn định kỳ riêng (xem
+	// docs/plan/02-roadmap.md P2.2). Trả về số tác phẩm đã xoá được bản ghi DB.
+	DeleteArtworkBatch(ctx context.Context, ids []int64) (int, error)
 	GetArtwork(ctx context.Context, id int64) (*models.ArtworkWithMeta, error)
 	ListArtworks(ctx context.Context, filter models.ArtworkFilter) (*ArtworkListResult, error)
+	// ListPublishedForSitemap trả về MỌI tác phẩm đã publish, chỉ gồm ID và
+	// thời điểm cập nhật - đủ cho sitemap.xml (loc + lastmod), KHÔNG enrich
+	// (không cần tên học sinh/trường/giải) và tự lặp trang để vượt trần
+	// page_size=100 của ArtworkRepository.List - trần đó bảo vệ endpoint
+	// public/admin khỏi bị lạm dụng page_size lớn, sitemap tự lo lặp ở đây
+	// thay vì nới trần dùng chung. Xem PublicHandler.HandleSitemap.
+	ListPublishedForSitemap(ctx context.Context) ([]SitemapArtwork, error)
 	SetFeatured(ctx context.Context, id int64, featured bool) error
 	// SetFeaturedBatch bật/tắt tiêu biểu hàng loạt cho thao tác bulk ở trang
 	// quản trị - 1 câu UPDATE thay vì N request PATCH đơn lẻ từ frontend.
 	SetFeaturedBatch(ctx context.Context, ids []int64, featured bool) error
+	// LogDownload ghi nhật ký một lượt tải ảnh gốc (admin hoặc public) để
+	// truy vết khi ảnh bị phát tán sai mục đích. Đây là thao tác phụ trợ:
+	// lỗi ghi log KHÔNG được chặn việc tải, nên chỉ trả lỗi để handler tự
+	// quyết định log cảnh báo - xem ArtworkHandler.HandleDownload và
+	// PublicHandler.HandleDownloadArtwork.
+	LogDownload(ctx context.Context, download *models.ArtworkDownload) error
 }
 
 type artworkService struct {
@@ -124,6 +150,7 @@ type artworkService struct {
 	awardRepo         repository.AwardRepository
 	reactionRepo      repository.ReactionRepository
 	commentRepo       repository.CommentRepository
+	downloadRepo      repository.ArtworkDownloadRepository
 	bulkConcurrency   int
 
 	// Cache trường + khối lớp + nhóm chủ đề. Đây là các bảng tham chiếu tĩnh
@@ -153,6 +180,7 @@ func NewArtworkService(
 	awardRepo repository.AwardRepository,
 	reactionRepo repository.ReactionRepository,
 	commentRepo repository.CommentRepository,
+	downloadRepo repository.ArtworkDownloadRepository,
 ) ArtworkService {
 	return &artworkService{
 		db:                db,
@@ -165,8 +193,17 @@ func NewArtworkService(
 		awardRepo:         awardRepo,
 		reactionRepo:      reactionRepo,
 		commentRepo:       commentRepo,
+		downloadRepo:      downloadRepo,
 		bulkConcurrency:   5, // giới hạn upload song song, tránh áp đảo S3/mạng khi admin chọn hàng chục ảnh cùng lúc
 	}
+}
+
+// LogDownload xem interface ArtworkService - thao tác phụ trợ, chỉ INSERT.
+func (s *artworkService) LogDownload(ctx context.Context, download *models.ArtworkDownload) error {
+	if s.downloadRepo == nil {
+		return fmt.Errorf("chưa cấu hình repository nhật ký tải ảnh")
+	}
+	return s.downloadRepo.Create(ctx, download)
 }
 
 func (s *artworkService) BulkUploadToS3(ctx context.Context, files []BulkUploadFile, maxSize int64) []BulkUploadItem {
@@ -422,7 +459,71 @@ func (s *artworkService) UpdateArtwork(ctx context.Context, id int64, req Update
 }
 
 func (s *artworkService) DeleteArtwork(ctx context.Context, id int64) error {
+	artwork, err := s.artworkRepo.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get artwork: %w", err)
+	}
+	if artwork == nil {
+		return fmt.Errorf("artwork not found: id=%d", id)
+	}
+
+	for _, key := range collectArtworkS3Keys(artwork, s.uploadService.ObjectKeyFromURL) {
+		if err := s.uploadService.DeleteObject(ctx, key); err != nil {
+			return fmt.Errorf("failed to delete S3 object %s: %w", key, err)
+		}
+	}
+
 	return s.artworkRepo.Delete(ctx, id)
+}
+
+// DeleteArtworkBatch xoá từng tác phẩm một (không phải 1 câu SQL IN(...) như
+// SetFeaturedBatch) vì mỗi tác phẩm còn cần xoá kèm object S3 riêng - không
+// gộp được thành 1 lệnh. Tác phẩm nào xoá S3 lỗi thì GIỮ NGUYÊN bản ghi DB
+// (giống DeleteArtwork đơn lẻ) và bỏ qua sang tác phẩm tiếp theo, thay vì làm
+// hỏng cả lô: admin chọn 50 ảnh xoá, 1 ảnh lỗi mạng lúc gọi S3 không nên khiến
+// 49 ảnh còn lại cũng không xoá được.
+func (s *artworkService) DeleteArtworkBatch(ctx context.Context, ids []int64) (int, error) {
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("chưa chọn tác phẩm nào")
+	}
+
+	deleted := 0
+	for _, id := range ids {
+		if err := s.DeleteArtwork(ctx, id); err != nil {
+			log.Printf("[ArtworkService] Xoá tác phẩm %d trong lô thất bại: %v", id, err)
+			continue
+		}
+		deleted++
+	}
+	return deleted, nil
+}
+
+// collectArtworkS3Keys gom key ảnh gốc và mọi biến thể (từ variants/thumbnail).
+func collectArtworkS3Keys(a *models.Artwork, keyFromURL func(string) string) []string {
+	seen := make(map[string]struct{})
+	var keys []string
+	add := func(k string) {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			return
+		}
+		if _, ok := seen[k]; ok {
+			return
+		}
+		seen[k] = struct{}{}
+		keys = append(keys, k)
+	}
+
+	add(a.S3Key)
+	if a.Variants != nil {
+		for _, objectURL := range a.Variants {
+			add(keyFromURL(objectURL))
+		}
+	}
+	if a.ThumbnailURL != nil {
+		add(keyFromURL(*a.ThumbnailURL))
+	}
+	return keys
 }
 
 func (s *artworkService) GetArtwork(ctx context.Context, id int64) (*models.ArtworkWithMeta, error) {
@@ -470,6 +571,30 @@ func (s *artworkService) ListArtworks(ctx context.Context, filter models.Artwork
 		Page:       page,
 		PageSize:   pageSize,
 	}, nil
+}
+
+func (s *artworkService) ListPublishedForSitemap(ctx context.Context) ([]SitemapArtwork, error) {
+	published := true
+	const pageSize = 100 // khớp trần đã có ở ArtworkRepository.List
+
+	var result []SitemapArtwork
+	for page := 1; ; page++ {
+		artworks, _, err := s.artworkRepo.List(ctx, models.ArtworkFilter{
+			IsPublished: &published,
+			Page:        page,
+			PageSize:    pageSize,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("không lấy được danh sách tác phẩm cho sitemap: %w", err)
+		}
+		for _, a := range artworks {
+			result = append(result, SitemapArtwork{ID: a.ID, UpdatedAt: a.UpdatedAt})
+		}
+		if len(artworks) < pageSize {
+			break
+		}
+	}
+	return result, nil
 }
 
 func (s *artworkService) SetFeatured(ctx context.Context, id int64, featured bool) error {

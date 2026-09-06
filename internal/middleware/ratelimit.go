@@ -3,7 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
-	"strings"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -154,14 +154,16 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	return false
 }
 
-// RateLimitMiddleware tạo middleware rate limit requests
+// RateLimitMiddleware tạo middleware rate limit requests.
+//
+// Khoá đếm lấy từ ClientIPKey (đã gom IPv6 về /64) thay vì chuỗi IP thô, để
+// người dùng IPv6 không thể xin bộ đếm mới bằng cách đổi địa chỉ trong cùng
+// khối được cấp.
 func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ip := GetClientIP(r)
-
-			if !limiter.Allow(ip) {
-				http.Error(w, "Rate limit exceeded. Please try again later.", http.StatusTooManyRequests)
+			if !limiter.Allow(ClientIPKey(r)) {
+				WriteRateLimited(w, limiter.window)
 				return
 			}
 
@@ -170,31 +172,22 @@ func RateLimitMiddleware(limiter *RateLimiter) func(http.Handler) http.Handler {
 	}
 }
 
-// GetClientIP trích xuất real client IP từ request - export để các package
-// khác (vd handlers.PublicHandler) dùng chung logic thay vì viết lại.
-func GetClientIP(r *http.Request) string {
-	// * Kiểm tra X-Forwarded-For header (cho proxies/load balancers)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// * X-Forwarded-For có thể chứa nhiều IPs, format: "client, proxy1, proxy2"
-		// * Lấy IP đầu tiên (original client IP)
-		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			ip := strings.TrimSpace(ips[0])
-			if ip != "" {
-				return ip
-			}
-		}
+// WriteRateLimited trả 429 kèm Retry-After. Dùng chung cho mọi nơi từ chối vì
+// vượt ngưỡng, để client (và cả bot lịch sự) nhận cùng một dạng phản hồi.
+//
+// Thân JSON thay cho http.Error dạng text: frontend đọc lỗi theo cùng khuôn
+// {success,error:{code,message}} như phần còn lại của API.
+func WriteRateLimited(w http.ResponseWriter, retryAfter time.Duration) {
+	seconds := int(retryAfter.Seconds())
+	if seconds < 1 {
+		seconds = 1
 	}
 
-	// * Kiểm tra X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// * Fallback về RemoteAddr (remove port nếu có)
-	addr := r.RemoteAddr
-	if idx := strings.LastIndex(addr, ":"); idx != -1 {
-		addr = addr[:idx]
-	}
-	return addr
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusTooManyRequests)
+	_, _ = w.Write([]byte(`{"success":false,"error":{"code":"RATE_LIMITED","message":"Bạn thao tác quá nhanh. Vui lòng chờ một lát rồi thử lại."}}`))
 }
+
+// GetClientIP đã chuyển sang clientip.go - nơi đó chỉ tin header chuyển tiếp
+// khi request thật sự đến từ proxy tin cậy.

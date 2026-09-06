@@ -110,8 +110,11 @@ type DashboardRepository interface {
 	TopSchoolsByArtworkCount(ctx context.Context, limit int) ([]SchoolCount, error)
 	// TopArtworksByEngagement sắp theo (view_count + số reaction) giảm dần.
 	TopArtworksByEngagement(ctx context.Context, limit int) ([]ArtworkEngagement, error)
-	// ActivityTrend trả số liệu từng ngày trong `days` ngày gần nhất.
-	ActivityTrend(ctx context.Context, days int) ([]ActivityPoint, error)
+	// ActivityTrend trả số liệu từng ngày trong khoảng [from, to] (cả hai đầu
+	// đều tính theo lịch, giờ trong ngày bị bỏ qua). Nhận khoảng tường minh
+	// thay vì "N ngày gần nhất" để phục vụ được cả bộ lọc theo tháng lẫn theo
+	// khoảng ngày tuỳ chọn ở Dashboard.
+	ActivityTrend(ctx context.Context, from, to time.Time) ([]ActivityPoint, error)
 	// SchoolCoverageReport trả toàn bộ trường (kể cả trường 0 bài).
 	SchoolCoverageReport(ctx context.Context) ([]SchoolCoverage, error)
 	Operations(ctx context.Context) (OperationsSnapshot, error)
@@ -227,8 +230,12 @@ func (r *dashboardRepository) TopArtworksByEngagement(ctx context.Context, limit
 	if limit <= 0 {
 		limit = 10
 	}
-	query := fmt.Sprintf(`
-		SELECT %s, st.full_name,
+	// Chỉ lấy cột dashboard thật sự dùng (ảnh hero + đối chiếu school_id).
+	// Không SELECT cả artworkSelectColumns: thêm cột artwork mới (vd
+	// topic_category_id) từng làm Scan lệch số đích và trắng cả trang /admin.
+	query := `
+		SELECT a.id, a.title, a.school_id, a.s3_url, a.thumbnail_url, a.variants, a.view_count,
+		       st.full_name,
 		       COALESCE(rc.reaction_count, 0) AS reaction_count,
 		       COALESCE(cc.comment_count, 0) AS comment_count,
 		       (a.view_count + COALESCE(rc.reaction_count, 0)) AS engagement_score
@@ -245,7 +252,7 @@ func (r *dashboardRepository) TopArtworksByEngagement(ctx context.Context, limit
 		WHERE a.is_published = 1
 		ORDER BY engagement_score DESC, a.created_at DESC
 		LIMIT ?
-	`, prefixColumns("a", artworkSelectColumns))
+	`
 
 	rows, err := r.db.QueryContext(ctx, query, limit)
 	if err != nil {
@@ -257,14 +264,9 @@ func (r *dashboardRepository) TopArtworksByEngagement(ctx context.Context, limit
 	for rows.Next() {
 		var e ArtworkEngagement
 		var thumbnailURL sql.NullString
-		var width, height sql.NullInt64
-		var uploadID, createdBy sql.NullInt64
 
 		err := rows.Scan(
-			&e.ID, &e.Title, &e.StudentID, &e.SchoolID, &e.GradeLevelID, &e.S3Key, &e.S3URL, &thumbnailURL,
-			&e.Variants,
-			&e.FileSize, &width, &height, &e.IsFeatured, &e.IsPublished, &e.ViewCount, &uploadID, &createdBy,
-			&e.CreatedAt, &e.UpdatedAt,
+			&e.ID, &e.Title, &e.SchoolID, &e.S3URL, &thumbnailURL, &e.Variants, &e.ViewCount,
 			&e.StudentName, &e.ReactionCount, &e.CommentCount, &e.EngagementScore,
 		)
 		if err != nil {
@@ -273,29 +275,16 @@ func (r *dashboardRepository) TopArtworksByEngagement(ctx context.Context, limit
 		if thumbnailURL.Valid {
 			e.ThumbnailURL = &thumbnailURL.String
 		}
-		if width.Valid {
-			w := int(width.Int64)
-			e.Width = &w
-		}
-		if height.Valid {
-			h := int(height.Int64)
-			e.Height = &h
-		}
-		if uploadID.Valid {
-			e.UploadID = &uploadID.Int64
-		}
-		if createdBy.Valid {
-			e.CreatedBy = &createdBy.Int64
-		}
 		results = append(results, e)
 	}
 	return results, rows.Err()
 }
 
-func (r *dashboardRepository) ActivityTrend(ctx context.Context, days int) ([]ActivityPoint, error) {
-	if days <= 0 {
-		days = 14
-	}
+func (r *dashboardRepository) ActivityTrend(ctx context.Context, from, to time.Time) ([]ActivityPoint, error) {
+	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, from.Location())
+	to = time.Date(to.Year(), to.Month(), to.Day(), 0, 0, 0, 0, to.Location())
+	fromStr := from.Format("2006-01-02")
+	toStr := to.Format("2006-01-02")
 
 	// Bốn nguồn số liệu nằm ở bốn bảng khác nhau và không bảng nào chắc
 	// chắn có dòng cho mọi ngày. Gom bằng UNION ALL rồi GROUP BY ngày thay
@@ -310,35 +299,34 @@ func (r *dashboardRepository) ActivityTrend(ctx context.Context, days int) ([]Ac
 		FROM (
 			SELECT DATE(created_at) AS d, COUNT(*) AS uploads, 0 AS views, 0 AS reactions, 0 AS comments
 			FROM artworks
-			WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+			WHERE DATE(created_at) BETWEEN ? AND ?
 			GROUP BY DATE(created_at)
 			UNION ALL
 			SELECT DATE(viewed_at), 0, COUNT(*), 0, 0
 			FROM artwork_views
-			WHERE viewed_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+			WHERE DATE(viewed_at) BETWEEN ? AND ?
 			GROUP BY DATE(viewed_at)
 			UNION ALL
 			SELECT DATE(created_at), 0, 0, COUNT(*), 0
 			FROM artwork_reactions
-			WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+			WHERE DATE(created_at) BETWEEN ? AND ?
 			GROUP BY DATE(created_at)
 			UNION ALL
 			SELECT DATE(created_at), 0, 0, 0, COUNT(*)
 			FROM artwork_comments
-			WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND is_hidden = 0
+			WHERE DATE(created_at) BETWEEN ? AND ? AND is_hidden = 0
 			GROUP BY DATE(created_at)
 		) t
 		GROUP BY d
 		ORDER BY d
 	`
-	span := days - 1
-	rows, err := r.db.QueryContext(ctx, query, span, span, span, span)
+	rows, err := r.db.QueryContext(ctx, query, fromStr, toStr, fromStr, toStr, fromStr, toStr, fromStr, toStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get activity trend: %w", err)
 	}
 	defer rows.Close()
 
-	byDate := make(map[string]ActivityPoint, days)
+	byDate := make(map[string]ActivityPoint)
 	for rows.Next() {
 		var p ActivityPoint
 		if err := rows.Scan(&p.Date, &p.Uploads, &p.Views, &p.Reactions, &p.Comments); err != nil {
@@ -355,13 +343,15 @@ func (r *dashboardRepository) ActivityTrend(ctx context.Context, days int) ([]Ac
 		return nil, err
 	}
 
-	// Trả đủ `days` điểm liên tục, kể cả ngày không có hoạt động: biểu đồ
-	// đường mà thiếu ngày sẽ vẽ sai độ dốc (hai ngày cách nhau một tuần bị
-	// nối thẳng như hai ngày liền kề).
-	points := make([]ActivityPoint, 0, days)
-	today := time.Now()
-	for i := span; i >= 0; i-- {
-		key := today.AddDate(0, 0, -i).Format("2006-01-02")
+	// Trả đủ điểm liên tục cho mọi ngày trong [from, to], kể cả ngày không
+	// có hoạt động: biểu đồ đường mà thiếu ngày sẽ vẽ sai độ dốc (hai ngày
+	// cách nhau một tuần bị nối thẳng như hai ngày liền kề). Cắt bớt phần
+	// đầu/cuối không có dữ liệu là việc của tầng service (quyết định trình
+	// bày), repository luôn trả đúng khoảng đã yêu cầu.
+	totalDays := int(to.Sub(from).Hours()/24) + 1
+	points := make([]ActivityPoint, 0, totalDays)
+	for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+		key := d.Format("2006-01-02")
 		if p, ok := byDate[key]; ok {
 			points = append(points, p)
 			continue

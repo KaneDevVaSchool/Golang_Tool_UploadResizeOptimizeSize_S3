@@ -117,16 +117,12 @@ func (b *ConfigBuilder) WithUpload(maxSize, absoluteMaxSize int64, uploadTimeout
 	return b
 }
 
-func (b *ConfigBuilder) WithDirectories(uploadDir, wpUploadsDir string) *ConfigBuilder {
+func (b *ConfigBuilder) WithDirectories(uploadDir string) *ConfigBuilder {
 	if uploadDir == "" {
 		uploadDir = "./uploads"
 	}
-	if wpUploadsDir == "" {
-		wpUploadsDir = "./wp-uploads"
-	}
 	b.config.Directories = DirectoriesConfig{
-		UploadDir:    uploadDir,
-		WPUploadsDir: wpUploadsDir,
+		UploadDir: uploadDir,
 	}
 	return b
 }
@@ -177,60 +173,6 @@ func (b *ConfigBuilder) WithAuth(clientID, clientSecret, redirectURL, sessionSec
 	return b
 }
 
-func (b *ConfigBuilder) WithWordPress(enabled bool, baseURL string, imageSizes []ImageSizeConfig, optimization ImageOptimizationConfig) *ConfigBuilder {
-	if len(imageSizes) == 0 {
-		// Default WordPress image sizes
-		imageSizes = []ImageSizeConfig{
-			{Name: "thumbnail", Width: 150, Height: 150},
-			{Name: "medium", Width: 300, Height: 300},
-			{Name: "medium_large", Width: 768, Height: 0}, // 0 means no limit
-			{Name: "large", Width: 1024, Height: 1024},
-		}
-	}
-
-	// Validate image sizes
-	seenNames := make(map[string]bool)
-	const maxDimension = 10000
-	for i := range imageSizes {
-		size := &imageSizes[i]
-
-		// Validate name
-		if size.Name == "" {
-			size.Name = fmt.Sprintf("size_%d", i)
-		}
-		if seenNames[size.Name] {
-			// Duplicate name, skip this size
-			continue
-		}
-		seenNames[size.Name] = true
-
-		// Validate dimensions
-		if size.Width < 0 || size.Height < 0 {
-			// Invalid dimensions, use default
-			if size.Width < 0 {
-				size.Width = 0
-			}
-			if size.Height < 0 {
-				size.Height = 0
-			}
-		}
-		if size.Width > maxDimension {
-			size.Width = maxDimension
-		}
-		if size.Height > maxDimension {
-			size.Height = maxDimension
-		}
-	}
-
-	b.config.WordPress = WordPressConfig{
-		Enabled:      enabled,
-		BaseURL:      baseURL,
-		ImageSizes:   imageSizes,
-		Optimization: optimization,
-	}
-	return b
-}
-
 func (b *ConfigBuilder) WithRateLimit(enabled bool, requests int, windowMinutes int, cleanupMinutes int) *ConfigBuilder {
 	if requests == 0 {
 		requests = 100 // Default: 100 requests per window
@@ -247,6 +189,26 @@ func (b *ConfigBuilder) WithRateLimit(enabled bool, requests int, windowMinutes 
 		Window:          time.Duration(windowMinutes) * time.Minute,
 		CleanupInterval: time.Duration(cleanupMinutes) * time.Minute,
 	}
+	return b
+}
+
+// WithDownloadRateLimit đặt trần riêng cho đường tải ảnh gốc. Gọi SAU
+// WithRateLimit vì cùng ghi vào b.config.RateLimit.
+func (b *ConfigBuilder) WithDownloadRateLimit(requests int, windowMinutes int) *ConfigBuilder {
+	if requests <= 0 {
+		requests = 30
+	}
+	if windowMinutes <= 0 {
+		windowMinutes = 1
+	}
+	b.config.RateLimit.DownloadRequests = requests
+	b.config.RateLimit.DownloadWindow = time.Duration(windowMinutes) * time.Minute
+	return b
+}
+
+// WithSecurity nối các lựa chọn phòng thủ (proxy tin cậy, chống quét, CSP).
+func (b *ConfigBuilder) WithSecurity(sec SecurityConfig) *ConfigBuilder {
+	b.config.Security = sec
 	return b
 }
 
@@ -435,58 +397,6 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 		}
 	}
 
-	// WordPress configuration
-	wpEnabled := getEnv("WORDPRESS_ENABLED", "true") == "true"
-	wpBaseURL := getEnv("WORDPRESS_BASE_URL", "http://localhost")
-	// Validate BaseURL format
-	if wpBaseURL != "" {
-		if !strings.HasPrefix(wpBaseURL, "http://") && !strings.HasPrefix(wpBaseURL, "https://") {
-			return nil, fmt.Errorf("invalid WordPress base URL: must start with http:// or https://")
-		}
-	}
-	wpUploadsDir := getEnv("WORDPRESS_UPLOADS_DIR", "./wp-uploads")
-
-	// Parse image sizes from env (format: "thumbnail:150x150,medium:300x300,large:1024x1024")
-	var wpImageSizes []ImageSizeConfig
-	wpSizesStr := getEnv("WORDPRESS_IMAGE_SIZES", "")
-	if wpSizesStr != "" {
-		sizeConfigs := strings.Split(wpSizesStr, ",")
-		for _, sizeConfig := range sizeConfigs {
-			parts := strings.Split(strings.TrimSpace(sizeConfig), ":")
-			if len(parts) == 2 {
-				name := parts[0]
-				dimensions := strings.Split(parts[1], "x")
-				if len(dimensions) == 2 {
-					width := parseInt(dimensions[0], 0)
-					height := parseInt(dimensions[1], 0)
-					wpImageSizes = append(wpImageSizes, ImageSizeConfig{
-						Name:   name,
-						Width:  width,
-						Height: height,
-					})
-				}
-			}
-		}
-	}
-
-	// Image optimization configuration
-	optEnabled := getEnv("IMAGE_OPTIMIZATION_ENABLED", "true") == "true"
-	jpegQuality := parseInt(getEnv("IMAGE_JPEG_QUALITY", "85"), 85)
-	if jpegQuality < 0 || jpegQuality > 100 {
-		jpegQuality = 85
-	}
-	pngQuality := parseInt(getEnv("IMAGE_PNG_QUALITY", "90"), 90)
-	if pngQuality < 0 || pngQuality > 100 {
-		pngQuality = 90
-	}
-	enableWebP := getEnv("IMAGE_ENABLE_WEBP", "false") == "true"
-
-	wpOptimization := ImageOptimizationConfig{
-		Enabled:     optEnabled,
-		JPEGQuality: jpegQuality,
-		PNGQuality:  pngQuality,
-		EnableWebP:  enableWebP,
-	}
 
 	// Database configuration
 	dbEnabled := getEnv("DATABASE_ENABLED", "false") == "true"
@@ -539,6 +449,53 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 	forcePathStyle := getEnv("S3_FORCE_PATH_STYLE", "false") == "true"
 	s3Endpoint := getEnv("S3_ENDPOINT", "")
 
+	// --- Bảo mật: proxy tin cậy, chống quét, CSP ---
+	//
+	// Mặc định tin loopback vì kiến trúc triển khai là Nginx chạy cùng máy
+	// proxy sang 127.0.0.1:8080 (xem deploy/nginx/). Người đặt app sau một
+	// proxy khác (Cloudflare, load balancer riêng) phải khai dải IP của proxy
+	// đó, nếu không rate limit sẽ gom mọi khách vào cùng một bộ đếm.
+	trustedProxies := splitAndTrim(getEnv("TRUSTED_PROXIES", "127.0.0.0/8,::1/128"))
+
+	botGuardEnabled := getEnv("BOT_GUARD_ENABLED", "true") == "true"
+	botGuardMaxRequests := parseInt(getEnv("BOT_GUARD_MAX_REQUESTS_PER_MINUTE", "240"), 240)
+	botGuardMaxPaths := parseInt(getEnv("BOT_GUARD_MAX_PATHS_PER_MINUTE", "150"), 150)
+	botGuardBlockMinutes := parseInt(getEnv("BOT_GUARD_BLOCK_MINUTES", "10"), 10)
+
+	downloadRateRequests := parseInt(getEnv("RATE_LIMIT_DOWNLOAD_REQUESTS", "30"), 30)
+	downloadRateWindow := parseInt(getEnv("RATE_LIMIT_DOWNLOAD_WINDOW_MINUTES", "1"), 1)
+
+	// HSTS mặc định theo production, nhưng vẫn cho tắt tường minh: bật HSTS
+	// khi site còn phục vụ HTTP sẽ khoá trình duyệt khỏi site suốt max-age.
+	enableHSTS := appEnv == "production"
+	if v := getEnv("SECURITY_HSTS_ENABLED", ""); v != "" {
+		enableHSTS = v == "true"
+	}
+
+	// CSP phải biết domain S3, nếu không img-src 'self' sẽ chặn chính ảnh tác
+	// phẩm. Tự suy từ cấu hình S3 đang dùng, cộng thêm khai báo tuỳ ý.
+	cspImageSources := splitAndTrim(getEnv("SECURITY_CSP_IMAGE_SOURCES", ""))
+	cspImageSources = append(cspImageSources, deriveS3Origins(
+		getEnv("S3_BUCKET_NAME", ""),
+		getEnv("AWS_REGION", "us-east-1"),
+		s3Endpoint,
+	)...)
+	cspConnectSources := splitAndTrim(getEnv("SECURITY_CSP_CONNECT_SOURCES", ""))
+
+	maxJSONBody := int64(parseInt(getEnv("MAX_JSON_BODY_KB", "1024"), 1024)) << 10
+
+	securityCfg := SecurityConfig{
+		TrustedProxies:       trustedProxies,
+		BotGuardEnabled:      botGuardEnabled,
+		BotGuardMaxRequests:  botGuardMaxRequests,
+		BotGuardMaxPaths:     botGuardMaxPaths,
+		BotGuardBlockMinutes: botGuardBlockMinutes,
+		EnableHSTS:           enableHSTS,
+		CSPImageSources:      cspImageSources,
+		CSPConnectSources:    cspConnectSources,
+		MaxJSONBodyBytes:     maxJSONBody,
+	}
+
 	return NewConfigBuilder().
 		WithServer(getEnv("PORT", "8080"), readTimeout, writeTimeout, idleTimeout, shutdownTimeout).
 		WithAWSFull(
@@ -557,12 +514,13 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 			uploadTimeout,
 		).
 		WithDatabase(dbEnabled, dbDriver, dbDataSource, dbMaxOpen, dbMaxIdle, dbMaxLifetime, dbAutoMigrate).
-		WithDirectories("./uploads", wpUploadsDir).
+		WithDirectories("./uploads").
 		WithRateLimit(rateLimitEnabled, rateLimitRequests, rateLimitWindow, rateLimitCleanup).
+		WithDownloadRateLimit(downloadRateRequests, downloadRateWindow).
+		WithSecurity(securityCfg).
 		WithCSRF(csrfEnabled, csrfSecureCookie).
 		WithConcurrency(concurrencyEnabled, maxConcurrent, acquireTimeout).
 		WithAPI(apiEnabled, apiKey, corsOrigins, requireAPIKey).
-		WithWordPress(wpEnabled, wpBaseURL, wpImageSizes, wpOptimization).
 		WithAuth(googleClientID, googleClientSecret, googleRedirectURL, sessionSecret, "", time.Duration(sessionTTLHours)*time.Hour, authSecureCookie, allowedEmailDomains, allowedEmails).
 		Build()
 }
@@ -573,6 +531,54 @@ func getEnv(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+// splitAndTrim tách danh sách ngăn cách bằng dấu phẩy, bỏ phần tử rỗng.
+func splitAndTrim(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if v := strings.TrimSpace(p); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// deriveS3Origins suy ra origin phục vụ ảnh từ cấu hình S3 đang dùng.
+//
+// Không bắt người vận hành khai lại domain S3 trong một biến CSP riêng: họ đã
+// khai bucket/region/endpoint rồi, và quên đồng bộ hai chỗ sẽ khiến CSP chặn
+// đúng ảnh tác phẩm - lỗi chỉ lộ ra trên trình duyệt người dùng cuối, không
+// thấy trong log server.
+func deriveS3Origins(bucket, region, endpoint string) []string {
+	var origins []string
+
+	if e := strings.TrimSpace(endpoint); e != "" {
+		// Endpoint tuỳ chỉnh (MinIO/LocalStack) đã là URL đầy đủ.
+		origins = append(origins, strings.TrimSuffix(e, "/"))
+		return origins
+	}
+
+	b := strings.TrimSpace(bucket)
+	if b == "" {
+		return origins
+	}
+	r := strings.TrimSpace(region)
+	if r == "" {
+		r = "us-east-1"
+	}
+
+	// Hai dạng URL S3 đều có thể xuất hiện tuỳ cách sinh link
+	// (virtual-hosted style và dạng kèm region), khai cả hai cho chắc.
+	origins = append(origins,
+		"https://"+b+".s3."+r+".amazonaws.com",
+		"https://"+b+".s3.amazonaws.com",
+	)
+	return origins
 }
 
 func parseInt(s string, defaultValue int) int {

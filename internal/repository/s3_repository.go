@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -14,11 +15,12 @@ import (
 
 type S3Repository interface {
 	Upload(ctx context.Context, bucket, key string, body io.Reader, contentType string, useACL bool) (string, error)
+	// GetObject trả body object S3 để stream ra HTTP (vd tải ảnh gốc qua API).
+	GetObject(ctx context.Context, bucket, key string) (body io.ReadCloser, contentType string, contentLength int64, err error)
 	GeneratePresignedURL(ctx context.Context, bucket, key string, expiry time.Duration) (string, error)
 	CheckConnectivity(ctx context.Context) error
-	// Delete xoá 1 object khỏi S3 - dùng khi admin xoá hẳn 1 tác phẩm.
-	// Không tự động gọi khi xoá artwork record (mặc định chỉ xoá DB row,
-	// xem artwork_service.go) - chỉ expose để service tự quyết định gọi.
+	// Delete xoá 1 object khỏi S3 - artwork_service.DeleteArtwork gọi sau khi
+	// đã nạp s3_key và variants từ DB.
 	Delete(ctx context.Context, bucket, key string) error
 }
 
@@ -54,6 +56,28 @@ func (r *s3Repository) Upload(ctx context.Context, bucket, key string, body io.R
 	}
 
 	return result.Location, nil
+}
+
+func (r *s3Repository) GetObject(ctx context.Context, bucket, key string) (io.ReadCloser, string, int64, error) {
+	out, err := r.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return nil, "", 0, fmt.Errorf("failed to get S3 object bucket %s, key %s: %w", bucket, key, err)
+	}
+
+	contentType := "application/octet-stream"
+	if out.ContentType != nil && strings.TrimSpace(*out.ContentType) != "" {
+		contentType = *out.ContentType
+	}
+
+	var contentLength int64
+	if out.ContentLength != nil {
+		contentLength = *out.ContentLength
+	}
+
+	return out.Body, contentType, contentLength, nil
 }
 
 func (r *s3Repository) GeneratePresignedURL(ctx context.Context, bucket, key string, expiry time.Duration) (string, error) {

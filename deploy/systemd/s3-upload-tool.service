@@ -38,8 +38,8 @@ ProtectControlGroups=true
 RestrictSUIDSGID=true
 RestrictNamespaces=true
 # ProtectSystem=strict cho toàn hệ thống read-only; mở lại đúng các thư mục
-# app cần ghi (upload tạm, ảnh resize, log).
-ReadWritePaths=/opt/s3-upload-tool/uploads /opt/s3-upload-tool/wp-uploads /opt/s3-upload-tool/storage
+# app cần ghi (upload tạm, log).
+ReadWritePaths=/opt/s3-upload-tool/uploads /opt/s3-upload-tool/storage
 
 # Log ra journald: xem bằng `journalctl -u s3-upload-tool -f`
 StandardOutput=journal

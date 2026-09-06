@@ -14,7 +14,6 @@ import (
 	"s3-upload-tool/internal/database"
 	"s3-upload-tool/internal/metrics"
 	"s3-upload-tool/internal/middleware"
-	"s3-upload-tool/internal/models"
 	"s3-upload-tool/internal/repository"
 	"s3-upload-tool/internal/service"
 	"s3-upload-tool/internal/utils"
@@ -23,7 +22,6 @@ import (
 type APIHandler struct {
 	BaseHandler
 	uploadService   service.UploadService
-	chunkService    service.ChunkUploadService
 	s3Repository    repository.S3Repository
 	maxUploadSize   int64
 	absoluteMaxSize int64
@@ -34,14 +32,12 @@ type APIHandler struct {
 // db có thể nil nếu database không được bật
 func NewAPIHandler(
 	uploadService service.UploadService,
-	chunkService service.ChunkUploadService,
 	s3Repository repository.S3Repository,
 	maxUploadSize, absoluteMaxSize int64,
 	db *database.DB,
 ) *APIHandler {
 	return &APIHandler{
 		uploadService:   uploadService,
-		chunkService:    chunkService,
 		s3Repository:    s3Repository,
 		maxUploadSize:   maxUploadSize,
 		absoluteMaxSize: absoluteMaxSize,
@@ -55,30 +51,6 @@ type UploadResponseData struct {
 	Key  string `json:"key"`
 	Size int64  `json:"size"`
 	Name string `json:"name"`
-}
-
-// UploadWithTransactionResponseData đại diện cho successful upload với transaction response
-type UploadWithTransactionResponseData struct {
-	URL    string                `json:"url"`
-	Key    string                `json:"key"`
-	Size   int64                 `json:"size"`
-	Name   string                `json:"name"`
-	Record *UploadRecordResponse `json:"record"`
-}
-
-// UploadRecordResponse đại diện cho upload record trong response
-type UploadRecordResponse struct {
-	ID           int64   `json:"id"`
-	Filename     string  `json:"filename"`
-	OriginalName string  `json:"original_name"`
-	FileSize     int64   `json:"file_size"`
-	ContentType  string  `json:"content_type"`
-	S3Key        string  `json:"s3_key,omitempty"`
-	S3URL        string  `json:"s3_url,omitempty"`
-	Status       string  `json:"status"`
-	Error        *string `json:"error,omitempty"`
-	CreatedAt    string  `json:"created_at"`
-	UpdatedAt    string  `json:"updated_at"`
 }
 
 // uploadRequestData chứa validated upload request data
@@ -189,89 +161,6 @@ func (h *APIHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// toUploadRecordResponse chuyển đổi models.UploadRecord thành UploadRecordResponse
-func toUploadRecordResponse(record *models.UploadRecord) *UploadRecordResponse {
-	resp := &UploadRecordResponse{
-		ID:           record.ID,
-		Filename:     record.Filename,
-		OriginalName: record.OriginalName,
-		FileSize:     record.FileSize,
-		ContentType:  record.ContentType,
-		Status:       record.Status,
-		CreatedAt:    record.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:    record.UpdatedAt.Format(time.RFC3339),
-	}
-
-	if record.S3Key != "" {
-		resp.S3Key = record.S3Key
-	}
-	if record.S3URL != "" {
-		resp.S3URL = record.S3URL
-	}
-	if record.Error != nil {
-		resp.Error = record.Error
-	}
-
-	return resp
-}
-
-// HandleUploadWithTransaction xử lý upload file với database transaction
-func (h *APIHandler) HandleUploadWithTransaction(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[API] Nhận request upload với transaction từ IP: %s, Method: %s", r.RemoteAddr, r.Method)
-
-	if h.uploadService == nil {
-		h.SendError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Upload service with transaction support is not available")
-		return
-	}
-	if h.db == nil {
-		h.SendError(w, http.StatusServiceUnavailable, "DATABASE_DISABLED", "Database is not enabled. Set DATABASE_ENABLED=true and DATABASE_URL.")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
-	defer cancel()
-
-	reqData, err := h.processUploadRequest(r)
-	if err != nil {
-		errMsg := sanitizeError(err)
-		errStr := strings.ToLower(err.Error())
-
-		if strings.Contains(errStr, "method not allowed") {
-			h.SendError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only POST method is allowed")
-		} else if strings.Contains(errStr, "parse multipart form") {
-			h.SendError(w, http.StatusBadRequest, "INVALID_FORM", "Unable to parse form data. Please try again.")
-		} else if strings.Contains(errStr, "get file from request") {
-			h.SendError(w, http.StatusBadRequest, "FILE_NOT_FOUND", errMsg)
-		} else {
-			h.SendError(w, http.StatusBadRequest, "VALIDATION_ERROR", errMsg)
-		}
-		return
-	}
-	defer reqData.File.Close()
-
-	log.Printf("[API] Đang gọi upload service với transaction...")
-	uploadStart := time.Now()
-	result, record, err := h.uploadService.UploadImageWithTransaction(ctx, reqData.Header.Filename, reqData.File, reqData.Header.Size, h.maxUploadSize)
-	uploadDuration := time.Since(uploadStart)
-
-	metrics.GetMetrics().RecordUpload(err == nil, uploadDuration)
-
-	if err != nil {
-		h.handleUploadError(w, err)
-		return
-	}
-
-	log.Printf("[API] Upload với transaction thành công! URL: %s, Key: %s, Record ID: %d", result.URL, result.Key, record.ID)
-
-	h.SendSuccess(w, UploadWithTransactionResponseData{
-		URL:    result.URL,
-		Key:    result.Key,
-		Size:   reqData.Header.Size,
-		Name:   reqData.Header.Filename,
-		Record: toUploadRecordResponse(record),
-	})
-}
-
 func (h *APIHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ready := true
@@ -282,7 +171,6 @@ func (h *APIHandler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 		"max_size_formatted":          utils.FormatFileSize(h.maxUploadSize),
 		"absolute_max_size":           h.absoluteMaxSize,
 		"absolute_max_size_formatted": utils.FormatFileSize(h.absoluteMaxSize),
-		"chunk_upload":                h.chunkService != nil,
 	}
 
 	if requestID := middleware.GetRequestID(r.Context()); requestID != "" {

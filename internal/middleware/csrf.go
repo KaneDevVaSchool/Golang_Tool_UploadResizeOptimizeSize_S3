@@ -3,9 +3,11 @@ package middleware
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 const (
@@ -15,6 +17,20 @@ const (
 	csrfFormFieldName = "csrf_token"
 	csrfCookieMaxAge  = 3600
 )
+
+// csrfContextKey là kiểu riêng cho khoá context, tránh va chạm với khoá do
+// package khác đặt vào cùng một context.
+type csrfContextKey struct{}
+
+var csrfTokenContextKey = csrfContextKey{}
+
+// CSRFTokenFromContext đọc lại token đã sinh ở nhánh GET.
+func CSRFTokenFromContext(ctx context.Context) string {
+	if token, ok := ctx.Value(csrfTokenContextKey).(string); ok {
+		return token
+	}
+	return ""
+}
 
 // CSRFProtection cung cấp CSRF protection dùng double-submit cookie pattern
 type CSRFProtection struct {
@@ -75,9 +91,16 @@ func (c *CSRFProtection) getCSRFToken(r *http.Request) string {
 		return token
 	}
 
-	// * Kiểm tra form field (cho form submissions)
-	if token := r.FormValue(c.formFieldName); token != "" {
-		return token
+	// Chỉ đọc form khi body là form thường. Với multipart (đường upload ảnh),
+	// r.FormValue sẽ parse toàn bộ body - nghĩa là một file 200MB được đọc và
+	// ghi ra đĩa tạm TRƯỚC khi biết token có hợp lệ hay không, biến chính lớp
+	// chống CSRF thành đường làm cạn tài nguyên. Upload của dự án gửi token
+	// qua header nên nhánh này không cần thiết cho multipart.
+	contentType := r.Header.Get("Content-Type")
+	if strings.HasPrefix(contentType, "application/x-www-form-urlencoded") {
+		if token := r.PostFormValue(c.formFieldName); token != "" {
+			return token
+		}
 	}
 
 	return ""
@@ -92,8 +115,10 @@ func (c *CSRFProtection) validateCSRF(r *http.Request) bool {
 		return false
 	}
 
-	// * Tokens phải match chính xác (double-submit cookie pattern)
-	return cookieToken == requestToken
+	// So sánh constant-time: so sánh chuỗi thường thoát ra ở ký tự lệch đầu
+	// tiên, để lộ độ dài tiền tố đúng qua thời gian phản hồi và cho phép dò
+	// dần từng ký tự của token.
+	return subtle.ConstantTimeCompare([]byte(cookieToken), []byte(requestToken)) == 1
 }
 
 // CSRFMiddleware tạo middleware bảo vệ chống CSRF attacks
@@ -113,9 +138,10 @@ func (c *CSRFProtection) CSRFMiddleware(next http.Handler) http.Handler {
 				}
 				c.setCSRFCookie(w, token)
 			}
-			// * Add token vào context để template có thể access
-			ctx := r.Context()
-			ctx = context.WithValue(ctx, "csrf_token", token)
+			// * Add token vào context để template có thể access.
+			// Key dùng kiểu riêng (csrfContextKey) chứ không phải string trần:
+			// string trần có thể trùng key do package khác đặt vào cùng context.
+			ctx := context.WithValue(r.Context(), csrfTokenContextKey, token)
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 			return

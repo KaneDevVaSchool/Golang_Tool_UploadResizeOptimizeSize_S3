@@ -9,14 +9,24 @@ import (
 	"s3-upload-tool/internal/models"
 )
 
-// fakeArtworkRepo chỉ ghi lại lời gọi SetFeaturedBatch - các phương thức khác
-// của ArtworkRepository không cần thiết cho bài test bulk-featured nên trả
-// lỗi rõ ràng nếu lỡ bị gọi tới, để test khác không âm thầm dùng nhầm fake này.
+// fakeArtworkRepo chỉ ghi lại lời gọi SetFeaturedBatch và List - các phương
+// thức khác của ArtworkRepository không cần thiết cho các bài test dùng fake
+// này nên trả lỗi rõ ràng nếu lỡ bị gọi tới, để test khác không âm thầm dùng
+// nhầm fake này.
 type fakeArtworkRepo struct {
 	batchIDs   []int64
 	batchValue bool
 	batchCalls int
 	batchErr   error
+
+	// listPages mô phỏng dữ liệu trả về theo từng lần gọi List (dùng cho test
+	// ListPublishedForSitemap tự lặp trang) - index 0 ứng với Page=1, v.v.
+	// listErr khi khác nil thì List luôn trả lỗi này bất kể listPages.
+	// listFilters ghi lại filter nhận được ở MỖI lần gọi, để test xác nhận
+	// IsPublished luôn được ép true.
+	listPages   [][]*models.Artwork
+	listErr     error
+	listFilters []models.ArtworkFilter
 }
 
 func (f *fakeArtworkRepo) Create(context.Context, *database.Tx, *models.Artwork) (*models.Artwork, error) {
@@ -28,11 +38,24 @@ func (f *fakeArtworkRepo) Update(context.Context, *models.Artwork) error {
 func (f *fakeArtworkRepo) Delete(context.Context, int64) error {
 	return errors.New("không dùng trong test này")
 }
+func (f *fakeArtworkRepo) DeleteBatch(context.Context, []int64) (int64, error) {
+	return 0, errors.New("không dùng trong test này")
+}
 func (f *fakeArtworkRepo) GetByID(context.Context, int64) (*models.Artwork, error) {
 	return nil, errors.New("không dùng trong test này")
 }
-func (f *fakeArtworkRepo) List(context.Context, models.ArtworkFilter) ([]*models.Artwork, int64, error) {
-	return nil, 0, errors.New("không dùng trong test này")
+func (f *fakeArtworkRepo) List(_ context.Context, filter models.ArtworkFilter) ([]*models.Artwork, int64, error) {
+	f.listFilters = append(f.listFilters, filter)
+	if f.listErr != nil {
+		return nil, 0, f.listErr
+	}
+	// filter.Page đánh số từ 1 - trang vượt quá số trang đã chuẩn bị nghĩa là
+	// đã lấy hết, trả danh sách rỗng giống hành vi repository thật.
+	idx := filter.Page - 1
+	if idx < 0 || idx >= len(f.listPages) {
+		return nil, int64(len(f.listPages)), nil
+	}
+	return f.listPages[idx], int64(len(f.listPages)), nil
 }
 func (f *fakeArtworkRepo) SetFeatured(context.Context, int64, bool) error {
 	return errors.New("không dùng trong test này")

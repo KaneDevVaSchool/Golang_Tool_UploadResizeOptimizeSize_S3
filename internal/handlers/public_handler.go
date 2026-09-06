@@ -2,10 +2,15 @@ package handlers
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"html"
 	"html/template"
+	"io"
+	"log"
+	"mime"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +19,7 @@ import (
 	"s3-upload-tool/internal/models"
 	"s3-upload-tool/internal/repository"
 	"s3-upload-tool/internal/service"
+	"s3-upload-tool/internal/utils"
 )
 
 // maxCommentContentLength giới hạn độ dài bình luận - khớp cột
@@ -40,11 +46,15 @@ var artworkShareTemplate = template.Must(template.New("artwork-share").Parse(`<!
   <meta property="og:image" content="{{.ImageURL}}">
   <meta property="og:image:secure_url" content="{{.ImageURL}}">
   <meta property="og:image:alt" content="{{.ImageAlt}}">
+  {{if .ImageWidth}}<meta property="og:image:width" content="{{.ImageWidth}}">{{end}}
+  {{if .ImageHeight}}<meta property="og:image:height" content="{{.ImageHeight}}">{{end}}
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{{.Title}}">
   <meta name="twitter:description" content="{{.Description}}">
   <meta name="twitter:image" content="{{.ImageURL}}">
+  <meta name="twitter:image:alt" content="{{.ImageAlt}}">
   <meta http-equiv="refresh" content="0;url={{.AppURL}}">
+  <script type="application/ld+json">{{.BreadcrumbJSON}}</script>
 </head>
 <body>
   <p>Đang mở tác phẩm “{{.ImageAlt}}”… <a href="{{.AppURL}}">Xem tác phẩm</a></p>
@@ -58,6 +68,16 @@ type artworkSharePageData struct {
 	AppURL      string
 	ImageURL    string
 	ImageAlt    string
+	// ImageWidth/ImageHeight rỗng ("") khi tác phẩm cũ chưa có kích thước lưu
+	// sẵn - template bỏ qua 2 thẻ og:image:width/height trong trường hợp đó
+	// (chỉ thiếu tối ưu hiển thị preview, không phải lỗi).
+	ImageWidth  string
+	ImageHeight string
+	// BreadcrumbJSON là JSON-LD BreadcrumbList đã escape qua encoding/json,
+	// ép kiểu template.JS để html/template không escape thêm lần nữa trong
+	// context <script> - an toàn vì encoding/json mặc định đã escape <, >, &
+	// thành < v.v. nên tên tác phẩm chứa "</script>" không thoát được.
+	BreadcrumbJSON template.JS
 }
 
 // PublicHandler expose API không cần đăng nhập cho trang public (danh sách
@@ -72,6 +92,8 @@ type PublicHandler struct {
 	commentRepo    repository.CommentRepository
 	viewRepo       repository.ArtworkViewRepository
 	awardRepo      repository.AwardRepository
+	s3Repo         repository.S3Repository
+	s3Bucket       string
 }
 
 func NewPublicHandler(
@@ -80,6 +102,8 @@ func NewPublicHandler(
 	commentRepo repository.CommentRepository,
 	viewRepo repository.ArtworkViewRepository,
 	awardRepo repository.AwardRepository,
+	s3Repo repository.S3Repository,
+	s3Bucket string,
 ) *PublicHandler {
 	return &PublicHandler{
 		artworkService: artworkService,
@@ -87,6 +111,8 @@ func NewPublicHandler(
 		commentRepo:    commentRepo,
 		viewRepo:       viewRepo,
 		awardRepo:      awardRepo,
+		s3Repo:         s3Repo,
+		s3Bucket:       s3Bucket,
 	}
 }
 
@@ -109,11 +135,9 @@ func (h *PublicHandler) HandleListArtworks(w http.ResponseWriter, r *http.Reques
 	if v, err := strconv.ParseInt(r.URL.Query().Get("grade_level_id"), 10, 64); err == nil && v > 0 {
 		filter.GradeLevelID = &v
 	}
-	// region lọc theo school_id gián tiếp không khả dụng ở filter hiện có
-	// (ArtworkFilter chỉ có SchoolID) - FE nên tự truyền school_id cụ thể
-	// nếu cần lọc theo 1 trường; lọc theo cả region cần mở rộng filter sau
-	// nếu có nhu cầu thực tế (hiện tại billboard/section 3 dùng school_id
-	// đơn lẻ do metaHandler cung cấp danh sách trường theo region).
+	if v := strings.TrimSpace(r.URL.Query().Get("region")); models.IsKnownRegion(v) {
+		filter.Region = &v
+	}
 	if v, err := strconv.ParseInt(r.URL.Query().Get("school_id"), 10, 64); err == nil && v > 0 {
 		filter.SchoolID = &v
 	}
@@ -151,6 +175,9 @@ func (h *PublicHandler) HandleListFeatured(w http.ResponseWriter, r *http.Reques
 		Page:        1,
 		PageSize:    100,
 	}
+	if v := strings.TrimSpace(r.URL.Query().Get("region")); models.IsKnownRegion(v) {
+		filter.Region = &v
+	}
 
 	result, err := h.artworkService.ListArtworks(r.Context(), filter)
 	if err != nil {
@@ -158,23 +185,11 @@ func (h *PublicHandler) HandleListFeatured(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	region := strings.TrimSpace(r.URL.Query().Get("region"))
-	items := result.Items
-	if region != "" {
-		filtered := make([]*models.ArtworkWithMeta, 0, len(items))
-		for _, item := range items {
-			if item.Region == region {
-				filtered = append(filtered, item)
-			}
-		}
-		items = filtered
-	}
-
-	h.SendSuccess(w, map[string]any{"items": items, "total_count": len(items)})
+	h.SendSuccess(w, map[string]any{"items": result.Items, "total_count": result.TotalCount})
 }
 
 // HandleGetArtwork GET /api/v1/public/artworks/{id} - kèm ghi nhận 1 lượt
-// xem (chống đếm trùng trong 24h qua visitor_token gửi ở query param).
+// xem (visitor_token trong query param, mỗi request hợp lệ +1).
 func (h *PublicHandler) HandleGetArtwork(w http.ResponseWriter, r *http.Request) {
 	id, ok := parsePathID(r, "id")
 	if !ok {
@@ -193,13 +208,132 @@ func (h *PublicHandler) HandleGetArtwork(w http.ResponseWriter, r *http.Request)
 	}
 
 	visitorToken := strings.TrimSpace(r.URL.Query().Get("visitor_token"))
-	if visitorToken != "" {
-		if counted, err := h.viewRepo.RecordView(r.Context(), id, visitorToken); err == nil && counted {
-			artwork.ViewCount++
+	if visitorToken != "" && h.viewRepo != nil {
+		if _, err := h.viewRepo.RecordView(r.Context(), id, visitorToken); err != nil {
+			log.Printf("[public] RecordView artwork=%d: %v", id, err)
+		}
+		// Luôn đọc lại view_count từ DB sau khi ghi (tránh lệch bộ nhớ / race).
+		if refreshed, err := h.artworkService.GetArtwork(r.Context(), id); err == nil && refreshed != nil {
+			artwork = refreshed
 		}
 	}
 
 	h.SendSuccess(w, artwork)
+}
+
+// HandleDownloadArtwork GET /api/v1/public/artworks/{id}/download - stream ảnh
+// gốc qua API (same-origin) để trình duyệt tải xuống ngay, không mở tab S3.
+func (h *PublicHandler) HandleDownloadArtwork(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePathID(r, "id")
+	if !ok {
+		h.SendError(w, http.StatusBadRequest, "INVALID_ID", "ID tác phẩm không hợp lệ")
+		return
+	}
+
+	artwork, err := h.artworkService.GetArtwork(r.Context(), id)
+	if err != nil {
+		h.SendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Không tải được tác phẩm")
+		return
+	}
+	if artwork == nil || !artwork.IsPublished {
+		h.SendError(w, http.StatusNotFound, "NOT_FOUND", "Không tìm thấy tác phẩm")
+		return
+	}
+	if strings.TrimSpace(artwork.S3Key) == "" {
+		h.SendError(w, http.StatusNotFound, "NOT_FOUND", "Không có file ảnh để tải")
+		return
+	}
+	if h.s3Repo == nil || strings.TrimSpace(h.s3Bucket) == "" {
+		h.SendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Không cấu hình được tải ảnh")
+		return
+	}
+
+	body, contentType, _, err := h.s3Repo.GetObject(r.Context(), h.s3Bucket, artwork.S3Key)
+	if err != nil {
+		h.SendError(w, http.StatusBadGateway, "STORAGE_ERROR", "Không lấy được ảnh từ kho lưu trữ")
+		return
+	}
+	defer body.Close()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		h.SendError(w, http.StatusBadGateway, "STORAGE_ERROR", "Không đọc được ảnh từ kho lưu trữ")
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(artwork.S3Key))
+	if ext == "" {
+		ext = ".jpg"
+	}
+	downloadName := artworkDownloadFileName(artwork.Title, ext)
+
+	payload := raw
+	if watermarked, outType, werr := service.ApplyArtworkDownloadWatermark(raw, ext); werr != nil {
+		log.Printf("[PublicHandler] watermark artwork %d skipped: %v", id, werr)
+	} else {
+		payload = watermarked
+		if outType != "" {
+			contentType = outType
+		}
+	}
+
+	if contentType == "" || contentType == "application/octet-stream" {
+		if typed := utils.GetContentType(downloadName); typed != "application/octet-stream" {
+			contentType = typed
+		}
+	}
+
+	logArtworkDownload(r, h.artworkService, id, models.ArtworkDownloadSourcePublic)
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
+		"filename": downloadName,
+	}))
+	w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+
+	if _, err := w.Write(payload); err != nil {
+		log.Printf("[PublicHandler] write download artwork %d: %v", id, err)
+	}
+}
+
+func artworkDownloadFileName(title, ext string) string {
+	safe := strings.TrimSpace(title)
+	safe = strings.Map(func(r rune) rune {
+		switch r {
+		case '<', '>', ':', '"', '/', '\\', '|', '?', '*':
+			return '-'
+		default:
+			if r < 0x20 {
+				return '-'
+			}
+			return r
+		}
+	}, safe)
+	if safe == "" {
+		safe = "tac-pham-vas"
+	}
+	return safe + ext
+}
+
+// logArtworkDownload ghi nhật ký một lượt tải ảnh gốc - dùng chung cho cả
+// ArtworkHandler.HandleDownload (admin) và PublicHandler.HandleDownloadArtwork
+// (public), chỉ khác source và có/không có admin đăng nhập trong context.
+// Đây là thao tác phụ trợ: lỗi ghi log chỉ log cảnh báo, KHÔNG được chặn
+// việc trả ảnh về cho người tải (ảnh đã sẵn sàng ở phía gọi).
+func logArtworkDownload(r *http.Request, svc service.ArtworkService, artworkID int64, source string) {
+	download := &models.ArtworkDownload{
+		ArtworkID: artworkID,
+		Source:    source,
+		IPAddress: middleware.GetClientIP(r),
+		UserAgent: r.UserAgent(),
+	}
+	if admin := middleware.GetAdminUser(r.Context()); admin != nil {
+		download.AdminUserID = &admin.ID
+	}
+	if err := svc.LogDownload(r.Context(), download); err != nil {
+		log.Printf("[handlers] ghi nhật ký tải artwork %d thất bại: %v", artworkID, err)
+	}
 }
 
 // HandleArtworkSharePage trả HTML có Open Graph ngay từ server để crawler
@@ -218,14 +352,7 @@ func (h *PublicHandler) HandleArtworkSharePage(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	scheme := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))
-	if scheme != "http" && scheme != "https" {
-		scheme = "http"
-		if r.TLS != nil {
-			scheme = "https"
-		}
-	}
-	origin := &url.URL{Scheme: scheme, Host: r.Host}
+	origin := resolveRequestOrigin(r)
 	appURL := origin.ResolveReference(&url.URL{
 		Path:     "/tac-pham-tieu-bieu",
 		RawQuery: url.Values{"tranh": {strconv.FormatInt(id, 10)}}.Encode(),
@@ -235,14 +362,42 @@ func (h *PublicHandler) HandleArtworkSharePage(w http.ResponseWriter, r *http.Re
 	if parseErr != nil || !imageURL.IsAbs() {
 		imageURL = origin.ResolveReference(&url.URL{Path: artwork.S3URL})
 	}
+	title := "“" + artwork.Title + "” — " + artwork.StudentName
+	homeURL := origin.ResolveReference(&url.URL{Path: "/"})
+	featuredURL := origin.ResolveReference(&url.URL{Path: "/tac-pham-tieu-bieu"})
+
+	var imageWidth, imageHeight string
+	if artwork.Width != nil {
+		imageWidth = strconv.Itoa(*artwork.Width)
+	}
+	if artwork.Height != nil {
+		imageHeight = strconv.Itoa(*artwork.Height)
+	}
+
+	breadcrumbJSON, err := json.Marshal(map[string]any{
+		"@context": "https://schema.org",
+		"@type":    "BreadcrumbList",
+		"itemListElement": []map[string]any{
+			{"@type": "ListItem", "position": 1, "name": "Trang chủ", "item": homeURL.String()},
+			{"@type": "ListItem", "position": 2, "name": "Tác phẩm tiêu biểu", "item": featuredURL.String()},
+			{"@type": "ListItem", "position": 3, "name": artwork.Title, "item": shareURL.String()},
+		},
+	})
+	if err != nil {
+		log.Printf("trang chia sẻ tác phẩm %d: không dựng được breadcrumb JSON-LD: %v", id, err)
+		breadcrumbJSON = []byte("{}")
+	}
 
 	data := artworkSharePageData{
-		Title:       "“" + artwork.Title + "” — " + artwork.StudentName,
-		Description: "Ngắm tác phẩm “" + artwork.Title + "” của " + artwork.StudentName + " tại " + artwork.SchoolName + " trong Khu vườn nghệ thuật VA Schools.",
-		ShareURL:    shareURL.String(),
-		AppURL:      appURL.String(),
-		ImageURL:    imageURL.String(),
-		ImageAlt:    artwork.Title,
+		Title:          title,
+		Description:    "Ngắm tác phẩm “" + artwork.Title + "” của " + artwork.StudentName + " tại " + artwork.SchoolName + " trong Khu vườn nghệ thuật VA Schools.",
+		ShareURL:       shareURL.String(),
+		AppURL:         appURL.String(),
+		ImageURL:       imageURL.String(),
+		ImageAlt:       artwork.Title,
+		ImageWidth:     imageWidth,
+		ImageHeight:    imageHeight,
+		BreadcrumbJSON: template.JS(breadcrumbJSON),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -250,6 +405,111 @@ func (h *PublicHandler) HandleArtworkSharePage(w http.ResponseWriter, r *http.Re
 	if err := artworkShareTemplate.Execute(w, data); err != nil {
 		http.Error(w, "Không thể mở trang chia sẻ", http.StatusInternalServerError)
 	}
+}
+
+// resolveRequestOrigin suy ra scheme+host thật của request để dựng URL tuyệt
+// đối - dùng chung cho trang chia sẻ, sitemap.xml và robots.txt. Đọc
+// X-Forwarded-Proto vì sau reverse proxy (Nginx) r.TLS luôn nil; không thêm
+// biến môi trường APP_URL/SITE_URL vì domain luôn suy ra được từ request.
+func resolveRequestOrigin(r *http.Request) *url.URL {
+	scheme := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))
+	if scheme != "http" && scheme != "https" {
+		scheme = "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+	}
+	return &url.URL{Scheme: scheme, Host: r.Host}
+}
+
+// sitemapURLEntry là 1 phần tử <url> trong sitemap.xml theo chuẩn
+// http://www.sitemaps.org/schemas/sitemap/0.9. LastMod/ChangeFreq/Priority
+// dùng omitempty vì spec cho phép thiếu các field này.
+type sitemapURLEntry struct {
+	XMLName    xml.Name `xml:"url"`
+	Loc        string   `xml:"loc"`
+	LastMod    string   `xml:"lastmod,omitempty"`
+	ChangeFreq string   `xml:"changefreq,omitempty"`
+	Priority   string   `xml:"priority,omitempty"`
+}
+
+type sitemapURLSet struct {
+	XMLName xml.Name          `xml:"urlset"`
+	Xmlns   string            `xml:"xmlns,attr"`
+	URLs    []sitemapURLEntry `xml:"url"`
+}
+
+// HandleSitemap GET /sitemap.xml - liệt kê 4 trang public cố định + mọi tác
+// phẩm đã publish (trỏ về /chia-se/tac-pham/{id}, không phải ?tranh={id} trên
+// SPA, để Google index được nội dung không phụ thuộc JS và tránh trùng lặp
+// nội dung giữa các biến thể query param). Không cần Search Console
+// API/IndexNow - Google tự crawl lại theo lịch khi thấy <lastmod> mới.
+func (h *PublicHandler) HandleSitemap(w http.ResponseWriter, r *http.Request) {
+	origin := resolveRequestOrigin(r)
+
+	staticEntries := []struct {
+		path       string
+		priority   string
+		changefreq string
+	}{
+		{"/", "1.0", "daily"},
+		{"/tac-pham-tieu-bieu", "0.8", "daily"},
+		{"/phong-trien-lam", "0.8", "daily"},
+		{"/bang-vang", "0.7", "weekly"},
+	}
+
+	urlSet := sitemapURLSet{Xmlns: "http://www.sitemaps.org/schemas/sitemap/0.9"}
+	for _, e := range staticEntries {
+		loc := origin.ResolveReference(&url.URL{Path: e.path})
+		urlSet.URLs = append(urlSet.URLs, sitemapURLEntry{
+			Loc:        loc.String(),
+			Priority:   e.priority,
+			ChangeFreq: e.changefreq,
+		})
+	}
+
+	// Lỗi lấy danh sách tác phẩm là lỗi phụ trợ: sitemap vẫn trả về hữu ích
+	// với 4 URL tĩnh thay vì lỗi 500 toàn bộ - cùng tinh thần buildVariants.
+	artworks, err := h.artworkService.ListPublishedForSitemap(r.Context())
+	if err != nil {
+		log.Printf("sitemap.xml: không lấy được danh sách tác phẩm, chỉ trả URL tĩnh: %v", err)
+	}
+	for _, a := range artworks {
+		loc := origin.ResolveReference(&url.URL{Path: "/chia-se/tac-pham/" + strconv.FormatInt(a.ID, 10)})
+		urlSet.URLs = append(urlSet.URLs, sitemapURLEntry{
+			Loc:        loc.String(),
+			LastMod:    a.UpdatedAt.Format(time.RFC3339),
+			Priority:   "0.6",
+			ChangeFreq: "monthly",
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=900")
+	w.Write([]byte(xml.Header))
+	if err := xml.NewEncoder(w).Encode(urlSet); err != nil {
+		log.Printf("sitemap.xml: lỗi ghi response: %v", err)
+	}
+}
+
+// HandleRobotsTxt GET /robots.txt - cho phép crawl toàn bộ trang public, chặn
+// khu quản trị/API/OAuth (vệ sinh index, không phải bảo mật), trỏ tới
+// sitemap.xml bằng URL tuyệt đối suy từ request.
+func (h *PublicHandler) HandleRobotsTxt(w http.ResponseWriter, r *http.Request) {
+	origin := resolveRequestOrigin(r)
+	sitemapURL := origin.ResolveReference(&url.URL{Path: "/sitemap.xml"})
+
+	body := "User-agent: *\n" +
+		"Allow: /\n" +
+		"Disallow: /admin/\n" +
+		"Disallow: /api/\n" +
+		"Disallow: /auth/\n" +
+		"\n" +
+		"Sitemap: " + sitemapURL.String() + "\n"
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	w.Write([]byte(body))
 }
 
 type reactionRequestBody struct {

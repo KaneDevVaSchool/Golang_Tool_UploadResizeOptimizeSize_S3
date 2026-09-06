@@ -20,6 +20,11 @@ type ArtworkRepository interface {
 	Create(ctx context.Context, tx *database.Tx, artwork *models.Artwork) (*models.Artwork, error)
 	Update(ctx context.Context, artwork *models.Artwork) error
 	Delete(ctx context.Context, id int64) error
+	// DeleteBatch xoá nhiều bản ghi trong 1 câu DELETE ... WHERE id IN (...) -
+	// dùng cho thao tác xoá hàng loạt ở trang quản trị. Trả về số dòng thực sự
+	// bị xoá (có thể nhỏ hơn len(ids) nếu vài id không tồn tại - không coi là
+	// lỗi, giống SetFeaturedBatch).
+	DeleteBatch(ctx context.Context, ids []int64) (int64, error)
 	GetByID(ctx context.Context, id int64) (*models.Artwork, error)
 	// List trả (items, totalCount, error) - totalCount phục vụ pagination
 	// UI (tổng số trang), tính bằng query COUNT(*) riêng cùng điều kiện WHERE.
@@ -152,6 +157,30 @@ func (r *artworkRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (r *artworkRepository) DeleteBatch(ctx context.Context, ids []int64) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`DELETE FROM artworks WHERE id IN (%s)`, strings.Join(placeholders, ","))
+	result, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete artworks batch: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	return rows, nil
+}
+
 func (r *artworkRepository) GetByID(ctx context.Context, id int64) (*models.Artwork, error) {
 	query := fmt.Sprintf(`SELECT %s FROM artworks WHERE id = ?`, artworkSelectColumns)
 	a, err := scanArtwork(r.db.QueryRowContext(ctx, query, id))
@@ -223,6 +252,10 @@ func (r *artworkRepository) List(ctx context.Context, filter models.ArtworkFilte
 	if filter.SchoolID != nil {
 		where = append(where, "artworks.school_id = ?")
 		args = append(args, *filter.SchoolID)
+	}
+	if filter.Region != nil && *filter.Region != "" {
+		where = append(where, "artworks.school_id IN (SELECT id FROM schools WHERE region = ?)")
+		args = append(args, *filter.Region)
 	}
 	if filter.GradeLevelID != nil {
 		where = append(where, "artworks.grade_level_id = ?")

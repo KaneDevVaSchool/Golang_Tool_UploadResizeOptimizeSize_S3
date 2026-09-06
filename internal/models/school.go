@@ -20,3 +20,13 @@ const (
 	RegionVungTau = "vungtau"
 )
 
+// IsKnownRegion báo true cho đúng 3 khu vực trưng bày — dùng khi parse query
+// `region=` để bỏ qua giá trị lạ thay vì đưa vào SQL.
+func IsKnownRegion(region string) bool {
+	switch region {
+	case RegionSaigon, RegionCanTho, RegionVungTau:
+		return true
+	}
+	return false
+}
+

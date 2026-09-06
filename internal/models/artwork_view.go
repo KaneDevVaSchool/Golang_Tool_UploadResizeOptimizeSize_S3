@@ -2,8 +2,7 @@ package models
 
 import "time"
 
-// ArtworkView ghi lại 1 lượt xem để chống đếm trùng - trước khi tăng
-// artworks.view_count, service kiểm tra visitor_token đã xem trong 24h chưa.
+// ArtworkView ghi lại 1 lượt xem (mỗi lần mở chi tiết tác phẩm = 1 dòng).
 type ArtworkView struct {
 	ID           int64     `db:"id" json:"id"`
 	ArtworkID    int64     `db:"artwork_id" json:"artwork_id"`

@@ -3,12 +3,17 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"mime"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"s3-upload-tool/internal/middleware"
 	"s3-upload-tool/internal/models"
+	"s3-upload-tool/internal/repository"
 	"s3-upload-tool/internal/service"
 	"s3-upload-tool/internal/utils"
 )
@@ -19,10 +24,16 @@ type ArtworkHandler struct {
 	BaseHandler
 	service       service.ArtworkService
 	maxUploadSize int64
+	// s3Repo/s3Bucket chỉ phục vụ HandleDownload (tải ảnh gốc từ khu quản
+	// trị) - cùng cơ chế PublicHandler.HandleDownloadArtwork nhưng KHÔNG
+	// watermark (admin cần file gốc sạch để lưu trữ/in ấn) và KHÔNG ép
+	// is_published (admin phải tải được cả ảnh đang ẩn).
+	s3Repo   repository.S3Repository
+	s3Bucket string
 }
 
-func NewArtworkHandler(svc service.ArtworkService, maxUploadSize int64) *ArtworkHandler {
-	return &ArtworkHandler{service: svc, maxUploadSize: maxUploadSize}
+func NewArtworkHandler(svc service.ArtworkService, maxUploadSize int64, s3Repo repository.S3Repository, s3Bucket string) *ArtworkHandler {
+	return &ArtworkHandler{service: svc, maxUploadSize: maxUploadSize, s3Repo: s3Repo, s3Bucket: s3Bucket}
 }
 
 // HandleBulkUpload POST /api/v1/admin/artworks/bulk-upload - nhận field
@@ -261,6 +272,101 @@ func (h *ArtworkHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	h.SendSuccess(w, map[string]bool{"deleted": true})
 }
 
+// HandleDeleteBatch DELETE /api/v1/admin/artworks/bulk-delete - xoá nhiều tác
+// phẩm cùng lúc (thao tác bulk ở trang danh sách). Dùng method DELETE với
+// thân JSON {ids} thay vì query string vì số lượng id có thể lớn.
+func (h *ArtworkHandler) HandleDeleteBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		h.SendError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Chỉ hỗ trợ DELETE")
+		return
+	}
+
+	var body struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		h.SendError(w, http.StatusBadRequest, "INVALID_BODY", "Dữ liệu gửi lên không hợp lệ")
+		return
+	}
+	if len(body.IDs) == 0 {
+		h.SendError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Chưa chọn tác phẩm nào")
+		return
+	}
+
+	deleted, err := h.service.DeleteArtworkBatch(r.Context(), body.IDs)
+	if err != nil {
+		h.SendError(w, http.StatusInternalServerError, "DELETE_FAILED", "Không xoá được tác phẩm")
+		return
+	}
+	h.SendSuccess(w, map[string]any{"deleted": deleted, "requested": len(body.IDs)})
+}
+
+// HandleDownload GET /api/v1/admin/artworks/{id}/download - stream ảnh gốc
+// (không watermark, không ép is_published) để admin tải về lưu trữ/in ấn.
+// Cùng cơ chế PublicHandler.HandleDownloadArtwork (proxy qua backend thay vì
+// link S3 trực tiếp, để trình duyệt tải same-origin và không cần CORS trên
+// bucket), khác ở hai điểm trên vì đây là công cụ quản trị nội bộ.
+func (h *ArtworkHandler) HandleDownload(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePathID(r, "id")
+	if !ok {
+		h.SendError(w, http.StatusBadRequest, "INVALID_ID", "ID tác phẩm không hợp lệ")
+		return
+	}
+
+	artwork, err := h.service.GetArtwork(r.Context(), id)
+	if err != nil {
+		h.SendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Không tải được tác phẩm")
+		return
+	}
+	if artwork == nil {
+		h.SendError(w, http.StatusNotFound, "NOT_FOUND", "Không tìm thấy tác phẩm")
+		return
+	}
+	if strings.TrimSpace(artwork.S3Key) == "" {
+		h.SendError(w, http.StatusNotFound, "NOT_FOUND", "Không có file ảnh để tải")
+		return
+	}
+	if h.s3Repo == nil || strings.TrimSpace(h.s3Bucket) == "" {
+		h.SendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Không cấu hình được tải ảnh")
+		return
+	}
+
+	body, contentType, _, err := h.s3Repo.GetObject(r.Context(), h.s3Bucket, artwork.S3Key)
+	if err != nil {
+		h.SendError(w, http.StatusBadGateway, "STORAGE_ERROR", "Không lấy được ảnh từ kho lưu trữ")
+		return
+	}
+	defer body.Close()
+
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		h.SendError(w, http.StatusBadGateway, "STORAGE_ERROR", "Không đọc được ảnh từ kho lưu trữ")
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(artwork.S3Key))
+	if ext == "" {
+		ext = ".jpg"
+	}
+	downloadName := artworkDownloadFileName(artwork.Title, ext)
+
+	if contentType == "" || contentType == "application/octet-stream" {
+		if typed := utils.GetContentType(downloadName); typed != "application/octet-stream" {
+			contentType = typed
+		}
+	}
+
+	logArtworkDownload(r, h.service, id, models.ArtworkDownloadSourceAdmin)
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
+		"filename": downloadName,
+	}))
+	w.Header().Set("Content-Length", strconv.Itoa(len(raw)))
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Write(raw)
+}
+
 // HandleGet GET /api/v1/admin/artworks/{id}
 func (h *ArtworkHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	id, ok := parsePathID(r, "id")
@@ -281,7 +387,7 @@ func (h *ArtworkHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	h.SendSuccess(w, artwork)
 }
 
-// HandleList GET /api/v1/admin/artworks?search=&school_id=&grade_level_id=&award_id=&featured=&page=&page_size=
+// HandleList GET /api/v1/admin/artworks?search=&region=&school_id=&grade_level_id=&award_id=&featured=&page=&page_size=
 func (h *ArtworkHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.SendError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Chỉ hỗ trợ GET")
@@ -368,6 +474,9 @@ func parseArtworkFilter(r *http.Request) models.ArtworkFilter {
 		PageSize:       parseIntOrDefault(q.Get("page_size"), 20),
 	}
 
+	if v := strings.TrimSpace(q.Get("region")); models.IsKnownRegion(v) {
+		filter.Region = &v
+	}
 	if v, err := strconv.ParseInt(q.Get("school_id"), 10, 64); err == nil && v > 0 {
 		filter.SchoolID = &v
 	}

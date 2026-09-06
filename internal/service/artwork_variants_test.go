@@ -31,10 +31,6 @@ func (f *fakeUploadService) UploadImage(context.Context, string, io.Reader, int6
 	return nil, errors.New("không dùng trong test này")
 }
 
-func (f *fakeUploadService) UploadImageWithTransaction(context.Context, string, io.Reader, int64, int64) (*models.UploadResponse, *models.UploadRecord, error) {
-	return nil, nil, errors.New("không dùng trong test này")
-}
-
 func (f *fakeUploadService) UploadDerived(_ context.Context, key string, data []byte, contentType string) (string, error) {
 	if f.failOn != "" && strings.Contains(key, f.failOn) {
 		return "", errors.New("lỗi upload giả lập")
@@ -46,6 +42,18 @@ func (f *fakeUploadService) UploadDerived(_ context.Context, key string, data []
 	defer f.mu.Unlock()
 	f.uploaded[key] = contentType
 	return "https://cdn.test/" + key, nil
+}
+
+func (f *fakeUploadService) ObjectKeyFromURL(objectURL string) string {
+	const prefix = "https://cdn.test/"
+	if strings.HasPrefix(objectURL, prefix) {
+		return strings.TrimPrefix(objectURL, prefix)
+	}
+	return ""
+}
+
+func (f *fakeUploadService) DeleteObject(context.Context, string) error {
+	return errors.New("không dùng trong test này")
 }
 
 func (f *fakeUploadService) keys() []string {
