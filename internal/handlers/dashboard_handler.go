@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 
 	"s3-upload-tool/internal/service"
@@ -25,6 +26,9 @@ func (h *DashboardHandler) HandleStats(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := h.service.GetStats(r.Context())
 	if err != nil {
+		// Ghi log nguyên nhân thật: thông báo trả về cho người dùng cố tình chung
+		// chung, nên nếu không log ở đây thì lỗi 500 mất dấu hoàn toàn.
+		log.Printf("[Dashboard] Không lấy được số liệu thống kê: %v", err)
 		h.SendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Không tải được số liệu thống kê")
 		return
 	}

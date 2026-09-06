@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"s3-upload-tool/internal/database"
 	"s3-upload-tool/internal/models"
@@ -38,6 +39,56 @@ type ArtworkEngagement struct {
 	EngagementScore int64  `json:"engagement_score"`
 }
 
+// ActivityPoint là số liệu của 1 ngày trên biểu đồ xu hướng - dùng cho
+// "nhịp hội thi 14 ngày gần nhất" ở Dashboard.
+//
+// Views đếm từ artwork_views (mỗi dòng = 1 lượt xem đã khử trùng lặp 24h),
+// KHÔNG lấy từ artworks.view_count vì cột đó là tổng tích luỹ, không tách
+// được theo ngày.
+type ActivityPoint struct {
+	Date      string `json:"date"` // YYYY-MM-DD
+	Uploads   int64  `json:"uploads"`
+	Views     int64  `json:"views"`
+	Reactions int64  `json:"reactions"`
+	Comments  int64  `json:"comments"`
+}
+
+// SchoolCoverage là mức độ tham gia của 1 trường: bao nhiêu khối lớp đã có
+// bài trên tổng số khối. Đây là chỉ số hành động được - trường nào còn
+// thiếu khối nào thì ban tổ chức biết phải nhắc ai.
+type SchoolCoverage struct {
+	SchoolID      int64  `json:"school_id"`
+	Name          string `json:"name"`
+	Region        string `json:"region"`
+	Artworks      int64  `json:"artworks"`
+	GradesCovered int64  `json:"grades_covered"`
+	TotalGrades   int64  `json:"total_grades"`
+	// Awarded là số tác phẩm của trường đã được trao giải.
+	Awarded int64 `json:"awarded"`
+}
+
+// OperationsSnapshot gom các con số cần xử lý ngay (hàng chờ việc), tách
+// khỏi các con số mô tả quy mô triển lãm.
+type OperationsSnapshot struct {
+	// PendingArtworks là tác phẩm đã upload nhưng chưa xuất bản.
+	PendingArtworks int64 `json:"pending_artworks"`
+	// HiddenComments là bình luận đã bị ẩn (đã xử lý) - dùng để đối chiếu
+	// với tổng bình luận, cho biết mức độ spam.
+	HiddenComments int64 `json:"hidden_comments"`
+	TotalComments  int64 `json:"total_comments"`
+	// AwardedArtworks / ActiveAwards cho biết tiến độ chấm giải.
+	AwardedArtworks int64 `json:"awarded_artworks"`
+	ActiveAwards    int64 `json:"active_awards"`
+	// FeaturedArtworks là số tác phẩm đang được ghim nổi bật ở trang chủ.
+	FeaturedArtworks int64 `json:"featured_artworks"`
+	// SilentArtworks là tác phẩm đã xuất bản nhưng chưa có bất kỳ tương
+	// tác nào (0 view, 0 reaction) - ứng viên cần đẩy lên trang chủ.
+	SilentArtworks int64 `json:"silent_artworks"`
+	// TotalViews / TotalReactions là tổng tương tác toàn triển lãm.
+	TotalViews     int64 `json:"total_views"`
+	TotalReactions int64 `json:"total_reactions"`
+}
+
 // DashboardRepository chạy các query tổng hợp cho trang Dashboard - không
 // map 1-1 với 1 bảng nào, luôn JOIN/GROUP BY qua artworks + schools/grade_levels.
 type DashboardRepository interface {
@@ -48,6 +99,11 @@ type DashboardRepository interface {
 	TopSchoolsByArtworkCount(ctx context.Context, limit int) ([]SchoolCount, error)
 	// TopArtworksByEngagement sắp theo (view_count + số reaction) giảm dần.
 	TopArtworksByEngagement(ctx context.Context, limit int) ([]ArtworkEngagement, error)
+	// ActivityTrend trả số liệu từng ngày trong `days` ngày gần nhất.
+	ActivityTrend(ctx context.Context, days int) ([]ActivityPoint, error)
+	// SchoolCoverageReport trả toàn bộ trường (kể cả trường 0 bài).
+	SchoolCoverageReport(ctx context.Context) ([]SchoolCoverage, error)
+	Operations(ctx context.Context) (OperationsSnapshot, error)
 }
 
 type dashboardRepository struct {
@@ -192,6 +248,7 @@ func (r *dashboardRepository) TopArtworksByEngagement(ctx context.Context, limit
 
 		err := rows.Scan(
 			&e.ID, &e.Title, &e.StudentID, &e.SchoolID, &e.GradeLevelID, &e.S3Key, &e.S3URL, &thumbnailURL,
+			&e.Variants,
 			&e.FileSize, &width, &height, &e.IsFeatured, &e.IsPublished, &e.ViewCount, &uploadID, &createdBy,
 			&e.CreatedAt, &e.UpdatedAt,
 			&e.StudentName, &e.ReactionCount, &e.CommentCount, &e.EngagementScore,
@@ -219,4 +276,148 @@ func (r *dashboardRepository) TopArtworksByEngagement(ctx context.Context, limit
 		results = append(results, e)
 	}
 	return results, rows.Err()
+}
+
+func (r *dashboardRepository) ActivityTrend(ctx context.Context, days int) ([]ActivityPoint, error) {
+	if days <= 0 {
+		days = 14
+	}
+
+	// Bốn nguồn số liệu nằm ở bốn bảng khác nhau và không bảng nào chắc
+	// chắn có dòng cho mọi ngày. Gom bằng UNION ALL rồi GROUP BY ngày thay
+	// vì JOIN chéo: JOIN nhiều bảng "một-nhiều" theo ngày sẽ nhân bản dòng
+	// và thổi phồng số đếm.
+	query := `
+		SELECT d AS day,
+		       SUM(uploads) AS uploads,
+		       SUM(views) AS views,
+		       SUM(reactions) AS reactions,
+		       SUM(comments) AS comments
+		FROM (
+			SELECT DATE(created_at) AS d, COUNT(*) AS uploads, 0 AS views, 0 AS reactions, 0 AS comments
+			FROM artworks
+			WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+			GROUP BY DATE(created_at)
+			UNION ALL
+			SELECT DATE(viewed_at), 0, COUNT(*), 0, 0
+			FROM artwork_views
+			WHERE viewed_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+			GROUP BY DATE(viewed_at)
+			UNION ALL
+			SELECT DATE(created_at), 0, 0, COUNT(*), 0
+			FROM artwork_reactions
+			WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+			GROUP BY DATE(created_at)
+			UNION ALL
+			SELECT DATE(created_at), 0, 0, 0, COUNT(*)
+			FROM artwork_comments
+			WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY) AND is_hidden = 0
+			GROUP BY DATE(created_at)
+		) t
+		GROUP BY d
+		ORDER BY d
+	`
+	span := days - 1
+	rows, err := r.db.QueryContext(ctx, query, span, span, span, span)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activity trend: %w", err)
+	}
+	defer rows.Close()
+
+	byDate := make(map[string]ActivityPoint, days)
+	for rows.Next() {
+		var p ActivityPoint
+		if err := rows.Scan(&p.Date, &p.Uploads, &p.Views, &p.Reactions, &p.Comments); err != nil {
+			return nil, fmt.Errorf("failed to scan activity point: %w", err)
+		}
+		// Driver có thể trả DATE dạng "2026-09-06 00:00:00" tuỳ parseTime -
+		// cắt về đúng phần ngày để khớp khoá lịch bên dưới.
+		if len(p.Date) > 10 {
+			p.Date = p.Date[:10]
+		}
+		byDate[p.Date] = p
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Trả đủ `days` điểm liên tục, kể cả ngày không có hoạt động: biểu đồ
+	// đường mà thiếu ngày sẽ vẽ sai độ dốc (hai ngày cách nhau một tuần bị
+	// nối thẳng như hai ngày liền kề).
+	points := make([]ActivityPoint, 0, days)
+	today := time.Now()
+	for i := span; i >= 0; i-- {
+		key := today.AddDate(0, 0, -i).Format("2006-01-02")
+		if p, ok := byDate[key]; ok {
+			points = append(points, p)
+			continue
+		}
+		points = append(points, ActivityPoint{Date: key})
+	}
+	return points, nil
+}
+
+func (r *dashboardRepository) SchoolCoverageReport(ctx context.Context) ([]SchoolCoverage, error) {
+	// LEFT JOIN để trường chưa có tác phẩm nào vẫn xuất hiện với số 0 -
+	// đó chính là trường ban tổ chức cần nhắc, bỏ khỏi báo cáo thì hỏng
+	// mục đích của bảng này.
+	query := `
+		SELECT s.id, s.name, s.region,
+		       COUNT(DISTINCT a.id) AS artworks,
+		       COUNT(DISTINCT a.grade_level_id) AS grades_covered,
+		       (SELECT COUNT(*) FROM grade_levels) AS total_grades,
+		       COUNT(DISTINCT aa.artwork_id) AS awarded
+		FROM schools s
+		LEFT JOIN artworks a ON a.school_id = s.id AND a.is_published = 1
+		LEFT JOIN artwork_awards aa ON aa.artwork_id = a.id
+		WHERE s.is_active = 1
+		GROUP BY s.id, s.name, s.region, s.display_order
+		ORDER BY artworks DESC, s.display_order
+	`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get school coverage: %w", err)
+	}
+	defer rows.Close()
+
+	var results []SchoolCoverage
+	for rows.Next() {
+		var c SchoolCoverage
+		if err := rows.Scan(&c.SchoolID, &c.Name, &c.Region, &c.Artworks,
+			&c.GradesCovered, &c.TotalGrades, &c.Awarded); err != nil {
+			return nil, fmt.Errorf("failed to scan school coverage: %w", err)
+		}
+		results = append(results, c)
+	}
+	return results, rows.Err()
+}
+
+func (r *dashboardRepository) Operations(ctx context.Context) (OperationsSnapshot, error) {
+	var s OperationsSnapshot
+
+	// Gom về một lần round-trip: mỗi số là một subquery vô hướng, rẻ hơn
+	// nhiều so với 8 lần gọi DB riêng cho một trang tải mỗi lần mở.
+	query := `
+		SELECT
+			(SELECT COUNT(*) FROM artworks WHERE is_published = 0),
+			(SELECT COUNT(*) FROM artwork_comments WHERE is_hidden = 1),
+			(SELECT COUNT(*) FROM artwork_comments),
+			(SELECT COUNT(DISTINCT artwork_id) FROM artwork_awards),
+			(SELECT COUNT(*) FROM awards WHERE is_active = 1),
+			(SELECT COUNT(*) FROM artworks WHERE is_featured = 1 AND is_published = 1),
+			(SELECT COUNT(*) FROM artworks a
+			 WHERE a.is_published = 1 AND a.view_count = 0
+			   AND NOT EXISTS (SELECT 1 FROM artwork_reactions r WHERE r.artwork_id = a.id)),
+			(SELECT COALESCE(SUM(view_count), 0) FROM artworks WHERE is_published = 1),
+			(SELECT COUNT(*) FROM artwork_reactions)
+	`
+	err := r.db.QueryRowContext(ctx, query).Scan(
+		&s.PendingArtworks, &s.HiddenComments, &s.TotalComments,
+		&s.AwardedArtworks, &s.ActiveAwards, &s.FeaturedArtworks,
+		&s.SilentArtworks, &s.TotalViews, &s.TotalReactions,
+	)
+	if err != nil {
+		return s, fmt.Errorf("failed to get operations snapshot: %w", err)
+	}
+	return s, nil
 }

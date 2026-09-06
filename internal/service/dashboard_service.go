@@ -15,7 +15,17 @@ type DashboardStatsResponse struct {
 	TotalByGrade  []repository.GradeLevelCount   `json:"total_by_grade"`
 	TopSchools    []repository.SchoolCount       `json:"top_schools"`
 	TopArtworks   []repository.ArtworkEngagement `json:"top_artworks"`
+	// Activity là nhịp hoạt động từng ngày (mặc định 14 ngày gần nhất).
+	Activity []repository.ActivityPoint `json:"activity"`
+	// SchoolCoverage cho biết trường nào còn thiếu bài / thiếu khối.
+	SchoolCoverage []repository.SchoolCoverage `json:"school_coverage"`
+	// Operations là các con số cần hành động (hàng chờ duyệt, chấm giải...).
+	Operations repository.OperationsSnapshot `json:"operations"`
 }
+
+// activityTrendDays là bề rộng cửa sổ biểu đồ xu hướng. Hai tuần đủ để thấy
+// hiệu ứng của một đợt phát động mà không làm trục hoành chật trên mobile.
+const activityTrendDays = 14
 
 // DashboardService gộp các query tổng hợp từ DashboardRepository thành 1
 // response duy nhất cho trang Dashboard.
@@ -57,11 +67,29 @@ func (s *dashboardService) GetStats(ctx context.Context) (*DashboardStatsRespons
 		return nil, fmt.Errorf("failed to get top artworks: %w", err)
 	}
 
+	activity, err := s.repo.ActivityTrend(ctx, activityTrendDays)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get activity trend: %w", err)
+	}
+
+	coverage, err := s.repo.SchoolCoverageReport(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get school coverage: %w", err)
+	}
+
+	ops, err := s.repo.Operations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operations snapshot: %w", err)
+	}
+
 	return &DashboardStatsResponse{
-		TotalArtworks: total,
-		TotalByRegion: byRegion,
-		TotalByGrade:  byGrade,
-		TopSchools:    topSchools,
-		TopArtworks:   topArtworks,
+		TotalArtworks:  total,
+		TotalByRegion:  byRegion,
+		TotalByGrade:   byGrade,
+		TopSchools:     topSchools,
+		TopArtworks:    topArtworks,
+		Activity:       activity,
+		SchoolCoverage: coverage,
+		Operations:     ops,
 	}, nil
 }

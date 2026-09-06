@@ -211,7 +211,7 @@ hướng xuyên site, `Strict` sẽ không gửi cookie và người dùng vừa
 | `artwork_repository.go` | 309 | CRUD + WHERE động + phân trang + `SetFeaturedBatch` |
 | `award_repository.go` | 252 | Giải thưởng + gán/gỡ N:N + lọc theo `grade_level_id` |
 | `topic_category_repository.go` | | Nhóm chủ đề sáng tạo — CRUD, cùng mẫu `award_repository.go` |
-| `dashboard_repository.go` | 222 | Truy vấn tổng hợp |
+| `dashboard_repository.go` | 423 | Truy vấn tổng hợp + xu hướng 14 ngày, độ phủ trường, chỉ số vận hành |
 | `comment_repository.go` | 163 | Gồm `DeleteOwned` kiểm tra quyền sở hữu |
 | `reaction_repository.go` | 114 | `INSERT IGNORE` → idempotent |
 | `admin_user_repository.go` | 120 | Tìm/tạo theo `google_sub` |
@@ -249,7 +249,7 @@ qua `?` — không bao giờ nối giá trị vào SQL.
 | `artwork_service.go` | 629 | Bulk upload, tạo/sửa/xoá, enrich (topic category + nhiều giải/tác phẩm + `SetFeaturedBatch`, có test ở `artwork_bulk_featured_test.go`) |
 | `award_service.go` | | CRUD giải |
 | `topic_category_service.go` | | CRUD nhóm chủ đề sáng tạo, cùng mẫu `award_service.go` |
-| `dashboard_service.go` | 67 | Gộp số liệu thành 1 DTO |
+| `dashboard_service.go` | 95 | Gộp số liệu thành 1 DTO (có test ở `dashboard_service_test.go`) |
 | `image_resize.go` | 534 | Resize kiểu WordPress |
 | `image_optimizer.go` | 440 | Chất lượng thích ứng theo dung lượng |
 | `image_variants.go` | — | Sinh biến thể thumb/medium/large × WebP/JPEG |

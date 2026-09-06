@@ -590,12 +590,34 @@ DELETE trả **409 `TOPIC_CATEGORY_IN_USE`** nếu nhóm đang gắn cho tác ph
     "total_by_region": { "saigon": 200, "cantho": 80, "vungtau": 70 },
     "total_by_grade": [ { } ],
     "top_schools": [ { } ],
-    "top_artworks": [ { } ]
+    "top_artworks": [ { } ],
+    "activity": [
+      { "date": "2026-09-06", "uploads": 12, "views": 210, "reactions": 44, "comments": 9 }
+    ],
+    "school_coverage": [
+      {
+        "school_id": 1, "name": "Phú Định", "region": "saigon",
+        "artworks": 57, "grades_covered": 9, "total_grades": 12, "awarded": 4
+      }
+    ],
+    "operations": {
+      "pending_artworks": 23, "hidden_comments": 7, "total_comments": 264,
+      "awarded_artworks": 27, "active_awards": 4, "featured_artworks": 6,
+      "silent_artworks": 14, "total_views": 9142, "total_reactions": 1863
+    }
   }
 }
 ```
 
 Gộp toàn bộ số liệu vào **một** lần gọi, để frontend không phải gọi nhiều endpoint rời rạc.
+
+Ba khối bổ sung phục vụ việc **ra quyết định**, không chỉ mô tả quy mô:
+
+| Khối | Ý nghĩa |
+|---|---|
+| `activity` | Nhịp từng ngày trong 14 ngày gần nhất. Luôn trả **đủ** ngày liên tục, ngày không có hoạt động vẫn có mặt với số 0 — thiếu ngày sẽ làm biểu đồ đường vẽ sai độ dốc. `views` đếm từ `artwork_views` chứ không lấy `artworks.view_count` (cột đó là tổng tích luỹ, không tách được theo ngày). |
+| `school_coverage` | Mỗi cơ sở đã có bài ở bao nhiêu khối trên tổng số khối. Trường **chưa có tác phẩm nào vẫn xuất hiện** với số 0 — đó chính là nơi ban tổ chức cần nhắc. |
+| `operations` | Các con số cần hành động: bài chờ xuất bản, bình luận đã ẩn, tiến độ trao giải, tác phẩm chưa có tương tác nào. |
 
 ---
 
