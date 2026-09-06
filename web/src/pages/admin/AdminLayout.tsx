@@ -113,9 +113,34 @@ export default function AdminLayout() {
           />
 
           <main className="admin-content">
+            {/* background-logo.png có alpha gốc rất thấp (~5%) - CSS filter
+                (invert/sepia/...) chỉ đổi màu RGB, không khuếch đại alpha,
+                nên watermark từng tàng hình thực sự dù đã set opacity. Cần
+                feColorMatrix để nhân alpha lên trước khi tô màu, đúng kỹ
+                thuật bản gốc (ProjectCreate.vue bên va-workspace). */}
+            <svg className="admin-content-watermark-defs" aria-hidden focusable="false">
+              <filter id="admin-watermark-boost" colorInterpolationFilters="sRGB">
+                <feColorMatrix type="matrix" values="0 0 0 0 0.6  0 0 0 0 0  0 0 0 0 0.21  0 0 0 18 0" />
+              </filter>
+            </svg>
             {/* Watermark logo: cố định trong khung nội dung, không cuộn
-                theo, nằm dưới mọi card (z-index 0 + card position:relative). */}
-            <div className="admin-content-watermark" aria-hidden />
+                theo, nằm dưới mọi card (z-index 0 + card position:relative).
+                Wrapper canh giữa logo + quầng sáng (::before trong CSS). */}
+            <div className="admin-content-watermark" aria-hidden>
+              <div className="admin-content-watermark-logo" />
+            </div>
+            {/* Viền trang trí góc - thuần thẩm mỹ, gợi khung "tấm ảnh" quanh
+                vùng nội dung mà không đóng khung cứng. */}
+            <div className="admin-content-watermark-deco" aria-hidden>
+              <svg className="corner-tl" width="96" height="96" viewBox="0 0 120 120">
+                <path d="M0 40 L0 0 L40 0" fill="none" stroke="rgba(154, 0, 54, 0.18)" strokeWidth="2" />
+                <circle cx="0" cy="0" r="3" fill="rgba(154, 0, 54, 0.25)" />
+              </svg>
+              <svg className="corner-br" width="96" height="96" viewBox="0 0 120 120">
+                <path d="M0 40 L0 0 L40 0" fill="none" stroke="rgba(23, 80, 181, 0.16)" strokeWidth="2" />
+                <circle cx="0" cy="0" r="3" fill="rgba(23, 80, 181, 0.22)" />
+              </svg>
+            </div>
             {/* key theo pathname: mỗi trang admin vào bằng hoạt cảnh ngắn
                 thay vì bụp một cái sau quãng chờ chunk. Đặt ở lớp trong
                 cùng - sidebar, header và watermark không nhấp nháy theo. */}

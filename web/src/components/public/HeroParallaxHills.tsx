@@ -1,7 +1,7 @@
 /**
  * Lớp "đồi" parallax cho Hero - dùng nguyên bộ ảnh PNG từ mẫu tham chiếu
  * (C:\Users\ASUS\Desktop\theme: hill1-5, tree, plant, leaf), giữ đúng tông
- * xanh lá/ngọc bích gốc của mẫu thay vì vẽ lại theo màu thương hiệu VAS -
+ * xanh lá/ngọc bích gốc của mẫu thay vì vẽ lại theo màu thương hiệu VASchools -
  * theo yêu cầu dùng thẳng asset gốc. File nằm ở
  * public/images/parallax/*.png. Mỗi <img> là một dải đồi/cụm cây kéo dài
  * toàn chiều rộng (hoặc neo 1 góc); layer cha (HeroSection) áp transform

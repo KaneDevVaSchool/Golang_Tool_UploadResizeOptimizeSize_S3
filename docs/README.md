@@ -1,4 +1,4 @@
-# Tài liệu hệ thống — VAS Art Gallery
+# Tài liệu hệ thống — VASchools Art Gallery
 
 Bộ tài liệu cho hệ thống hội thi vẽ tranh "20 năm Trường Việt Mỹ": upload ảnh lên S3,
 quản trị tác phẩm/giải thưởng, và trang public trưng bày.
@@ -77,6 +77,6 @@ Bản khảo sát ngày 2026-09-06 phát hiện các sai lệch sau trong tài l
 |---|---|
 | `ARCHITECTURE.md` ghi CSDL là PostgreSQL | MySQL 8 — driver `go-sql-driver/mysql`, DSN `user:pass@tcp(...)`, schema dùng `ENGINE=InnoDB` |
 | `DEPLOYMENT.md` hướng dẫn deploy bằng Dockerfile | `Dockerfile` đã bị xoá khỏi repo; phương án thật là binary + systemd |
-| `MODULES.md` ghi "hiện có 1 file migration" | Có 14 file migration (`001`→`014`) |
+| `MODULES.md` ghi "hiện có 1 file migration" | Nhiều file migration tăng dần, đánh số từ `001` (xem `internal/database/migrations/` để biết số lượng hiện tại — đừng chép cứng con số vào tài liệu) |
 | Tài liệu cũ không nhắc trang public | Trang public là phần lớn nhất của UI hiện tại (4 trang, 22 component) |
 

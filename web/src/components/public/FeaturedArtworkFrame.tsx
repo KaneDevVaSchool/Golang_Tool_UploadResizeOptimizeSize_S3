@@ -123,7 +123,10 @@ export function FeaturedArtworkFrame({
               <span className="artwork-frame-screw" aria-hidden />
               <span className="artwork-frame-plaque-inner">
                 {topAward && (
-                  <span className={`artwork-frame-award${awardClass}`} style={{ backgroundColor: topAward.color_hex }}>
+                  <span
+                    className={`artwork-frame-award${awardClass}`}
+                    style={{ "--award-badge-color": topAward.color_hex } as CSSProperties}
+                  >
                     <Trophy strokeWidth={2.4} aria-hidden />
                     {topAward.name}
                   </span>

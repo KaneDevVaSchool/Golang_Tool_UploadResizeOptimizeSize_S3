@@ -1660,7 +1660,7 @@ html.scrollable-page {
   will-change: background-position;
   animation: hero-bird-fly-cycle var(--flap-dur, 1s) steps(9) infinite;
   animation-delay: var(--flap-delay, 0s);
-  /* Tint bằng thương hiệu VAS thay vì màu đen mặc định của sprite gốc -
+  /* Tint bằng thương hiệu VASchools thay vì màu đen mặc định của sprite gốc -
      invert+sepia+saturate+hue-rotate là công thức chuẩn để nhuộm 1 hình
      đơn sắc bằng CSS filter (không cần ảnh riêng cho từng màu). */
   filter: invert(15%) sepia(80%) saturate(1800%) hue-rotate(325deg) brightness(0.85) contrast(0.95);
@@ -1951,7 +1951,7 @@ html.scrollable-page {
   justify-content: center;
   gap: 0.75rem;
 }
-/* Nút cơ sở - mỗi nơi mang một màu giá trị VAS riêng (teal Nhân ái / xanh
+/* Nút cơ sở - mỗi nơi mang một màu giá trị VASchools riêng (teal Nhân ái / xanh
    Khai phóng / vàng Trách nhiệm) qua --btn-accent, thay vì cả 3 cùng một
    khối gradient đỏ đặc: 3 mảng đỏ bão hoà nằm cạnh nhau trên nền pastel
    sáng của Hero vừa nặng vừa làm mất phân biệt giữa các cơ sở. Nền giờ là
@@ -1970,7 +1970,7 @@ html.scrollable-page {
   backdrop-filter: blur(10px) saturate(1.2);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
   /* --btn-ink tách khỏi --btn-accent: màu accent dùng cho viền/bóng/nền
-     hover, nhưng vài màu VAS (nhất là vàng Trách nhiệm) quá nhạt để làm
+     hover, nhưng vài màu VASchools (nhất là vàng Trách nhiệm) quá nhạt để làm
      màu chữ trên nền trắng - nút nào cần thì đặt riêng --btn-ink đậm hơn.
      Mặc định 2 màu trùng nhau. */
   color: var(--btn-ink, var(--btn-accent));
@@ -3618,6 +3618,13 @@ html.scrollable-page {
   transform: translateX(10%);
 }
 
+/* Nền kính sáng cố định + chữ/icon lấy màu giải (--award-badge-color, do
+   admin chọn tự do trong AwardsPage) làm màu chữ thay vì làm màu nền. Màu
+   giải là bất kỳ - admin có thể chọn cả màu rất đậm (navy, đen...); nếu để
+   làm nền đặc sau chữ nâu cố định như trước, giải đậm sẽ khiến chữ chìm hẳn
+   vào nền (chữ #2a1806 trên nền navy gần như không đọc được). Cùng cách làm
+   với .hall-card-award ở trang Bảng vàng - màu giải luôn an toàn khi chỉ
+   dùng làm màu chữ trên nền sáng cố định. */
 .artwork-frame-award {
   position: relative;
   z-index: 2;
@@ -3636,15 +3643,16 @@ html.scrollable-page {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #2a1806;
+  color: color-mix(in srgb, var(--award-badge-color, #8a6018) 82%, #201004);
   white-space: nowrap;
   text-overflow: ellipsis;
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  border: 1px solid color-mix(in srgb, var(--award-badge-color, #c49c57) 45%, rgba(255, 255, 255, 0.7));
   box-shadow: 0 3px 8px rgba(40, 24, 10, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  background-color: rgba(255, 252, 244, 0.92);
   background-image: linear-gradient(
     115deg,
     transparent 28%,
-    rgba(255, 255, 255, 0.38) 50%,
+    rgba(255, 255, 255, 0.5) 50%,
     transparent 72%
   );
   background-size: 220% 100%;
@@ -4300,6 +4308,13 @@ html.scrollable-page {
   display: none;
 }
 
+/* --- Section theo nhóm chủ đề sáng tạo, đặt sau 2 phòng cấp học -------- */
+.gallery-hall--topics {
+  margin-top: 0.5rem;
+  padding-top: 2.25rem;
+  border-top: 1px solid rgba(0, 144, 130, 0.12);
+}
+
 /* Rail: card rộng, tranh + tên hiện đủ, không cắt. */
 .gallery-rail-wrap {
   position: relative;
@@ -4588,7 +4603,10 @@ html.scrollable-page {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #fff;
+  /* Không ép trắng nữa - kế thừa nền kính sáng + màu chữ theo giải từ
+     .artwork-frame-award gốc (xem giải thích ở đó). Ép "color: #fff" như cũ
+     từng ăn theo nền đặc màu giải set qua inline style; nay nền đã đổi
+     thành kính sáng cố định, chữ trắng trên đó sẽ mất chữ. */
   box-shadow: 0 2px 8px rgba(20, 60, 50, 0.24);
 }
 /* Khung đoạt giải: gỗ đổi sang mạ vàng + quầng sáng nhẹ theo màu giải,
@@ -7079,6 +7097,159 @@ html.scrollable-page {
      một bitmap, tốn bộ nhớ vẽ mà trên màn hình nhỏ gần như không thấy. */
   .edu-card-stars,
   .edu-card-stars--twinkle {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Trang 404 (public) - dùng nền FeaturedGardenScene có sẵn, chỉ thêm khối */
+/* nội dung ở giữa: mascot rồng + biển 404 + lối tắt quay lại.             */
+/* ---------------------------------------------------------------------- */
+.not-found-page {
+  position: relative;
+  min-height: calc(100dvh - 4.5rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: clamp(2rem, 6vw, 4rem) 1rem;
+}
+
+.not-found-content {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  max-width: 34rem;
+  margin: 0 auto;
+}
+
+.not-found-mascot-wrap {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.not-found-mascot {
+  width: clamp(6.5rem, 22vw, 9.5rem);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 22px rgba(36, 20, 23, 0.22));
+}
+
+/* Bóng dưới chân, co giãn ngược pha với cú lắc để mascot không trông như
+   trôi lơ lửng - cùng mẹo đã dùng ở admin-loading-shadow. */
+.not-found-mascot-shadow {
+  width: 3.4rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: rgba(36, 20, 23, 0.22);
+  filter: blur(2px);
+  animation: not-found-shadow-pulse 3.2s ease-in-out infinite;
+}
+@keyframes not-found-shadow-pulse {
+  0%, 100% { transform: scaleX(1); opacity: 0.5; }
+  50% { transform: scaleX(0.7); opacity: 0.3; }
+}
+
+/* Biển gỗ nhỏ ghi "404" cắm cạnh mascot, như biển chỉ đường trong vườn. */
+.not-found-signpost {
+  position: absolute;
+  top: -0.6rem;
+  right: calc(50% - clamp(4.6rem, 15vw, 6.4rem));
+  display: grid;
+  place-items: center;
+  min-width: 2.6rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: var(--vas-radius-sm, 0.6rem);
+  background: var(--vas-umber, #725139);
+  color: #fdf3e0;
+  font-family: var(--vas-display, "Fraunces", serif);
+  font-weight: 700;
+  font-size: 1rem;
+  box-shadow: 0 6px 14px rgba(36, 20, 23, 0.25);
+  transform: rotate(8deg);
+}
+
+.not-found-kicker {
+  margin: 0 0 0.35rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+  color: var(--vas-tri-thuc, #9a0036);
+}
+
+.not-found-title {
+  margin: 0 0 0.75rem;
+  font-family: var(--vas-display, "Fraunces", serif);
+  font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+  color: var(--vas-text, #241417);
+}
+
+.not-found-subtitle {
+  margin: 0 0 1.75rem;
+  color: var(--vas-text-muted, #6b5a5d);
+  line-height: 1.6;
+  font-size: clamp(0.92rem, 2vw, 1rem);
+}
+
+.not-found-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem;
+}
+
+.not-found-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.2rem;
+  border-radius: 999px;
+  font-weight: 650;
+  font-size: 0.9rem;
+  text-decoration: none;
+  background: #fff;
+  color: var(--vas-text, #241417);
+  border: 1px solid var(--vas-border, #ece5e2);
+  box-shadow: var(--vas-shadow-sm, 0 2px 8px rgba(36, 20, 23, 0.06));
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.not-found-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--vas-shadow-md, 0 8px 24px rgba(36, 20, 23, 0.1));
+}
+.not-found-btn--primary {
+  background: var(--vas-tri-thuc, #9a0036);
+  color: #fff;
+  border-color: transparent;
+}
+.not-found-btn--primary:hover {
+  background: var(--vas-tri-thuc-700, #b3003f);
+}
+
+@media (max-width: 480px) {
+  .not-found-signpost {
+    right: calc(50% - 3.6rem);
+    top: -0.3rem;
+    font-size: 0.85rem;
+  }
+  .not-found-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+  .not-found-btn {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .not-found-mascot,
+  .not-found-mascot-shadow {
     animation: none;
   }
 }

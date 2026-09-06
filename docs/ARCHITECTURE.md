@@ -9,7 +9,7 @@ Một service Go duy nhất phục vụ **ba nhóm người dùng khác nhau** t
 
 | Khu vực | Đường dẫn | Người dùng | Xác thực |
 |---|---|---|---|
-| Trang public "20 năm VAS" | `/`, `/tac-pham-tieu-bieu`, `/phong-trien-lam`, `/bang-vang` | Phụ huynh, học sinh, khách | Không — ẩn danh hoàn toàn |
+| Trang public "20 năm VASchools" | `/`, `/tac-pham-tieu-bieu`, `/phong-trien-lam`, `/bang-vang` | Phụ huynh, học sinh, khách | Không — ẩn danh hoàn toàn |
 | Admin panel | `/admin/*` | Ban tổ chức hội thi | Google OAuth + session cookie |
 | Công cụ upload nội bộ | `/upload` | Nhân viên kỹ thuật | API key (tuỳ cấu hình) |
 

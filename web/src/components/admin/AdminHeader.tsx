@@ -1,4 +1,4 @@
-import { ChevronDown, ExternalLink, LogOut, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronDown, LogOut, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -21,13 +21,41 @@ function shortName(full: string): string {
   return parts.length > 1 ? parts[parts.length - 1] : full;
 }
 
+const WEEKDAYS = ["Chủ nhật", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy"];
+
 /**
- * Header admin - port AppHeader.vue (va-workspace): MỘT hàng thấp
- * (--admin-header-h) gồm
- *   nút menu · vùng portal cho AdminPageHeader · lối tắt + tài khoản.
+ * Đồng hồ header - thông tin CHỈ có ở header, không lặp lại sidebar.
+ * Nhịp cập nhật căn đúng đầu phút thay vì setInterval(60s): tránh lệch dần
+ * và tránh hiện sai phút ngay sau khi tab được đánh thức.
+ */
+function useClock(): Date {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    let timer: number;
+    function schedule() {
+      const current = new Date();
+      setNow(current);
+      const msToNextMinute = 60_000 - (current.getSeconds() * 1000 + current.getMilliseconds());
+      timer = window.setTimeout(schedule, msToNextMinute);
+    }
+    schedule();
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return now;
+}
+
+/**
+ * Header admin - một hàng thấp (--admin-header-h) gồm
+ *   nút menu · vùng portal cho AdminPageHeader · đồng hồ + tài khoản.
  *
- * Nút menu đa dụng như bản gốc: desktop thu gọn/mở rộng sidebar, dưới
- * desktop mở drawer off-canvas.
+ * Nút menu đa dụng: desktop thu gọn/mở rộng sidebar, dưới desktop mở drawer
+ * off-canvas.
+ *
+ * CỐ Ý không có lối tắt "Xem triển lãm" ở đây: sidebar đã có thẻ promo dẫn
+ * sang trang công khai ở chân menu. Header lặp lại lần nữa (và dropdown lặp
+ * lần thứ ba) chỉ làm người dùng phân vân "hai nút này có khác nhau không".
  */
 export function AdminHeader({
   user,
@@ -48,6 +76,7 @@ export function AdminHeader({
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const registerSlot = useRegisterPageHeaderSlot();
+  const now = useClock();
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -82,7 +111,11 @@ export function AdminHeader({
 
   const initial = (user.name || user.email || "?").trim().charAt(0).toUpperCase();
   const displayName = user.name || "Quản trị viên";
-  const greeting = `${greetingFor(new Date().getHours())}, ${shortName(displayName)}`;
+  const greeting = `${greetingFor(now.getHours())}, ${shortName(displayName)}`;
+  const roleLabel = user.role === "super_admin" ? "Quản trị cấp cao" : "Quản trị viên";
+
+  const clockTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const clockDate = `${WEEKDAYS[now.getDay()]}, ${now.getDate()}/${now.getMonth() + 1}`;
 
   // Desktop: icon phản ánh trạng thái thu gọn; mobile: icon hamburger.
   const ToggleIcon = !isDesktop ? Menu : collapsed ? PanelLeftOpen : PanelLeftClose;
@@ -109,17 +142,13 @@ export function AdminHeader({
       <div id="admin-content-header" className="admin-header-page" ref={registerSlot} />
 
       <div className="admin-header-actions">
-        <a
-          href="/"
-          target="_blank"
-          rel="noreferrer"
-          className="admin-header-visit"
-          aria-label="Mở trang triển lãm trong tab mới"
-          title="Mở trang triển lãm trong tab mới"
-        >
-          <ExternalLink size={16} strokeWidth={2} />
-          <span className="admin-header-visit-label">Xem triển lãm</span>
-        </a>
+        {/* Giờ/ngày: cột mốc hữu ích khi nhập liệu theo đợt ("hôm nay đã
+            duyệt tới đâu"), và là thứ duy nhất trên header thay đổi theo
+            thời gian nên header không còn là thanh chết. */}
+        <div className="admin-header-clock" aria-hidden>
+          <span className="admin-header-clock-time">{clockTime}</span>
+          <span className="admin-header-clock-date">{clockDate}</span>
+        </div>
 
         <span className="admin-header-divider" aria-hidden />
 
@@ -139,9 +168,7 @@ export function AdminHeader({
             )}
             <span className="admin-header-account-name">
               <span className="admin-header-account-greeting">{greeting}</span>
-              <span className="admin-header-account-role">
-                {user.role === "super_admin" ? "Quản trị cấp cao" : "Quản trị viên"}
-              </span>
+              <span className="admin-header-account-role">{roleLabel}</span>
             </span>
             <ChevronDown
               size={16}
@@ -165,23 +192,9 @@ export function AdminHeader({
                 <span className="admin-header-dropdown-identity">
                   <strong>{displayName}</strong>
                   <span>{user.email}</span>
-                  <span className="admin-header-role-badge">
-                    {user.role === "super_admin" ? "Quản trị cấp cao" : "Quản trị viên"}
-                  </span>
+                  <span className="admin-header-role-badge">{roleLabel}</span>
                 </span>
               </div>
-
-              <a
-                href="/"
-                target="_blank"
-                rel="noreferrer"
-                role="menuitem"
-                className="admin-header-dropdown-item admin-header-dropdown-item--visit"
-                onClick={() => setMenuOpen(false)}
-              >
-                <ExternalLink size={16} />
-                Xem trang triển lãm
-              </a>
 
               <button
                 type="button"

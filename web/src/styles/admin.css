@@ -298,7 +298,15 @@ html.scrollable-page {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Watermark logo VAS phủ TOÀN BỘ vùng nội dung: position:fixed nên KHÔNG
+/* SVG chỉ chứa <filter>, không tự vẽ gì - ẩn hẳn khỏi layout. */
+.admin-content-watermark-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* Watermark logo VASchools phủ TOÀN BỘ vùng nội dung: position:fixed nên KHÔNG
    cuộn theo nội dung, và trải kín khung .admin-main (chừa sidebar) để mọi
    thứ trong main-content đều nằm trên nền logo. Đặt sau header/sidebar về
    z-index để không phủ lên chúng; mọi card nội dung có position:relative
@@ -310,40 +318,166 @@ html.scrollable-page {
    mức chìm. Cùng thủ thuật filter mà .admin-login-watermark đang dùng,
    chỉ ngược chiều.
 
-   Hai lớp background: một hoạ tiết lặp cỡ nhỏ trải đều toàn khung, chồng
-   lên một bản logo lớn ở giữa làm điểm nhấn. Lớp lặp mờ hơn hẳn để không
-   làm nhiễu chữ trong các card. */
+   Một bản logo lớn duy nhất, căn giữa khung nội dung - đủ lớn để làm điểm
+   nhấn "mặt giấy" nhưng không lặp lại rối mắt. Bọc trong wrapper flex để
+   glow tròn phía sau luôn canh giữa logo dù kích thước responsive. */
 .admin-content-watermark {
-  /* Đứng yên khi vùng .admin-content cuộn - watermark là "mặt giấy" chứ
-     không phải nội dung. */
   position: fixed;
   z-index: 0;
   top: var(--admin-header-h);
   right: 0;
   bottom: 0;
   left: 0;
-  background-image:
-    url("/images/background-logo.png"),
-    url("/images/background-logo.png");
-  background-repeat: no-repeat, repeat;
-  background-position: center center, center center;
-  background-size: clamp(20rem, 46vw, 40rem) auto, 13rem auto;
-  filter: invert(1);
-  opacity: 0.055;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: none;
   user-select: none;
+}
+
+/* Quầng sáng màu thương hiệu phía sau logo - tránh cảm giác logo "trơ" giữa
+   nền mesh nhiều màu, đồng thời kéo mắt người xem về đúng tâm điểm. */
+.admin-content-watermark::before {
+  content: "";
+  position: absolute;
+  width: 46rem;
+  height: 46rem;
+  max-width: 90vw;
+  max-height: 90vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(154, 0, 54, 0.12) 0%, rgba(154, 0, 54, 0.04) 45%, transparent 70%);
+  filter: blur(4px);
+}
+
+.admin-content-watermark-logo {
+  position: relative;
+  width: min(52rem, 62vw);
+  aspect-ratio: 1373 / 960;
+  background-image: url("/images/background-logo.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  /* background-logo.png có alpha gốc chỉ ~5% (logo trắng rất mờ, vẽ cho nền
+     brand tối ở trang login) - filter CSS thường (invert/sepia/...) chỉ đổi
+     màu RGB chứ không khuếch đại alpha, nên với ảnh nguồn này watermark vẫn
+     tàng hình dù chỉnh màu/opacity thế nào. feColorMatrix (định nghĩa trong
+     AdminLayout.tsx, #admin-watermark-boost) nhân alpha lên trước, rồi tô
+     màu đỏ thương hiệu - cùng kỹ thuật bản gốc ProjectCreate.vue. */
+  filter: url("#admin-watermark-boost");
+  opacity: 0.1;
+}
+
+/* Viền trang trí góc: một nét chữ L mảnh + chấm tròn ở 2 góc chéo nhau,
+   thuần trang trí - gợi khung "tấm ảnh" quanh vùng nội dung mà không đóng
+   khung cứng, giữ cảm giác thoáng của mặt giấy. */
+.admin-content-watermark-deco {
+  position: fixed;
+  z-index: 0;
+  top: var(--admin-header-h);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.admin-content-watermark-deco svg {
+  position: absolute;
+}
+
+.admin-content-watermark-deco svg.corner-tl {
+  top: 1.75rem;
+  left: 1.75rem;
+}
+
+.admin-content-watermark-deco svg.corner-br {
+  right: 1.75rem;
+  bottom: 1.75rem;
+  transform: rotate(180deg);
+}
+
+/* Lớp mesh gradient dưới watermark: 5 điểm sáng màu thương hiệu (đỏ/xanh/
+   vàng) thay vì 3 vệt đơn giản, để "mặt giấy" có chiều sâu thay vì phẳng lì
+   một màu. Vẫn nhạt hơn nhiều so với nền các card nên card luôn nổi lên trên.
+
+   Đặt ở ::before của chính .admin-content (không phải lớp watermark) vì
+   watermark đang bị filter: invert(1) - gradient nằm chung sẽ bị đảo màu. */
+.admin-content::before {
+  content: "";
+  position: fixed;
+  z-index: 0;
+  top: var(--admin-header-h);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background:
+    radial-gradient(44rem 30rem at 8% -10%, rgba(154, 0, 54, 0.16), transparent 55%),
+    radial-gradient(38rem 26rem at 98% -4%, rgba(23, 80, 181, 0.13), transparent 55%),
+    radial-gradient(50rem 34rem at 50% 115%, rgba(196, 156, 87, 0.15), transparent 60%),
+    radial-gradient(30rem 24rem at 82% 60%, rgba(154, 0, 54, 0.06), transparent 60%),
+    radial-gradient(34rem 26rem at 6% 70%, rgba(23, 80, 181, 0.055), transparent 60%),
+    linear-gradient(165deg, #fbf8f6 0%, #faf6f4 40%, #f7f2ee 100%);
+  pointer-events: none;
+}
+
+/* Dot-grid rất mảnh chồng lên mesh - gợi cảm giác "giấy kẻ ô" của các bảng
+   điều khiển cao cấp. Mask tròn mờ dần ra rìa để không cạnh tranh với viền
+   sidebar/header, chỉ nổi rõ nhất quanh khu vực watermark chính giữa. */
+.admin-content::after {
+  content: "";
+  position: fixed;
+  z-index: 0;
+  top: var(--admin-header-h);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background-image: radial-gradient(rgba(60, 20, 30, 0.05) 1px, transparent 1.5px);
+  background-size: 22px 22px;
+  background-position: -4px -4px;
+  -webkit-mask-image: radial-gradient(70% 65% at 50% 42%, black 0%, transparent 75%);
+  mask-image: radial-gradient(70% 65% at 50% 42%, black 0%, transparent 75%);
+  pointer-events: none;
+}
+
+@media (min-width: 1280px) {
+  .admin-content::after {
+    left: var(--spacing-sidebar-expanded);
+    transition: left 0.2s ease;
+  }
+  .admin-shell:has(.admin-sidebar--collapsed) .admin-content::after {
+    left: var(--spacing-sidebar-rail);
+  }
+}
+
+@media (min-width: 1280px) {
+  .admin-content::before {
+    left: var(--spacing-sidebar-expanded);
+    transition: left 0.2s ease;
+  }
+  .admin-shell:has(.admin-sidebar--collapsed) .admin-content::before {
+    left: var(--spacing-sidebar-rail);
+  }
 }
 
 /* Từ desktop trở lên sidebar chiếm chỗ cố định bên trái -> watermark bắt
    đầu từ mép phải của sidebar để không bị nó cắt mất một phần. */
 @media (min-width: 1280px) {
-  .admin-content-watermark {
+  .admin-content-watermark,
+  .admin-content-watermark-deco {
     left: var(--spacing-sidebar-expanded);
     transition: left 0.2s ease;
   }
 
-  .admin-shell:has(.admin-sidebar--collapsed) .admin-content-watermark {
+  .admin-shell:has(.admin-sidebar--collapsed) .admin-content-watermark,
+  .admin-shell:has(.admin-sidebar--collapsed) .admin-content-watermark-deco {
     left: var(--spacing-sidebar-rail);
+  }
+}
+
+/* Góc trang trí chỉ có chỗ thở ở màn hình rộng - trên mobile/tablet dẹp đi
+   để không cấn vào nội dung khi khung nội dung hẹp lại. */
+@media (max-width: 767px) {
+  .admin-content-watermark-deco {
+    display: none;
   }
 }
 
@@ -450,13 +584,13 @@ html.scrollable-page {
   outline-offset: 2px;
 }
 
-/* Logo lớn: cao gấp ~2.4x bản cũ (1.75rem -> 4.25rem), co giãn theo bề
+/* Logo lớn: cao gấp ~1.9x bản cũ (1.75rem -> 3.4rem), co giãn theo bề
    ngang sidebar để không tràn khi drawer hẹp trên mobile. */
 .admin-sidebar-logo {
   display: block;
   width: auto;
   max-width: 100%;
-  height: clamp(3.25rem, 4.6vw, 4.25rem);
+  height: clamp(2.6rem, 3.7vw, 3.4rem);
   object-fit: contain;
   filter: brightness(1.06) drop-shadow(0 3px 10px rgba(0, 0, 0, 0.25));
   transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -464,8 +598,8 @@ html.scrollable-page {
 
 .admin-sidebar-mark {
   flex-shrink: 0;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2.35rem;
+  height: 2.35rem;
   object-fit: contain;
   filter: brightness(1.06) drop-shadow(0 3px 10px rgba(0, 0, 0, 0.25));
   transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -648,16 +782,6 @@ html.scrollable-page {
   line-height: 1.3;
 }
 
-.admin-sidebar-hint {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--color-sidebar-text-muted);
-  font-size: 0.6875rem;
-  font-weight: 400;
-  line-height: 1.3;
-  transition: color 200ms ease;
-}
-
 .admin-sidebar-link:hover {
   background: var(--color-sidebar-hover);
   color: var(--color-on-primary);
@@ -668,10 +792,6 @@ html.scrollable-page {
   background: var(--color-sidebar-well-strong);
   color: var(--color-on-primary);
   transform: scale(1.08) rotate(-4deg);
-}
-
-.admin-sidebar-link:hover .admin-sidebar-hint {
-  color: rgba(255, 255, 255, 0.72);
 }
 
 .admin-sidebar-link:focus-visible {
@@ -694,12 +814,7 @@ html.scrollable-page {
   color: var(--color-umber-700);
 }
 
-.admin-sidebar-link--active .admin-sidebar-hint {
-  color: rgba(255, 255, 255, 0.68);
-}
-
-/* Nhãn bay ra khi sidebar ở dạng rail (chỉ icon) - nay 2 dòng: tên mục +
-   dòng gợi ý, để bản thu gọn không mất thông tin so với bản mở rộng. */
+/* Nhãn bay ra khi sidebar ở dạng rail (chỉ icon). */
 .admin-sidebar-flyout {
   position: absolute;
   left: calc(100% + var(--space-2));
@@ -723,12 +838,6 @@ html.scrollable-page {
   transition:
     opacity 180ms ease,
     transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.admin-sidebar-flyout > span {
-  color: var(--color-text-muted);
-  font-size: 0.6875rem;
-  font-weight: 400;
 }
 
 .admin-sidebar-link:hover .admin-sidebar-flyout,
@@ -823,10 +932,11 @@ html.scrollable-page {
 /* ---------------------------------------------------------------------- */
 /* Header - port AppHeader.vue (va-workspace)                              */
 /* ---------------------------------------------------------------------- */
-/* Nền header: trắng ngả sang một vệt brand cực nhạt ở mép trái (nối tiếp
-   sidebar đỏ) rồi tan hết trước giữa thanh - đủ để header không phẳng lì
-   mà chữ vẫn nằm trên nền gần như trắng. blur giữ cho header đọc được khi
-   nội dung cuộn sát bên dưới. */
+/* Nền header: KHÔNG dùng mảng màu đặc. Ba quầng gradient rất nhạt (đỏ tri
+   thức ở mép trái nối tiếp sidebar, xanh khai phóng và vàng trách nhiệm
+   loãng dần về phải) chồng lên mặt trắng - header có chiều sâu và sắc
+   thương hiệu mà chữ vẫn nằm trên nền gần như trắng, không chọi độ tương
+   phản. blur giữ cho header đọc được khi nội dung cuộn sát bên dưới. */
 .admin-header {
   position: relative;
   flex-shrink: 0;
@@ -837,38 +947,65 @@ html.scrollable-page {
   height: var(--admin-header-h);
   padding: 0 var(--space-4);
   background:
-    linear-gradient(
-      100deg,
-      color-mix(in srgb, var(--color-primary) 7%, var(--color-surface)) 0%,
-      color-mix(in srgb, var(--color-primary) 2%, var(--color-surface)) 26%,
-      var(--color-surface) 55%
-    );
-  backdrop-filter: saturate(1.4) blur(8px);
+    radial-gradient(
+      120% 180% at 0% 0%,
+      color-mix(in srgb, var(--vas-tri-thuc) 9%, transparent) 0%,
+      transparent 46%
+    ),
+    radial-gradient(
+      90% 160% at 62% 120%,
+      color-mix(in srgb, var(--vas-khai-phong) 6%, transparent) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      80% 150% at 100% -20%,
+      color-mix(in srgb, var(--vas-trach-nhiem) 8%, transparent) 0%,
+      transparent 55%
+    ),
+    var(--color-surface);
+  backdrop-filter: saturate(1.35) blur(10px);
   box-shadow:
-    0 1px 0 var(--color-border),
-    0 6px 18px -12px rgba(36, 20, 23, 0.45);
+    0 1px 0 color-mix(in srgb, var(--color-border) 80%, transparent),
+    0 10px 26px -20px rgba(36, 20, 23, 0.5);
 }
 
-/* Dải 5 màu giá trị cốt lõi VAS chạy sát mép trên - chi tiết thương hiệu
-   duy nhất trên header, mảnh 2px nên không cạnh tranh với nội dung. */
-.admin-header::before {
+/* Dải 5 màu giá trị cốt lõi VASchools sát mép dưới - mảnh 2px và trôi chậm sang
+   ngang. Đặt ở mép DƯỚI (không phải trên) để nó kiêm luôn vai trò đường
+   phân cách header/nội dung, khỏi cần thêm border thứ hai.
+
+   Gradient dài 200% + dịch -50% để vòng lặp khép kín, không giật khi
+   animation quay lại đầu. */
+.admin-header::after {
   content: "";
   position: absolute;
-  inset: 0 0 auto;
+  inset: auto 0 0;
   height: 2px;
   background: linear-gradient(
     90deg,
-    var(--vas-tri-thuc) 0%,
-    var(--vas-tri-thuc) 22%,
-    var(--vas-ban-linh) 40%,
-    var(--vas-trach-nhiem) 58%,
-    var(--vas-nhan-ai) 76%,
-    var(--vas-khai-phong) 100%
+    var(--vas-tri-thuc),
+    var(--vas-ban-linh),
+    var(--vas-trach-nhiem),
+    var(--vas-nhan-ai),
+    var(--vas-khai-phong),
+    var(--vas-tri-thuc),
+    var(--vas-ban-linh),
+    var(--vas-trach-nhiem),
+    var(--vas-nhan-ai),
+    var(--vas-khai-phong)
   );
-  opacity: 0.85;
+  background-size: 200% 100%;
+  opacity: 0.55;
+  animation: admin-header-sheen 24s linear infinite;
   pointer-events: none;
 }
 
+@keyframes admin-header-sheen {
+  from { background-position: 0% 50%; }
+  to { background-position: -200% 50%; }
+}
+
+/* Nút menu: nền gradient rất loãng + viền trong mảnh thay cho mảng màu
+   phẳng, để nút "nổi" bằng chất liệu chứ không bằng độ đậm của màu. */
 .admin-header-icon-btn {
   position: relative;
   display: flex;
@@ -879,21 +1016,31 @@ html.scrollable-page {
   height: 2.25rem;
   border: none;
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 9%, var(--color-surface)),
+    color-mix(in srgb, var(--color-primary) 3%, var(--color-surface))
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 12%, transparent);
   color: var(--color-primary);
   cursor: pointer;
   text-decoration: none;
   transition:
-    background-color 180ms ease,
+    background 180ms ease,
     color 180ms ease,
     box-shadow 180ms ease,
     transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .admin-header-icon-btn:hover {
-  background: var(--color-primary-surface-strong);
-  color: var(--color-primary);
-  box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--color-primary) 60%, transparent);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 16%, var(--color-surface)),
+    color-mix(in srgb, var(--color-primary) 6%, var(--color-surface))
+  );
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 24%, transparent),
+    0 6px 14px -8px color-mix(in srgb, var(--color-primary) 65%, transparent);
   transform: translateY(-1px);
 }
 
@@ -901,53 +1048,34 @@ html.scrollable-page {
   transform: scale(0.94);
 }
 
-/* Lối tắt sang trang công khai: nút có nhãn chữ thay vì icon trần - người
-   dùng không phải đoán icon "mũi tên ra ngoài" nghĩa là gì. */
-.admin-header-visit {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4375rem;
-  height: 2.25rem;
-  padding: 0 0.875rem;
-  border-radius: var(--radius-full);
-  background: var(--color-primary-surface);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 16%, transparent);
-  color: var(--color-primary);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  text-decoration: none;
-  white-space: nowrap;
-  transition:
-    background-color 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.admin-header-visit:hover {
-  background: var(--color-primary-surface-strong);
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 30%, transparent),
-    0 6px 16px -8px color-mix(in srgb, var(--color-primary) 70%, transparent);
-  transform: translateY(-1px);
-}
-
-.admin-header-visit:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-.admin-header-visit svg {
-  flex-shrink: 0;
-  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.admin-header-visit:hover svg {
-  transform: translate(2px, -2px);
-}
-
 .admin-header-icon-btn:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* Đồng hồ: chữ số theo font tabular để không nhảy ngang mỗi phút. */
+.admin-header-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  padding-right: 0.125rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.admin-header-clock-time {
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.admin-header-clock-date {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
 }
 
 /* Đích portal của AdminPageHeader. */
@@ -964,13 +1092,19 @@ html.scrollable-page {
   gap: var(--space-2);
 }
 
-/* Vạch ngăn mảnh giữa nhóm lối tắt và khối tài khoản - hai thứ khác vai
-   trò, không nên đọc thành một dãy nút liền mạch. */
+/* Vạch ngăn giữa đồng hồ và khối tài khoản - hai thứ khác vai trò, không
+   nên đọc thành một cụm liền mạch. Gradient nhạt dần hai đầu để vạch không
+   cắt ngang cứng như kẻ bảng. */
 .admin-header-divider {
   flex-shrink: 0;
   width: 1px;
-  height: 1.5rem;
-  background: var(--color-border);
+  height: 1.75rem;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--color-primary) 22%, var(--color-border)) 50%,
+    transparent
+  );
 }
 
 .admin-header-account {
@@ -996,9 +1130,13 @@ html.scrollable-page {
 }
 
 .admin-header-account-btn:hover {
-  background: var(--color-surface);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-primary) 5%, var(--color-surface)),
+    var(--color-surface)
+  );
   box-shadow:
-    inset 0 0 0 1px var(--color-border),
+    inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 14%, var(--color-border)),
     var(--shadow-sm);
 }
 
@@ -1061,10 +1199,18 @@ html.scrollable-page {
     0 0 0 3px var(--color-primary);
 }
 
+/* Chữ cái đầu khi không có ảnh: gradient ba chặng đi qua đỏ tri thức ->
+   nâu bản lĩnh -> vàng trách nhiệm. Ấm hơn hẳn khối đỏ đặc, và trùng bảng
+   màu giá trị cốt lõi đang chạy ở dải dưới header. */
 .admin-header-avatar--fallback {
   display: grid;
   place-items: center;
-  background: linear-gradient(140deg, var(--color-primary-700), var(--color-primary-900));
+  background: linear-gradient(
+    140deg,
+    var(--vas-tri-thuc) 0%,
+    color-mix(in srgb, var(--vas-ban-linh) 70%, var(--vas-tri-thuc)) 55%,
+    var(--vas-trach-nhiem) 100%
+  );
   color: var(--color-on-primary);
   font-weight: 700;
   font-size: 0.875rem;
@@ -1085,90 +1231,117 @@ html.scrollable-page {
   right: 0;
   top: calc(100% + var(--space-2));
   z-index: 40;
-  width: 16rem;
+  width: 17rem;
   padding: 0.375rem;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--color-surface);
   box-shadow:
     inset 0 0 0 1px var(--color-border),
     var(--shadow-lg);
+  overflow: hidden;
   animation: admin-menu-in 140ms ease-out;
 }
 
+/* Thẻ nhận diện: nền gradient nhạt theo brand để tách khỏi danh sách hành
+   động bên dưới, thay vì chỉ một đường kẻ mảnh - dropdown giờ đọc thành
+   hai khối rõ ràng "đang là ai" và "làm gì". */
 .admin-header-dropdown-info {
   display: flex;
-  align-items: flex-start;
-  gap: 0.625rem;
-  padding: 0.625rem 0.5rem 0.75rem;
+  align-items: center;
+  gap: 0.75rem;
+  margin: -0.375rem -0.375rem 0.375rem;
+  padding: 1rem 0.875rem 0.875rem;
+  background: linear-gradient(
+    155deg,
+    color-mix(in srgb, var(--color-primary) 9%, var(--color-surface)),
+    var(--color-surface) 70%
+  );
   box-shadow: 0 1px 0 var(--color-border);
 }
 
 .admin-header-dropdown-avatar {
   flex-shrink: 0;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: var(--radius-full);
   object-fit: cover;
+  box-shadow:
+    0 0 0 2px var(--color-surface),
+    0 0 0 3px color-mix(in srgb, var(--color-primary) 35%, transparent);
 }
 
 .admin-header-dropdown-identity {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  align-items: flex-start;
+  gap: 0.1875rem;
   min-width: 0;
 }
 .admin-header-dropdown-info strong {
-  font-size: 0.875rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9375rem;
+  font-weight: 700;
   color: var(--color-text);
 }
 .admin-header-dropdown-identity span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.75rem;
   color: var(--color-text-muted);
-  overflow-wrap: anywhere;
 }
 .admin-header-role-badge {
-  align-self: flex-start;
-  margin-top: 0.375rem;
-  padding: 0.125rem 0.5rem;
+  margin-top: 0.125rem;
+  padding: 0.1875rem 0.625rem;
   border-radius: var(--radius-full);
   background: var(--color-primary-surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent);
   color: var(--color-primary) !important;
   font-size: 0.6875rem !important;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .admin-header-dropdown-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.625rem;
   width: 100%;
-  padding: 0.5rem;
+  padding: 0.625rem 0.625rem;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   background: transparent;
   color: var(--color-text);
   font-family: inherit;
   font-size: 0.8125rem;
+  font-weight: 500;
   text-align: left;
   text-decoration: none;
   cursor: pointer;
-  transition: background-color 150ms ease;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 }
 .admin-header-dropdown-item:hover {
   background: var(--color-surface-muted);
 }
 .admin-header-dropdown-item svg {
   flex-shrink: 0;
-}
-/* Lối tắt "xem triển lãm" chỉ cần thiết khi header đã giấu nút chữ (mobile). */
-.admin-header-dropdown-item--visit {
-  display: none;
+  color: var(--color-text-muted);
+  transition: color 150ms ease;
 }
 .admin-header-dropdown-item--danger {
-  color: var(--color-primary);
+  color: var(--color-danger-tint-fg);
+}
+.admin-header-dropdown-item--danger svg {
+  color: var(--color-danger-tint-fg);
 }
 .admin-header-dropdown-item--danger:hover {
   background: var(--color-danger-tint-bg);
@@ -1194,11 +1367,40 @@ html.scrollable-page {
 }
 
 .admin-page-header-title-wrap {
+  position: relative;
   display: flex;
   flex: 1;
   min-width: 0;
   flex-direction: column;
   justify-content: center;
+  padding-left: 0.75rem;
+}
+
+/* Thanh dọc gradient trước tiêu đề: neo thị giác cho cụm title/subtitle,
+   và vuốt cao dần khi vào trang để mắt bắt vào đây trước. */
+.admin-page-header-title-wrap::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 3px;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  background: linear-gradient(
+    180deg,
+    var(--vas-trach-nhiem),
+    var(--vas-tri-thuc)
+  );
+  transform: translateY(-50%) scaleY(0.2);
+  opacity: 0;
+  animation: admin-title-bar-in 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes admin-title-bar-in {
+  to {
+    transform: translateY(-50%) scaleY(1);
+    opacity: 1;
+  }
 }
 
 .admin-page-header-title {
@@ -1213,6 +1415,54 @@ html.scrollable-page {
   line-height: 1.3;
 }
 
+/* Bản chữ đầy đủ chỉ để screen reader đọc - giấu khỏi mắt nhưng KHÔNG
+   display:none (display:none thì trình đọc màn hình cũng bỏ qua). */
+.admin-page-header-title-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.admin-page-header-title-chars {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  /* Đường lui cho tiêu đề dài (không tách ký tự): cả cụm mờ vào một lần. */
+  animation: admin-title-fade-in 320ms ease-out both;
+}
+
+/* Từng ký tự trồi lên + mờ vào, lệch pha nhau bằng animation-delay đặt
+   inline trong AdminPageHeader.tsx. */
+.admin-page-header-char {
+  display: inline-block;
+  white-space: pre;
+  opacity: 0;
+  transform: translateY(0.45em) rotateX(-55deg);
+  animation: admin-title-char-in 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes admin-title-char-in {
+  to {
+    opacity: 1;
+    transform: translateY(0) rotateX(0);
+  }
+}
+
+@keyframes admin-title-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.25em);
+  }
+}
+
 .admin-page-header-subtitle {
   margin: 0;
   overflow: hidden;
@@ -1222,6 +1472,8 @@ html.scrollable-page {
   font-size: 0.71875rem;
   font-weight: 500;
   line-height: 1.35;
+  /* Vào sau tiêu đề một nhịp - thông tin phụ thì xuất hiện sau. */
+  animation: admin-title-fade-in 380ms ease-out 140ms both;
 }
 
 .admin-page-header-right {
@@ -1231,7 +1483,11 @@ html.scrollable-page {
   gap: var(--space-2);
 }
 
+/* Nút hành động chính: gradient đỏ tri thức -> nâu bản lĩnh thay cho mảng
+   đỏ đặc, cộng một vệt sáng mảnh ở mép trên (inset box-shadow trắng) để
+   nút trông có khối. */
 .admin-page-header-primary {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -1239,8 +1495,15 @@ html.scrollable-page {
   padding: 0 0.75rem;
   border: none;
   border-radius: var(--radius-md);
-  background: var(--color-primary);
-  box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--color-primary) 80%, transparent);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-800) 0%,
+    var(--vas-tri-thuc) 45%,
+    color-mix(in srgb, var(--vas-ban-linh) 45%, var(--vas-tri-thuc)) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 6px 16px -8px color-mix(in srgb, var(--color-primary) 85%, transparent);
   color: var(--color-on-primary);
   font-family: inherit;
   font-size: 0.8125rem;
@@ -1249,14 +1512,16 @@ html.scrollable-page {
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background-color 150ms ease,
+    filter 150ms ease,
     box-shadow 180ms ease,
     transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .admin-page-header-primary:hover {
-  background: var(--color-primary-hover);
-  box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--color-primary) 85%, transparent);
+  filter: saturate(1.1) brightness(1.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 10px 22px -10px color-mix(in srgb, var(--color-primary) 90%, transparent);
   transform: translateY(-1px);
 }
 
@@ -1284,6 +1549,14 @@ html.scrollable-page {
 
 .admin-page-header-primary-caret {
   opacity: 0.85;
+}
+
+/* Nút chính chỉ icon, không chữ (VD "+" thêm tác phẩm) - vuông lại thành
+   hình tròn/vuông gọn thay vì kéo dài theo chiều ngang như bản có label. */
+.admin-page-header-primary--icon-only {
+  width: 2.25rem;
+  padding: 0;
+  justify-content: center;
 }
 
 .admin-page-header-menu {
@@ -1369,11 +1642,11 @@ html.scrollable-page {
    tạo stacking context riêng để chữ/ảnh không bị họa tiết logo lẫn vào.
    Gom vào 1 rule thay vì sửa rải rác từng component. */
 .admin-page-placeholder,
-.dashboard-card,
+.region-card,
 .artworks-filter-bar,
 .artworks-table,
-.artworks-edit-main,
-.artworks-edit-thumb,
+.artwork-edit-panel,
+.artwork-picker-card,
 .artworks-upload-footer,
 .artworks-pagination,
 .admin-empty-note,
@@ -1389,7 +1662,9 @@ html.scrollable-page {
 .artworks-pagination,
 .admin-empty-note {
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-surface) 78%, transparent);
+  /* Đục hoàn toàn, không phải nền mờ: watermark nay đậm hơn hẳn, để nền
+     trong suốt thì hoạ tiết logo lẫn thẳng vào chữ. */
+  background: var(--color-surface);
 }
 
 /* Nội dung trang hiện lên nhẹ nhàng khi đổi route. */
@@ -1398,11 +1673,11 @@ html.scrollable-page {
 }
 
 /* Card nội dung: viền 1px mảnh + bóng nhẹ thay cho bóng đổ dày, đồng bộ
-   với ngôn ngữ thị giác của va-workspace. */
-.dashboard-card,
+   với ngôn ngữ thị giác của va-workspace. region-card tự định nghĩa box-
+   shadow riêng (dùng --vas-shadow-sm) nên không lặp lại ở đây. */
 .artworks-filter-bar,
 .artworks-table,
-.artworks-edit-main,
+.artwork-edit-panel,
 .award-card,
 .award-form {
   box-shadow:
@@ -1495,33 +1770,13 @@ html.scrollable-page {
     display: none;
   }
 
-  /* Nút "Xem triển lãm" thu về dạng icon tròn - nhãn còn ở aria-label. */
-  .admin-header-visit {
-    width: 2.25rem;
-    padding: 0;
-    justify-content: center;
-    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
-    box-shadow: none;
-    color: var(--color-primary);
-  }
-  .admin-header-visit:hover {
-    background: var(--color-primary-surface-strong);
-    box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--color-primary) 60%, transparent);
-  }
-  .admin-header-visit-label {
+  /* Bỏ dòng ngày, giữ giờ - giờ là phần người dùng liếc nhìn thật sự. */
+  .admin-header-clock-date {
     display: none;
   }
 
   .admin-header {
     padding: 0 var(--space-3);
-  }
-
-  /* Đã thu về icon trần thì phải đủ vùng chạm 44px trên máy cảm ứng. */
-  @media (hover: none) and (pointer: coarse) {
-    .admin-header-visit {
-      width: 2.75rem;
-      height: 2.75rem;
-    }
   }
 }
 
@@ -1534,22 +1789,24 @@ html.scrollable-page {
     padding-right: max(var(--space-2), env(safe-area-inset-right, 0px));
   }
 
-  /* Trên mobile bỏ nút riêng, lối tắt chuyển vào dropdown tài khoản. */
-  .admin-header-visit {
-    display: none;
-  }
-
-  /* Không còn hai nhóm để ngăn cách khi nút "xem triển lãm" đã ẩn. */
+  /* Mobile: bề ngang dành hết cho tiêu đề trang. Đồng hồ (và vạch ngăn đi
+     kèm) là thông tin "có thì tốt" - điện thoại nào cũng đã hiện giờ trên
+     thanh trạng thái. */
+  .admin-header-clock,
   .admin-header-divider {
     display: none;
   }
 
-  .admin-header-dropdown-item--visit {
-    display: flex;
-  }
-
   .admin-header-chevron {
     display: none;
+  }
+
+  .admin-page-header-title-wrap {
+    padding-left: 0.5rem;
+  }
+
+  .admin-page-header-title-wrap::before {
+    height: 1.25rem;
   }
 
   /* Nút hành động chính thu về dạng icon tròn - nhãn vẫn còn cho screen
@@ -1603,6 +1860,82 @@ html.scrollable-page {
   }
 }
 
+/* ---------------------------------------------------------------------- */
+/* 404 khu quản trị - card gọn giữa vùng nội dung, không dùng theme khu    */
+/* vườn của bản public (xem 06-frontend.md mục 7: 2 khu vực không lặp      */
+/* ngôn ngữ thị giác của nhau).                                            */
+/* ---------------------------------------------------------------------- */
+.admin-not-found {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  max-width: 26rem;
+  margin: clamp(2rem, 8vh, 4.5rem) auto;
+  padding: clamp(1.75rem, 4vw, 2.5rem);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.admin-not-found-mascot {
+  width: 4.5rem;
+  height: 4.5rem;
+  object-fit: contain;
+  margin-bottom: 0.75rem;
+  animation: admin-not-found-bounce 2.4s ease-in-out infinite;
+}
+@keyframes admin-not-found-bounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(-3deg); }
+}
+
+.admin-not-found-code {
+  margin: 0 0 0.25rem;
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  line-height: 1;
+}
+
+.admin-not-found-title {
+  margin: 0 0 0.5rem;
+  font-size: var(--text-h2);
+  color: var(--color-text);
+}
+
+.admin-not-found-text {
+  margin: 0 0 1.5rem;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+  font-size: 0.92rem;
+}
+
+.admin-not-found-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.3rem;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 650;
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.admin-not-found-btn:hover {
+  background: var(--color-primary-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 480px) {
+  .admin-not-found {
+    margin: 1.5rem auto;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .admin-sidebar,
   .admin-sidebar-overlay,
@@ -1611,22 +1944,22 @@ html.scrollable-page {
   .admin-sidebar-icon,
   .admin-sidebar-logo,
   .admin-sidebar-mark,
-  .admin-sidebar-hint,
   .admin-sidebar-flyout,
   .admin-sidebar-promo,
   .admin-header-chevron,
   .admin-header-account-btn,
   .admin-header-avatar,
   .admin-header-icon-btn,
-  .admin-header-visit,
-  .admin-header-visit svg,
   .admin-header-dropdown-item,
   .admin-page-header-primary {
     transition: none;
   }
 
-  /* Tắt hẳn hiệu ứng vào trang + hoạt hoạ lặp (linh vật vẫy tay, ngôi sao
-     nhấp nháy) - chỉ giữ trạng thái cuối. */
+  /* Tắt hẳn hiệu ứng vào trang + hoạt hoạ lặp (dải màu trôi, tiêu đề dồn
+     chữ, linh vật vẫy tay) - chỉ giữ trạng thái cuối. Riêng phần tiêu đề
+     phải trả lại opacity/transform bằng tay: trạng thái đầu của keyframe
+     nằm ở chính rule (opacity 0), animation:none không tự hoàn tác. */
+  .admin-header::after,
   .admin-header-dropdown,
   .admin-page-header-menu,
   .admin-content-inner > *,
@@ -1635,13 +1968,27 @@ html.scrollable-page {
   .admin-sidebar-section,
   .admin-sidebar-section-label,
   .admin-sidebar-link,
-  .admin-sidebar-promo-art {
+  .admin-sidebar-promo-art,
+  .admin-page-header-title-wrap::before,
+  .admin-page-header-title-chars,
+  .admin-page-header-char,
+  .admin-page-header-subtitle,
+  .admin-not-found-mascot {
     animation: none;
+  }
+
+  .admin-page-header-char {
+    opacity: 1;
+    transform: none;
+  }
+
+  .admin-page-header-title-wrap::before {
+    opacity: 1;
+    transform: translateY(-50%) scaleY(1);
   }
 
   .admin-sidebar-link:hover,
   .admin-sidebar-promo:hover,
-  .admin-header-visit:hover,
   .admin-header-icon-btn:hover,
   .admin-page-header-primary:hover {
     transform: none;
@@ -1659,207 +2006,353 @@ html.scrollable-page {
 .dashboard-page {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-}
-
-.dashboard-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
 }
 
+/* ---- Ô chỉ số ---------------------------------------------------------- */
+.dashboard-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
+  gap: 0.85rem;
+}
+
+/* Mặt giấy trắng + góc vát clip-path ở góc phải-trên, lấp gradient rất nhạt
+   của chính tone đó. Bản trước dùng vạch màu 3px đơn điệu; góc vát tạo
+   chiều sâu thật (không phải đường viền một cạnh - dự án cấm
+   border-left/top/right) mà vẫn giữ mặt giấy sạch, chữ số mặc mực đen. */
 .stat-card {
   position: relative;
   overflow: hidden;
-  border-radius: var(--vas-radius-lg);
-  padding: 1.4rem;
-  color: #fff;
-  box-shadow: var(--vas-shadow-md);
-  min-height: 8.5rem;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  gap: 0.15rem;
+  padding: 1.05rem 1.15rem 1.15rem;
+  border-radius: var(--vas-radius-md);
+  background: var(--vas-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-sm);
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s ease;
 }
 
-.stat-card-decor {
+.stat-card::before {
+  content: "";
   position: absolute;
-  top: -2.5rem;
-  right: -2.5rem;
-  width: 7rem;
-  height: 7rem;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
-  filter: blur(2px);
+  inset: 0;
+  background: linear-gradient(135deg, transparent 60%, color-mix(in srgb, var(--stat-ink) 16%, transparent) 100%);
+  clip-path: polygon(55% 0, 100% 0, 100% 70%);
   pointer-events: none;
 }
 
+.stat-card:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--stat-ink) 26%, var(--color-border)),
+    var(--shadow-md);
+}
+
+.stat-card-top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
 .stat-card-icon {
-  width: 2.4rem;
-  height: 2.4rem;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: var(--vas-radius-sm);
   display: grid;
   place-items: center;
+  color: var(--stat-ink);
+  background: color-mix(in srgb, var(--stat-ink) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--stat-ink) 22%, transparent);
 }
 
-.stat-card-value {
-  font-family: var(--vas-display);
-  font-size: 2rem;
-  font-weight: 700;
-  line-height: 1.1;
+.stat-card-value,
+.stat-card-label,
+.stat-card-hint,
+.stat-card-spark {
+  position: relative;
+  z-index: 1;
 }
 
-.stat-card-label {
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.dashboard-grid-2col {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.dashboard-card {
-  background: var(--vas-surface);
-  border-radius: var(--vas-radius-md);
-  padding: 1.25rem;
-  box-shadow: var(--vas-shadow-sm);
-  min-width: 0;
-}
-
-.dashboard-card h2 {
-  margin: 0 0 0.9rem;
-  font-size: 0.98rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--vas-text);
-}
-
-.dashboard-chart-wrap {
-  width: 100%;
-  overflow-x: auto;
-}
-
-.dashboard-pie-legend {
-  list-style: none;
-  margin: 0.75rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem 1rem;
-  font-size: 0.82rem;
-  color: var(--vas-text-muted);
-}
-.dashboard-pie-legend li {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.dashboard-pie-legend-dot {
-  width: 0.6rem;
-  height: 0.6rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.dashboard-school-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-.dashboard-school-list li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 6rem 2rem;
-  align-items: center;
-  gap: 0.6rem;
-  font-size: 0.85rem;
-}
-.dashboard-school-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--vas-text);
-}
-.dashboard-school-bar-track {
-  height: 0.45rem;
-  border-radius: 999px;
-  background: var(--vas-surface-muted);
-  overflow: hidden;
-}
-.dashboard-school-bar-fill {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--vas-tri-thuc), var(--vas-trach-nhiem));
-  border-radius: 999px;
-}
-.dashboard-school-count {
-  text-align: right;
-  font-weight: 700;
-  color: var(--vas-text);
-}
-
-.top-artworks-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  counter-reset: none;
-}
-.top-artworks-item {
-  display: grid;
-  grid-template-columns: 1.5rem 2.75rem minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.6rem;
-}
-.top-artworks-rank {
-  font-weight: 700;
-  color: var(--vas-text-muted);
-  text-align: center;
-}
-.top-artworks-thumb {
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: var(--vas-radius-sm);
-  object-fit: cover;
-  background: var(--vas-surface-muted);
-}
-.top-artworks-info {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.top-artworks-info strong {
-  font-size: 0.86rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.top-artworks-info span {
-  font-size: 0.76rem;
-  color: var(--vas-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.top-artworks-stats {
-  display: flex;
-  gap: 0.6rem;
-  font-size: 0.78rem;
-  color: var(--vas-text-muted);
-  white-space: nowrap;
-}
-.top-artworks-stats span {
+.stat-card-delta {
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-full);
+}
+.stat-card-delta--up {
+  color: var(--color-success-tint-fg);
+  background: var(--color-success-tint-bg);
+}
+.stat-card-delta--down {
+  color: var(--color-warning-tint-fg);
+  background: var(--color-warning-tint-bg);
+}
+
+/* Chữ số tỉ lệ (KHÔNG tabular-nums) và font sans như phần còn lại: ở cỡ lớn,
+   chữ số rộng bằng nhau làm "121" trông rời rạc, còn mặt chữ serif đọc ra
+   như đồ trang trí lạc khỏi hệ thống. */
+.stat-card-value {
+  font-size: clamp(1.65rem, 1.4rem + 1vw, 2.1rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--vas-text);
+}
+
+.stat-card-label {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--vas-text);
+}
+
+.stat-card-hint {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--vas-text-muted);
+}
+
+.stat-card-spark {
+  display: block;
+  width: 100%;
+  height: 1.75rem;
+  margin-top: 0.65rem;
+}
+
+/* ---- Ba khu vực trưng bày ---------------------------------------------- */
+/* 3 cột đều nhau ở desktop - đúng bằng số khu vực, nên không cần auto-fit:
+   một hàng luôn khớp, không bao giờ dư một ô lẻ xuống hàng dưới. */
+.dashboard-region-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.region-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--vas-radius-lg);
+  background: var(--vas-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--vas-shadow-sm);
+  transition: box-shadow 0.24s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.region-card:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--region-ink) 30%, var(--color-border)),
+    var(--vas-shadow-md);
+}
+
+/* Ảnh hero cắt clip-path ở góc dưới-trái thay vì bo góc chữ nhật đơn điệu -
+   một nhát vát chéo đọc như "cắt tấm ảnh" chứ không phải khung cứng. Chiều
+   cao cố định (không theo tỉ lệ ảnh gốc): ảnh học sinh gửi lên đủ mọi tỉ lệ,
+   khung cố định giữ 3 card cùng hàng cao đều nhau. */
+.region-card-hero {
+  position: relative;
+  height: 11rem;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 14% 100%, 0 82%);
+  background: var(--vas-surface-muted);
+}
+
+.region-card-hero-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.region-card-hero-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--vas-text-muted);
+  background: color-mix(in srgb, var(--region-ink) 8%, var(--vas-surface-muted));
+}
+
+/* Quầng tối dưới đáy ảnh - không phải để trang trí, mà để chữ trắng
+   (tên tác phẩm + tag khu vực) luôn đủ tương phản bất kể ảnh sáng hay tối. */
+.region-card-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(20, 8, 12, 0) 45%, rgba(20, 8, 12, 0.72) 100%);
+  pointer-events: none;
+}
+
+.region-card-hero-tag {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: var(--radius-full);
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #fff;
+  background: color-mix(in srgb, var(--region-ink) 82%, black 6%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+.region-card-hero-caption {
+  position: absolute;
+  left: 0.9rem;
+  right: 0.9rem;
+  bottom: 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  color: #fff;
+}
+.region-card-hero-caption strong {
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.region-card-hero-caption span {
+  font-size: 0.72rem;
+  opacity: 0.88;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.region-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.95rem 1.05rem 1.05rem;
+}
+
+.region-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.region-card-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.55rem 0.4rem;
+  border-radius: var(--vas-radius-sm);
+  text-align: center;
+  background: color-mix(in srgb, var(--region-ink) 6%, transparent);
+}
+
+.region-card-metric-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--vas-text);
+  letter-spacing: -0.01em;
+}
+
+.region-card-metric-label {
+  font-size: 0.68rem;
+  color: var(--vas-text-muted);
+}
+
+.region-card-schools {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 8.5rem;
+  overflow-y: auto;
+}
+
+.region-card-school {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  padding-bottom: 0.4rem;
+  box-shadow: inset 0 -1px 0 var(--color-border);
+}
+.region-card-school:last-child {
+  box-shadow: none;
+  padding-bottom: 0;
+}
+
+.region-card-school-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vas-text);
+  min-width: 0;
+}
+
+.region-card-school-count {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--vas-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.region-card-school--empty {
+  color: var(--vas-text-muted);
+  font-style: italic;
+}
+
+/* ---- Khung chờ tải ----------------------------------------------------- */
+.dashboard-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.dashboard-skeleton-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13.5rem, 1fr));
+  gap: 0.9rem;
+}
+
+.dashboard-skeleton-card,
+.dashboard-skeleton-chart {
+  position: relative;
+  z-index: 1;
+  border-radius: var(--vas-radius-md);
+  background: var(--vas-surface);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  animation: dashboard-skeleton-pulse 1.4s ease-in-out infinite;
+}
+.dashboard-skeleton-card {
+  height: 9.5rem;
+}
+.dashboard-skeleton-chart {
+  height: 18rem;
+}
+
+@keyframes dashboard-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .admin-empty-note {
@@ -1869,19 +2362,47 @@ html.scrollable-page {
   padding: 1.5rem 0;
 }
 
-@media (max-width: 900px) {
-  .dashboard-grid-2col {
+@media (max-width: 1080px) {
+  .dashboard-region-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .dashboard-region-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 480px) {
-  .top-artworks-item {
-    grid-template-columns: 1.25rem 2.25rem minmax(0, 1fr);
+  .dashboard-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
   }
-  .top-artworks-stats {
-    grid-column: 2 / -1;
-    justify-content: flex-start;
+  .stat-card {
+    padding: 0.85rem 0.9rem 1rem;
+  }
+  .stat-card-hint {
+    display: none;
+  }
+
+  .region-card-hero {
+    height: 9rem;
+  }
+  .region-card-metric-label {
+    display: none;
+  }
+}
+
+/* Tôn trọng thiết lập giảm chuyển động. */
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-skeleton-card,
+  .dashboard-skeleton-chart {
+    animation: none;
+  }
+  .stat-card:hover,
+  .region-card:hover {
+    transform: none;
   }
 }
 
@@ -1974,6 +2495,81 @@ html.scrollable-page {
   white-space: nowrap;
 }
 
+/* Chuyển đổi List <-> Grid - 2 icon-button dính liền như 1 khối segmented
+   control, khớp phong cách các nút icon khác trong khu quản trị. */
+.artworks-view-switch {
+  display: inline-flex;
+  border-radius: var(--vas-radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--vas-border);
+  margin-left: auto;
+}
+.artworks-view-switch button {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: none;
+  background: var(--vas-surface);
+  color: var(--vas-text-muted);
+  cursor: pointer;
+}
+.artworks-view-switch button + button {
+  border-left: 1px solid var(--vas-border);
+}
+.artworks-view-switch button:hover {
+  background: var(--vas-surface-muted);
+}
+.artworks-view-switch button.is-active {
+  background: var(--vas-tri-thuc-100);
+  color: var(--vas-tri-thuc);
+}
+
+/* Thanh thao tác hàng loạt - nổi lên khi có tác phẩm được chọn, biến mất khi
+   bỏ chọn hết chứ không chiếm chỗ cố định trên trang. */
+.artworks-bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.65rem 1rem;
+  background: var(--vas-tri-thuc-100);
+  color: var(--vas-tri-thuc);
+  border-radius: var(--vas-radius-md);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.artworks-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.artworks-bulk-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  border-radius: var(--vas-radius-sm);
+  background: var(--vas-surface);
+  color: var(--vas-text);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.artworks-bulk-actions button:hover {
+  background: var(--vas-surface-muted);
+}
+.artworks-bulk-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.artworks-bulk-actions .artworks-bulk-clear {
+  background: transparent;
+  color: var(--vas-tri-thuc);
+}
+
 /* Danh sách tác phẩm: CSS Grid với cột cố định qua minmax() để không rớt
    hàng ở màn hình rộng; dưới 900px chuyển sang card-list dọc (mỗi cột 1
    dòng riêng) thay vì cố nhồi vào 1 hàng ngang chật chội. */
@@ -1989,7 +2585,7 @@ html.scrollable-page {
 .artworks-table-head,
 .artworks-table-row {
   display: grid;
-  grid-template-columns: 3.5rem minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 0.9fr) 4.5rem minmax(0, 1fr) 4.5rem 6.5rem;
+  grid-template-columns: 1.75rem 3.5rem minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 0.9fr) 4.5rem minmax(0, 1fr) 4.5rem 6.5rem;
   gap: 0.75rem;
   align-items: center;
   padding: 0.65rem 1rem;
@@ -2010,7 +2606,21 @@ html.scrollable-page {
 .artworks-table-row:last-child {
   box-shadow: none;
 }
+.artworks-table-row.is-selected {
+  background: var(--vas-tri-thuc-100);
+}
 
+.artworks-cell-select {
+  display: grid;
+  place-items: center;
+}
+
+/* Hover phóng nhẹ ảnh trong bảng - chỉ scale tại chỗ, không che nội dung
+   xung quanh (khác lightbox trang public - ở đây chỉ cần xem nhanh, bảng
+   dày đặc nên popup lớn sẽ đè lên các dòng khác). */
+.artworks-cell-thumb {
+  overflow: visible;
+}
 .artworks-cell-thumb img {
   width: 3rem;
   height: 3rem;
@@ -2018,6 +2628,116 @@ html.scrollable-page {
   object-fit: cover;
   display: block;
   background: var(--vas-surface-muted);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.artworks-cell-thumb img:hover {
+  transform: scale(2.4);
+  position: relative;
+  z-index: 5;
+  box-shadow: var(--vas-shadow-md);
+}
+
+/* ---------------------------------------------------------------------- */
+/* Chế độ xem Grid - thư viện ảnh thay vì bảng, phù hợp duyệt nhanh bằng   */
+/* mắt khi có nhiều tác phẩm.                                              */
+/* ---------------------------------------------------------------------- */
+.artworks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 1rem;
+}
+
+.artworks-grid-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--vas-surface);
+  border-radius: var(--vas-radius-md);
+  box-shadow: var(--vas-shadow-sm);
+  overflow: hidden;
+}
+.artworks-grid-card.is-selected {
+  outline: 2px solid var(--vas-tri-thuc);
+  outline-offset: -2px;
+}
+
+.artworks-grid-select {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--vas-radius-sm);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(2px);
+}
+
+.artworks-grid-thumb {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--vas-surface-muted);
+}
+.artworks-grid-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Zoom tại chỗ: ảnh phóng nhẹ bên trong khung đã bị cắt bởi overflow:hidden
+   của card cha, không tràn ra đè lên thẻ khác như ở bảng List (nơi thumbnail
+   nhỏ hơn nhiều nên phóng to cần tràn ra ngoài mới nhìn rõ). */
+.artworks-grid-card:hover .artworks-grid-thumb img {
+  transform: scale(1.08);
+}
+
+.artworks-grid-featured-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: var(--vas-trach-nhiem);
+  color: #fff;
+}
+
+.artworks-grid-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.65rem 0.75rem;
+  flex: 1;
+}
+.artworks-grid-body strong {
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artworks-grid-body > span {
+  font-size: 0.78rem;
+  color: var(--vas-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.artworks-grid-meta {
+  color: var(--vas-tri-thuc);
+}
+
+.artworks-grid-actions {
+  display: flex;
+  gap: 0.3rem;
+  justify-content: flex-end;
+  padding: 0 0.75rem 0.65rem;
 }
 
 .artworks-cell-title {
@@ -2157,17 +2877,18 @@ html.scrollable-page {
      đè lên hàng cảm xúc). Nay: lượt xem + bình luận đứng cạnh nhau ở dòng
      "stats", cảm xúc chiếm dòng riêng vì có thể xuống nhiều hàng. */
   .artworks-table-row {
-    grid-template-columns: 3.25rem auto minmax(0, 1fr);
+    grid-template-columns: 1.5rem 3.25rem auto minmax(0, 1fr);
     grid-template-areas:
-      "thumb title    title"
-      "thumb meta     meta"
-      "award award    award"
-      "views comments ."
-      "react react    react"
-      "acts  acts     acts";
+      "sel   thumb title    title"
+      "sel   thumb meta     meta"
+      "award award award    award"
+      "views views comments ."
+      "react react react    react"
+      "acts  acts  acts     acts";
     row-gap: 0.4rem;
     padding: 0.75rem;
   }
+  .artworks-cell-select { grid-area: sel; align-self: start; }
   .artworks-cell-thumb { grid-area: thumb; }
   .artworks-cell-title { grid-area: title; }
   .artworks-cell-meta { grid-area: meta; }
@@ -2245,6 +2966,10 @@ html.scrollable-page {
   margin: 0;
   font-size: 1.1rem;
   font-family: var(--vas-display);
+  /* Không set thì kế thừa `color: var(--ink)` (gần trắng) từ `body` ở
+     index.css - token đó dành cho nền đỏ đậm của trang public, chìm mất
+     trên nền --vas-surface trắng của modal admin này. */
+  color: var(--vas-text);
 }
 .artwork-modal-close {
   border: none;
@@ -2260,13 +2985,13 @@ html.scrollable-page {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 1.25rem;
+  padding: 1.1rem 1.25rem;
 }
 
 .artwork-modal-grid {
   display: grid;
-  grid-template-columns: minmax(16rem, 0.9fr) minmax(0, 1.4fr);
-  gap: 1.5rem;
+  grid-template-columns: minmax(14rem, 0.8fr) minmax(0, 1.5fr);
+  gap: 1.25rem;
 }
 
 .artwork-modal-preview {
@@ -2299,38 +3024,111 @@ html.scrollable-page {
   }
 }
 
-/* Form 2 cột dùng chung (bulk-upload edit + modal edit) */
+/* Form 2 cột dùng chung (bulk-upload edit + modal edit). Gap hàng nhỏ hơn
+   gap cột: field bắt buộc/tuỳ chọn đứng cạnh nhau theo hàng ngang nên cần
+   tách rõ theo chiều dọc, nhưng không lãng phí khoảng trắng giữa các hàng. */
 .artwork-meta-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.9rem 1rem;
+  gap: 0.75rem 1rem;
 }
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.3rem;
   min-width: 0;
 }
 .form-field--full {
   grid-column: 1 / -1;
 }
+/* Nhãn đậm hơn + tối hơn chữ phụ (vas-text-muted quá nhạt trên nền trắng,
+   đứng cạnh input viền mờ làm cả field trông "chìm" - không phân biệt được
+   đâu là nhãn, đâu là placeholder). Dùng vas-text ở weight 600 để nhãn nổi
+   rõ, còn dấu * và hint mới dùng tông nhạt. */
 .form-field label {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  color: var(--vas-text-muted);
+  color: var(--vas-text);
+  letter-spacing: 0.01em;
 }
-/* :not([type="checkbox"]) - checkbox KHÔNG được ăn width:100%/padding của
+/* Nhãn kèm nút "+" thêm nhanh (vd nhóm chủ đề trong ArtworkMetaForm) - nút
+   nằm cuối hàng, tách khỏi chữ nhãn bằng margin-left: auto thay vì justify
+   trên toàn .form-field label (chỉ field này cần, không ảnh hưởng field khác). */
+.form-field-label-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.form-field-inline-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--vas-border);
+  background: var(--vas-surface);
+  color: var(--vas-text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.form-field-inline-add-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--vas-surface));
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.form-field-inline-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* Dấu * bắt buộc dùng chung mọi form admin - một màu, một cỡ, một chỗ
+   (RequiredMark trong ArtworkMetaForm.tsx), không để mỗi form tự bịa kiểu
+   đánh dấu riêng. */
+.form-required-mark {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+/* Field lỗi: viền đỏ + thông báo ngay dưới ô, hiện khi rời ô (blur) hoặc
+   sau khi submit thất bại - không đợi người dùng tự đoán field nào sai. */
+.form-field--error input:not([type="checkbox"]):not([type="radio"]),
+.form-field--error select {
+  border-color: var(--color-danger);
+  background: var(--color-danger-tint-bg);
+}
+.form-field--error label {
+  color: var(--color-danger-tint-fg);
+}
+.form-field-error-text {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-danger-tint-fg);
+}
+/* Viền + nền tương phản rõ hơn nền panel (trước dùng chung vas-border quá
+   nhạt (#ece5e2) khiến input gần như hoà vào nền trắng, chữ trông "chìm"
+   xuống mặt phẳng chứ không nổi thành một ô nhập rõ ràng). Nền hơi ngả xám
+   (vas-surface-muted) tách input khỏi panel trắng; viền đậm hơn + hover/focus
+   rõ ràng để người dùng luôn biết đang trỏ vào ô nào.
+   :not([type="checkbox"]) - checkbox KHÔNG được ăn width:100%/padding của
    ô nhập text. Trước đây nó giãn hết chiều ngang ô, đẩy nhãn "Hiển thị
    công khai" ra tận mép phải và trông như bị lệch khỏi ô tick. */
 .form-field input:not([type="checkbox"]):not([type="radio"]),
 .form-field select {
-  padding: 0.55rem 0.7rem;
+  padding: 0.6rem 0.75rem;
   border-radius: var(--vas-radius-sm);
   border: 1px solid var(--vas-border);
-  background: var(--vas-surface);
-  font-size: 0.88rem;
+  background: var(--vas-surface-muted);
+  font-size: 0.9rem;
   color: var(--vas-text);
   width: 100%;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.form-field input:not([type="checkbox"]):not([type="radio"])::placeholder {
+  color: var(--vas-text-muted);
+}
+.form-field input:not([type="checkbox"]):not([type="radio"]):hover:not(:disabled),
+.form-field select:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--vas-text-muted) 60%, var(--vas-border));
 }
 
 .form-field input[type="checkbox"],
@@ -2342,15 +3140,56 @@ html.scrollable-page {
   accent-color: var(--color-primary);
   cursor: pointer;
 }
-.form-field input:focus,
-.form-field select:focus {
+.form-field input:focus-visible,
+.form-field select:focus-visible {
   outline: 2px solid var(--vas-tri-thuc);
   outline-offset: 1px;
+  background: var(--vas-surface);
 }
 .form-field input:disabled,
 .form-field select:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Danh sách giải thưởng dạng checkbox - trước đây không có CSS riêng nên
+   hiện thành checkbox/chữ trần mặc định của trình duyệt, lạc tông hoàn
+   toàn với phần còn lại của form. Bọc mỗi lựa chọn trong "chip" viền mảnh
+   để dễ bấm (cả label, không chỉ ô tick nhỏ) và xếp dạng lưới co giãn để
+   không lãng phí bề ngang khi có nhiều giải. */
+.artwork-award-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.artwork-award-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--vas-border);
+  background: var(--vas-surface-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--vas-text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.artwork-award-checkbox:has(input:checked) {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--vas-surface));
+}
+.artwork-award-checkbox:has(input:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.artwork-award-swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 
 @media (max-width: 560px) {
@@ -2363,7 +3202,7 @@ html.scrollable-page {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Bulk upload page                                                         */
+/* Trang tải tác phẩm lên - 1 luồng duy nhất: lưới thẻ ảnh + panel sửa      */
 /* ---------------------------------------------------------------------- */
 .artworks-upload-page {
   display: flex;
@@ -2371,134 +3210,275 @@ html.scrollable-page {
   gap: 1rem;
 }
 
-.artworks-upload-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-.artworks-upload-header .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.artworks-upload-header h1 {
-  margin: 0;
-  font-family: var(--vas-display);
-  font-size: 1.3rem;
-}
-
+/* --- Khung kéo-thả (AdminDropzone) --- */
 .artworks-upload-dropzone-wrap {
-  min-height: 22rem;
   display: flex;
 }
-.artworks-upload-dropzone-wrap > * {
+.admin-dropzone {
   flex: 1;
-}
-
-.artworks-upload-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  padding: 3rem 1rem;
-  color: var(--vas-text-muted);
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 1.5rem 1rem;
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+.admin-dropzone:hover,
+.admin-dropzone:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-primary-surface);
+}
+.admin-dropzone[data-active="true"] {
+  border-color: var(--color-primary);
+  border-style: solid;
+  background: var(--color-primary-surface);
+}
+.admin-dropzone[data-busy="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.admin-dropzone-icon {
+  color: var(--color-primary);
+}
+.admin-dropzone-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.admin-dropzone-link {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+.admin-dropzone-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+.admin-dropzone-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
 }
 
-.artworks-edit-layout {
+/* --- Layout chính: lưới thẻ ảnh (trái) + panel sửa (phải) --- */
+.artwork-picker-layout {
   display: grid;
-  grid-template-columns: 11rem minmax(0, 1fr);
+  /* Panel sửa rộng 26rem (thay vì 22rem cũ) để hai select cùng hàng
+     (Cơ sở trực thuộc / Khối lớp) không bị bóp chữ. */
+  grid-template-columns: minmax(0, 1fr) 26rem;
   gap: 1.25rem;
   align-items: start;
 }
 
-.artworks-edit-thumbs {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 70vh;
-  overflow-y: auto;
-  padding-right: 0.25rem;
+.artwork-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
 }
 
-.artworks-edit-thumb {
+.artwork-picker-card {
   position: relative;
   display: flex;
   flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.4rem;
+  border-radius: var(--radius-md);
   border: 2px solid transparent;
-  border-radius: var(--vas-radius-sm);
-  background: var(--vas-surface);
-  padding: 0.35rem;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
-  text-align: left;
 }
-.artworks-edit-thumb--active {
-  border-color: var(--vas-tri-thuc);
+.artwork-picker-card--selected {
+  border-color: var(--color-primary);
 }
-.artworks-edit-thumb img {
+.artwork-picker-card--invalid {
+  border-color: var(--color-danger);
+}
+.artwork-picker-card--done {
+  opacity: 0.75;
+}
+
+.artwork-picker-checkbox {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  background: rgba(26, 26, 26, 0.35);
+  color: #fff;
+  cursor: pointer;
+}
+.artwork-picker-card--selected .artwork-picker-checkbox {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.artwork-picker-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: calc(var(--radius-md) - 4px);
+  overflow: hidden;
+  background: var(--color-surface-muted);
+}
+.artwork-picker-thumb img {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  height: 100%;
   object-fit: cover;
-  border-radius: calc(var(--vas-radius-sm) - 2px);
   display: block;
 }
-.artworks-edit-thumb-name {
-  font-size: 0.72rem;
-  color: var(--vas-text-muted);
+
+.artwork-picker-badge {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: rgba(26, 26, 26, 0.55);
+  color: #fff;
+}
+.artwork-picker-badge--saving {
+  background: var(--color-primary);
+}
+.artwork-picker-badge--done {
+  background: var(--color-success);
+}
+.artwork-picker-badge--error {
+  background: var(--color-danger);
+}
+
+.artwork-picker-name {
+  margin: 0;
+  padding: 0 0.15rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-top: 0.25rem;
-}
-.artworks-edit-thumb-badge {
-  position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
-  display: grid;
-  place-items: center;
-  min-width: 1.3rem;
-  height: 1.3rem;
-  padding: 0 0.25rem;
-  border-radius: 999px;
-  background: var(--vas-tri-thuc);
-  color: #fff;
-  font-size: 0.65rem;
-}
-.artworks-edit-thumb-badge--done {
-  background: var(--vas-success);
-}
-.artworks-edit-thumb-badge--error {
-  background: var(--vas-danger);
 }
 
-.artworks-edit-main {
-  background: var(--vas-surface);
-  border-radius: var(--vas-radius-md);
-  box-shadow: var(--vas-shadow-sm);
-  padding: 1.25rem;
+.artwork-picker-remove {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 2;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(26, 26, 26, 0.55);
+  color: #fff;
+  cursor: pointer;
+}
+/* Ẩn nút xoá cho tới khi hover/focus thẻ - badge trạng thái mới là thứ cần
+   luôn hiện. Trên cảm ứng (không có hover thật) hiện luôn để vẫn bấm được. */
+.artwork-picker-card:hover .artwork-picker-remove,
+.artwork-picker-card:focus-within .artwork-picker-remove {
+  display: flex;
+}
+.artwork-picker-remove:hover {
+  background: var(--color-danger);
+}
+@media (hover: none) and (pointer: coarse) {
+  .artwork-picker-remove {
+    display: flex;
+  }
+}
+
+/* --- Panel sửa bên phải --- */
+.artwork-edit-panel {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  padding: 1.1rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 1rem;
 }
-
-.artworks-edit-preview {
-  border-radius: var(--vas-radius-md);
+.artwork-edit-panel-empty {
+  margin: 0;
+  padding: 1.5rem 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+.artwork-edit-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.artwork-edit-panel-thumb {
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.artwork-edit-panel-heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.artwork-edit-panel-heading strong {
+  font-size: 0.85rem;
   overflow: hidden;
-  background: var(--vas-surface-muted);
-  max-height: 18rem;
-}
-.artworks-edit-preview img {
-  width: 100%;
-  height: 100%;
-  max-height: 18rem;
-  object-fit: contain;
-  display: block;
-  margin: 0 auto;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .artworks-edit-error {
-  color: var(--vas-danger);
-  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-danger);
+  font-size: 0.8rem;
   margin: 0;
+}
+
+/* Panel sửa hàng loạt khi ≥2 thẻ đang chọn - form dùng lại ArtworkMetaForm
+   nhưng không bắt buộc field nào, chỉ ghi đè field đã điền (applyPatch ở
+   ArtworksUploadPage.tsx). */
+.artwork-bulk-edit-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-surface);
+  color: var(--color-text);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.artwork-bulk-edit-banner svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--color-primary);
+}
+.artwork-bulk-edit-apply {
+  width: 100%;
+  justify-content: center;
 }
 
 /* Dính đáy vùng cuộn (.admin-content). z-index cao hơn các card anh em
@@ -2512,30 +3492,36 @@ html.scrollable-page {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.85rem 1.25rem;
-  background: var(--vas-surface);
-  border-radius: var(--vas-radius-md);
-  box-shadow: var(--vas-shadow-md);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
   font-size: 0.85rem;
-  color: var(--vas-text-muted);
+  color: var(--color-text-muted);
 }
 .artworks-upload-footer .btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
 }
+.artwork-bulk-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
 
 @media (max-width: 768px) {
-  .artworks-edit-layout {
+  .artwork-picker-layout {
     grid-template-columns: 1fr;
   }
-  .artworks-edit-thumbs {
-    flex-direction: row;
-    max-height: none;
-    overflow-x: auto;
-    overflow-y: hidden;
+  .artwork-edit-panel {
+    position: static;
   }
-  .artworks-edit-thumb {
-    flex: 0 0 6rem;
+}
+
+@media (max-width: 480px) {
+  .artwork-picker-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.5rem;
   }
 }
 
@@ -2555,23 +3541,143 @@ html.scrollable-page {
   align-items: start;
 }
 
+.awards-list-panel {
+  min-width: 0;
+}
+
+/* --- Danh sách kéo-thả ---------------------------------------------- */
+
 .awards-list {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
 }
+/* Trong lúc đang lưu thứ tự mới: mờ nhẹ + khoá tương tác, tránh người
+   dùng kéo tiếp trong khi request trước chưa xong. */
+.awards-list--busy {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.awards-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* --- TopicCategoriesPage: 3 khối kéo-thả riêng theo cấp học ---------- */
+.topic-category-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.topic-category-group-title {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.award-card-skeleton {
+  height: 4.4rem;
+  border-radius: var(--vas-radius-md);
+  background: linear-gradient(
+    100deg,
+    var(--vas-surface-muted) 30%,
+    var(--color-border) 50%,
+    var(--vas-surface-muted) 70%
+  );
+  background-size: 200% 100%;
+  animation: awards-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes awards-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -20% 0;
+  }
+}
+
+.awards-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 2.5rem 1.5rem;
+  color: var(--vas-text-muted);
+  text-align: center;
+}
 
 .award-card {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  gap: 0.75rem;
   background: var(--vas-surface);
   border-radius: var(--vas-radius-md);
   box-shadow: var(--vas-shadow-sm);
-  padding: 0.85rem 1rem;
+  padding: 0.75rem 1rem;
+  cursor: default;
+  /* framer-motion Reorder.Item định vị bằng transform khi kéo - cần
+     position tương đối để không văng khỏi layout cha. */
+  position: relative;
 }
 .award-card--inactive {
   opacity: 0.55;
+}
+
+.award-card-handle {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: var(--vas-radius-sm);
+  background: transparent;
+  color: var(--vas-text-muted);
+  cursor: grab;
+  touch-action: none;
+}
+.award-card-handle:hover {
+  background: var(--vas-surface-muted);
+  color: var(--vas-text);
+}
+.award-card-handle:active {
+  cursor: grabbing;
+}
+
+/* Huy hiệu số thứ tự - thay cho ký tự "#" trần trụi. Ba hạng đầu có màu
+   riêng (vàng/bạc/đồng) để nổi bật ngay cả khi màu giải trùng nhau. */
+.award-rank-badge {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--vas-surface-muted);
+  color: var(--vas-text-muted);
+  border: 1px solid var(--vas-border);
+}
+.award-rank-badge--top1 {
+  background: #fbe9c8;
+  color: #8a5a00;
+  border-color: #f0d49a;
+}
+.award-rank-badge--top2 {
+  background: #eef0f2;
+  color: #57606a;
+  border-color: #dde1e5;
+}
+.award-rank-badge--top3 {
+  background: #f3e2d3;
+  color: #8a5636;
+  border-color: #e6c9ac;
 }
 
 .award-card-icon {
@@ -2582,6 +3688,10 @@ html.scrollable-page {
   display: grid;
   place-items: center;
   box-shadow: var(--vas-shadow-sm);
+}
+.award-card-icon--lg {
+  width: 3.2rem;
+  height: 3.2rem;
 }
 
 .award-card-info {
@@ -2597,8 +3707,47 @@ html.scrollable-page {
   white-space: nowrap;
 }
 .award-card-info span {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.78rem;
   color: var(--vas-text-muted);
+}
+.award-hidden-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--vas-warning);
+}
+.award-grade-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--vas-surface-muted);
+  color: var(--vas-text-muted);
+  font-size: 0.7rem;
+}
+
+.form-field-hint {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--vas-text-muted);
+  line-height: 1.4;
+}
+
+.award-card-reorder {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 0.15rem;
+}
+.award-card-reorder .artworks-icon-btn {
+  width: 1.5rem;
+  height: 1.15rem;
+  font-size: 0.6rem;
+  line-height: 1;
 }
 
 .award-card-actions {
@@ -2606,6 +3755,8 @@ html.scrollable-page {
   gap: 0.3rem;
   flex-shrink: 0;
 }
+
+/* --- Form thêm/sửa (panel trượt vào, không còn chiếm chỗ khi đóng) --- */
 
 .award-form {
   background: var(--vas-surface);
@@ -2618,15 +3769,79 @@ html.scrollable-page {
   position: sticky;
   top: 4.5rem;
 }
+.award-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 .award-form h2 {
   margin: 0;
   font-size: 1rem;
   font-family: var(--vas-display);
+  /* Cùng lý do .artwork-modal-header h2 - chặn kế thừa var(--ink) gần trắng
+     từ body (theme trang public) chìm trên nền form trắng. */
+  color: var(--vas-text);
+}
+.award-form-close {
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: none;
+  border-radius: var(--vas-radius-sm);
+  background: var(--vas-surface-muted);
+  color: var(--vas-text-muted);
+  cursor: pointer;
+}
+.award-form-close:hover {
+  background: var(--vas-tri-thuc-100);
+  color: var(--vas-tri-thuc);
 }
 
+.award-form-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: var(--vas-radius-sm);
+  background: var(--vas-surface-muted);
+}
+.award-form-preview strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.award-form-preview span {
+  font-size: 0.75rem;
+  color: var(--vas-text-muted);
+}
+
+.award-color-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.award-color-swatch {
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.award-color-swatch--active {
+  border-color: var(--vas-text);
+}
 .award-color-input {
-  padding: 0.2rem !important;
-  height: 2.6rem;
+  padding: 0.15rem !important;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 50%;
+  overflow: hidden;
   cursor: pointer;
 }
 
@@ -2670,6 +3885,34 @@ html.scrollable-page {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+/* --- Modal tạo nhanh nhóm chủ đề (nút "+" trong ArtworkMetaForm) ----- */
+.topic-quick-modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.topic-quick-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  border: none;
+  background: rgba(20, 8, 12, 0.5);
+  cursor: pointer;
+}
+/* .award-form vốn được thiết kế để đứng cạnh danh sách trong layout grid
+   (position: static) - ở đây dùng lại làm nội dung modal nên cần đặt lại
+   làm phần tử định vị, giới hạn chiều rộng/chiều cao và cho cuộn riêng. */
+.topic-quick-modal-card {
+  position: relative;
+  z-index: 1;
+  width: min(28rem, calc(100vw - 2.5rem));
+  max-height: calc(100vh - 2.5rem);
+  overflow-y: auto;
 }
 
 @media (max-width: 900px) {
@@ -2755,12 +3998,17 @@ html.scrollable-page {
     min-height: 2.75rem;
   }
 
-  /* Awards: nút sửa/xoá xuống hàng riêng thay vì ép card chật lại. */
+  /* Awards: nút sửa/xoá xuống hàng riêng thay vì ép card chật lại. Nút
+     lên/xuống thay hẳn cho việc kéo bằng ngón tay, vốn dễ đụng lung tung
+     trên danh sách cuộn dọc trong lúc chạm cũng đang dùng để cuộn trang. */
   .award-card {
     flex-wrap: wrap;
   }
   .award-card-actions {
     margin-left: auto;
+  }
+  .award-card-handle {
+    display: none;
   }
   .award-form-actions .btn {
     flex: 1;
@@ -2768,9 +4016,9 @@ html.scrollable-page {
     min-height: 2.75rem;
   }
 
-  /* Dashboard: biểu đồ tròn/cột giữ được tỉ lệ đọc được ở màn hình hẹp. */
-  .dashboard-card {
-    padding: 1rem;
+  /* Dashboard: card khu vực bớt đệm để ảnh hero có thêm chỗ thở. */
+  .region-card-body {
+    padding: 0.85rem 0.9rem 0.95rem;
   }
   .stat-card-value {
     font-size: 1.65rem;
@@ -2789,6 +4037,11 @@ html.scrollable-page {
   }
   .stat-card-label {
     font-size: 0.75rem;
+  }
+  /* Sparkline bỏ đi ở bề ngang này: cao chưa tới 28px mà rộng chỉ còn nửa
+     màn hình thì hình chỉ còn là vệt nhiễu, không đọc được xu hướng. */
+  .stat-card-spark {
+    display: none;
   }
 }
 
@@ -2811,5 +4064,30 @@ html.scrollable-page {
      sau khi chạm. */
   .admin-sidebar-flyout {
     display: none;
+  }
+
+  /* Zoom ảnh khi hover cũng vô nghĩa trên cảm ứng: không có sự kiện hover
+     thật, chỉ có :active sau khi chạm - ảnh phóng to rồi "dính" lại render
+     ra khó chịu hơn là hữu ích. */
+  .artworks-cell-thumb img:hover {
+    transform: none;
+  }
+  .artworks-grid-card:hover .artworks-grid-thumb img {
+    transform: none;
+  }
+}
+
+/* Tôn trọng prefers-reduced-motion cho các hiệu ứng thêm ở trang danh sách
+   tác phẩm (zoom ảnh khi hover, xem mục 06-frontend.md §10). */
+@media (prefers-reduced-motion: reduce) {
+  .artworks-cell-thumb img,
+  .artworks-grid-thumb img {
+    transition: none;
+  }
+  .artworks-cell-thumb img:hover {
+    transform: none;
+  }
+  .artworks-grid-card:hover .artworks-grid-thumb img {
+    transform: none;
   }
 }

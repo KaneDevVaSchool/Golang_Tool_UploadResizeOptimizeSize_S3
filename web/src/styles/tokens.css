@@ -1,4 +1,4 @@
-/* Design tokens dùng riêng cho admin panel + trang public mới (20 năm VAS).
+/* Design tokens dùng riêng cho admin panel + trang public mới (20 năm VASchools).
    UploadTool cũ tiếp tục dùng biến --red-deep etc. trong index.css - không
    đụng vào để tránh phá vỡ giao diện đang chạy. 2 bộ token độc lập, không
    xung đột vì tên biến khác nhau hoàn toàn (--vas-* vs --red-*). */
@@ -150,7 +150,7 @@
 }
 
 :root {
-  /* 5 màu giá trị cốt lõi VAS */
+  /* 5 màu giá trị cốt lõi VASchools */
   --vas-nhan-ai: #009082; /* NHÂN ÁI - teal */
   --vas-ban-linh: #725139; /* BẢN LĨNH - brown */
   --vas-tri-thuc: #9a0036; /* TRI THỨC - deep red/maroon (= --red-deep hiện có) */
@@ -307,7 +307,7 @@
   height: 100%;
   width: 100%;
   transform-origin: left center;
-  /* Dải chuyển sắc theo 3 màu giá trị VAS thay vì một màu phẳng: ở bề dày
+  /* Dải chuyển sắc theo 3 màu giá trị VASchools thay vì một màu phẳng: ở bề dày
      3px thì gradient là thứ duy nhất còn đọc được như một chi tiết có chủ ý. */
   background: linear-gradient(
     90deg,

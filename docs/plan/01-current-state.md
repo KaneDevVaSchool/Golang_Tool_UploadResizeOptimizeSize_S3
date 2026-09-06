@@ -54,10 +54,12 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 |---|---|
 | CRUD tác phẩm | Tạo/sửa/xoá/xem, phân trang, lọc đa điều kiện |
 | Quy trình 2 bước | Đẩy S3 trước, nhập metadata sau |
-| Quản lý giải thưởng | CRUD giải, gán/gỡ cho tác phẩm |
+| Quản lý giải thưởng | CRUD giải, gán/gỡ cho tác phẩm, một tác phẩm nhận **nhiều giải cùng lúc** (`award_ids`) |
+| Giải theo khối lớp | `awards.grade_level_id` (migration `015`) — hội thi chia giải riêng theo từng khối, `grade_level_id` rỗng vẫn là giải dùng chung toàn hệ thống |
+| Nhóm chủ đề sáng tạo | Bảng `topic_categories` (migration `016`) + CRUD `/api/v1/admin/topic-categories`, lọc theo cấp học qua `education_level`, quản lý qua trang `/admin/topic-categories` (`TopicCategoriesPage`) — xem [03-artwork-domain.md](../detail_design/03-artwork-domain.md) |
 | Bảng điều khiển | Thống kê theo khu vực/khối, xếp hạng trường và tác phẩm |
 | Enrich theo lô | Tránh N+1 cho giải/cảm xúc/bình luận |
-| Bật/tắt tiêu biểu | |
+| Bật/tắt tiêu biểu | Đơn lẻ và hàng loạt (`bulk-featured`) |
 
 ### Trang public
 
@@ -69,6 +71,7 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 | Đếm lượt xem | Chống trùng trong 24 giờ, cập nhật trong transaction |
 | Trang chia sẻ Open Graph | Render phía server để Facebook/Zalo lấy được ảnh preview |
 | Tìm kiếm và lọc | Theo tên, trường, khối, cấp học |
+| Section theo nhóm chủ đề | `/phong-trien-lam` có thêm 1 section cho mỗi nhóm chủ đề đang active, đặt sau 2 section cấp học, tự ẩn nếu nhóm chưa có tác phẩm — `GalleryTopicSection` |
 
 ### Xác thực và bảo mật
 
@@ -88,7 +91,7 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 |---|---|
 | Script triển khai | 6 bước, chạy lại nhiều lần được, có kiểm tra sức khoẻ |
 | systemd + Nginx | Có sẵn file cấu hình mẫu trong repo |
-| Migration tự động | 14 file, idempotent qua `schema_migrations` |
+| Migration tự động | toàn bộ file trong `internal/database/migrations/`, idempotent qua `schema_migrations` |
 | Log theo ngày | Ghi đồng thời stdout + file |
 | Tắt máy an toàn | Drain request trước, đóng tài nguyên sau |
 | Chỉ số vận hành | `/api/v1/metrics` |
@@ -101,10 +104,84 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 | Lưu biến thể | Cột `artworks.variants` kiểu JSON (migration `013`); `thumbnail_url` nay **đã được ghi** (`internal/service/artwork_service.go:305`) |
 | Frontend chọn cỡ | `web/src/lib/artworkImage.ts` dựng `<picture>`/`srcset`, có đường lui khi tác phẩm chưa có biến thể |
 | Nén phản hồi HTTP | `internal/middleware/compress.go` **đã nối** vào chuỗi tại `internal/container/container.go:575` |
-| Tách chunk vendor | `web/vite.config.ts` — recharts/d3 tách riêng nên khách xem tranh không tải tới |
+| Tách chunk vendor | `web/vite.config.ts` — framer-motion/react-router/react tách riêng theo thư viện, ổn định qua nhiều lần deploy |
 | Gom truy vấn học sinh | `StudentRepository.ListByIDs` gộp một truy vấn, khử id trùng; `enrichArtworks` hết N+1 |
 | Bảng vinh danh một truy vấn | `HasAward` trong `ArtworkFilter` cho phép lấy mọi tác phẩm có giải một lần rồi tự nhóm, thay vì gọi `ListArtworks` cho từng giải |
 | Index cho truy vấn nóng | Migration `014`: `(is_published, created_at DESC)` và `(artwork_id, is_hidden, created_at DESC)` — bỏ được filesort |
+
+### Trạng thái chờ khi chuyển trang (hoàn thành 2026-09-06)
+
+Chưa nằm trong roadmap có sẵn — làm theo yêu cầu trực tiếp cải thiện trải nghiệm khi mạng
+chậm/lag lúc chuyển trang. Chi tiết kỹ thuật ở
+[06-frontend.md § Trạng thái chờ khi chuyển trang](../detail_design/06-frontend.md).
+
+| Hạng mục | Ghi chú |
+|---|---|
+| Thanh tiến trình chuyển trang | `web/src/components/RouteProgress.tsx` — phát hiện transition treo qua `useSyncExternalStore` trên URL thật, vì `useLocation()` bị giữ lại cùng cây cũ |
+| `RouteFallback` vẽ lại | Khung bố cục (skeleton) thay spinner, tránh nhảy layout khi nội dung thật thay vào |
+| Splash lúc boot | `web/index.html` — SVG inline (không dùng ảnh mascot 620KB, sẽ tải sau cả nội dung thật trên mạng chậm), tự gỡ bằng `MutationObserver` trên `#root` |
+| Hoạt cảnh vào trang | `.route-enter` (tokens.css) — fade + trượt nhẹ, áp cho cả `PublicLayout` và `AdminLayout` |
+
+### Trang tải tác phẩm lên: 2 chế độ (hoàn thành 2026-09-06)
+
+Chưa nằm trong roadmap có sẵn — làm theo yêu cầu trực tiếp nâng cấp trang
+`/admin/artworks/upload`. Chi tiết kỹ thuật ở
+[06-frontend.md §11](../detail_design/06-frontend.md).
+
+| Hạng mục | Ghi chú |
+|---|---|
+| Chế độ "Tải 1 ảnh" | Preview lớn + `ArtworkMetaForm` đầy đủ, dùng khi cần xem kỹ trước khi lưu |
+| Chế độ "Tải nhiều ảnh" | `ArtworkBulkTable` — bảng nhập liệu, mỗi ảnh 1 hàng, sửa trực tiếp trong ô, hover/focus thumbnail phóng to |
+| Thứ tự upload đổi | Ảnh chỉ preview ở client (`URL.createObjectURL`); chạm S3 lúc bấm Lưu, không phải lúc chọn file — đánh đổi khác thiết kế bulk-upload gốc, xem [03-artwork-domain.md](../detail_design/03-artwork-domain.md) |
+
+### Nâng cấp UI/UX trang tải tác phẩm lên + chuẩn validate dùng chung (hoàn thành 2026-09-06)
+
+Chưa nằm trong roadmap có sẵn — làm theo yêu cầu trực tiếp nâng cấp UI/UX
+`/admin/artworks/upload` và áp chuẩn validate cho toàn bộ form admin. Chi tiết kỹ thuật ở
+[06-frontend.md §12](../detail_design/06-frontend.md), mục roadmap ở
+[02-roadmap.md P2.9](./02-roadmap.md).
+
+| Hạng mục | Ghi chú |
+|---|---|
+| `validateMetaForm()` | Nguồn sự thật duy nhất cho field bắt buộc của `ArtworkMetaFormValues`, dùng chung cho cả logic (`isMetaFormValid`) lẫn UI (dấu `*`, lỗi theo field) |
+| Lỗi hiện tại field | Khi field "touched" (blur) hoặc khi bấm Lưu mà form còn thiếu (`showAllErrors`/`forceShowErrors`) — không đỏ lòm ngay lúc form vừa mở trống |
+| Phạm vi áp dụng | Cả 3 nơi dùng `ArtworkMetaForm` (tab 1 ảnh, `ArtworkBulkTable`, `ArtworkEditModal`) + form giải thưởng `AwardsPage` |
+
+### Modal admin bị vỡ layout do `.route-enter` — đã sửa (2026-09-06)
+
+Hệ quả không lường trước của mục trên: `will-change: transform` trong `.route-enter` biến
+`.admin-content-inner` thành containing block mới cho `position: fixed`, khiến
+`ArtworkEditModal` và `ConfirmDialog` (cả hai `position: fixed; inset: 0`) bị nhốt trong
+khung cuộn `.admin-content` thay vì phủ toàn viewport — tràn xuống đáy, bị cắt. Sửa bằng
+`createPortal(..., document.body)` cho cả hai. Chi tiết cơ chế ở
+[06-frontend.md § 10](../detail_design/06-frontend.md). Bài học cho modal/dialog toàn màn
+hình thêm sau này: luôn portal ra `document.body`, đừng dựa vào việc ancestor "trông có vẻ"
+không đặt `transform`.
+
+### Trang tải tác phẩm lên: redesign bỏ 2 tab, gộp lưới + panel (hoàn thành 2026-09-06)
+
+Giao diện 2 tab mô tả ở mục trên bị đánh giá "xấu, không tối ưu" — thay hẳn, không remix.
+Chi tiết kỹ thuật ở [06-frontend.md §11](../detail_design/06-frontend.md), mục roadmap ở
+[02-roadmap.md P2.10](./02-roadmap.md).
+
+| Hạng mục | Ghi chú |
+|---|---|
+| 1 luồng duy nhất | Bỏ tab "1 ảnh"/"nhiều ảnh" — chọn 1 hay nhiều ảnh đều vào chung 1 giao diện: `ArtworkPickerGrid` (lưới thẻ) trái + panel sửa phải |
+| `ArtworkPickerGrid.tsx` thay `ArtworkBulkTable.tsx` (đã xoá) | Lưới thẻ ảnh vuông thay bảng HTML mỗi ảnh 1 hàng — không còn cuộn ngang trên mobile, không còn popover phóng to hover |
+| Sửa hàng loạt | Chọn ≥2 thẻ → panel "áp dụng cho N ảnh", field điền thì ghi đè mọi thẻ đang chọn (`applyPatch()`), field trống giữ nguyên — tái dùng nguyên `ArtworkMetaForm`, không thêm prop mới |
+| `AdminDropzone.tsx` mới | Khung kéo-thả riêng cho khu quản trị, KHÔNG dùng chung `Dropzone.tsx` (phục vụ `/upload` độc lập, theme tối qua `index.css` nạp global). Bỏ hiệu ứng framer-motion (xoay 3D, viền chạy) khỏi bản admin |
+
+### Dashboard viết lại: bỏ Recharts (hoàn thành 2026-09-06)
+
+Chưa nằm trong roadmap có sẵn — làm theo yêu cầu trực tiếp cải thiện trang `/admin`. Chi
+tiết kỹ thuật ở [06-frontend.md §7](../detail_design/06-frontend.md), mục roadmap ở
+[02-roadmap.md P2.8](./02-roadmap.md).
+
+| Hạng mục | Ghi chú |
+|---|---|
+| Số liệu ra quyết định | `activity` (nhịp 14 ngày), `school_coverage` (trường thiếu khối nào), `operations` (hàng chờ xử lý) — gộp vào `GET /api/v1/admin/dashboard/stats` sẵn có |
+| Bỏ Recharts | `StatCard` tự vẽ sparkline SVG; `package.json` và `vite.config.ts` không còn `recharts`/`vendor-charts` |
+| Bố cục mới | 4 ô chỉ số + 3 card khu vực (Sài Gòn/Cần Thơ/Vũng Tàu) thay ba biểu đồ cũ |
 
 ## 3. Đang làm dở 🚧
 
@@ -170,7 +247,6 @@ test** cho `repository` và `container`, cũng như cho frontend.
 | Phân quyền theo vai trò | Cột `role` có nhưng mọi admin quyền như nhau |
 | Nhật ký thao tác admin | Không biết ai xoá tác phẩm nào lúc nào |
 | Xuất dữ liệu | Không xuất được CSV/Excel danh sách tác phẩm |
-| Trang lỗi 404 | Đường dẫn lạ rơi vào SPA, không có trang báo lỗi riêng |
 
 ## 6. Tình trạng commit
 

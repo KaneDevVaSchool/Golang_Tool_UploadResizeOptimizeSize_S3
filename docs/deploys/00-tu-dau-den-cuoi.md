@@ -525,7 +525,7 @@ Admin đăng nhập bằng tài khoản Google của trường, không có mật
    - User Type: **Internal** nếu `vaschools.edu.vn` là Google Workspace (khuyến nghị —
      người ngoài tổ chức không đăng nhập được, thêm một tầng bảo vệ). Nếu không thì
      **External**.
-   - App name: `VAS Art Gallery`, support email: email của bạn.
+   - App name: `VASchools Art Gallery`, support email: email của bạn.
 3. **Credentials** → **Create Credentials** → **OAuth client ID**:
    - Application type: **Web application**
    - Authorized JavaScript origins: `https://pictures.vaschools.edu.vn`

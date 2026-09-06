@@ -1,4 +1,4 @@
-# VAS Art Gallery — S3 Upload Tool + Admin Panel + Trang public 20 năm VAS
+# VASchools Art Gallery — S3 Upload Tool + Admin Panel + Trang public 20 năm VASchools
 
 HTTP API service (Go) cho hội thi vẽ tranh "20 năm Trường Việt Mỹ": upload ảnh lên Amazon S3,
 quản trị tác phẩm/giải thưởng qua admin panel (đăng nhập Google OAuth), và trang public kỷ niệm
@@ -128,7 +128,7 @@ Không có UI build sẵn, `/` vẫn trả JSON thông tin API.
 | `/admin/artworks` | Danh sách tác phẩm — tìm kiếm, lọc, sửa, xoá, đánh dấu tiêu biểu | Có |
 | `/admin/artworks/upload` | Upload hàng loạt tác phẩm lên S3 rồi gắn metadata (học sinh/trường/khối/giải) | Có |
 | `/admin/awards` | Quản lý giải thưởng (tên, màu, icon, thứ tự) | Có |
-| `/trien-lam` | Trang public kỷ niệm 20 năm VAS — gallery, phòng triển lãm theo khối, billboard vinh danh | Không |
+| `/trien-lam` | Trang public kỷ niệm 20 năm VASchools — gallery, phòng triển lãm theo khối, billboard vinh danh | Không |
 
 ## Features
 

@@ -177,7 +177,7 @@ export function PublicLightbox({
   const shareUrl = new URL(window.location.href);
   shareUrl.searchParams.set("tranh", String(artwork.id));
   const facebookPreviewUrl = new URL(`/chia-se/tac-pham/${artwork.id}`, window.location.origin);
-  const shareText = `Mời bạn ngắm “${artwork.title}” — tác phẩm của ${artwork.student_name} trong Khu vườn nghệ thuật VAS.`;
+  const shareText = `Mời bạn ngắm “${artwork.title}” — tác phẩm của ${artwork.student_name} trong Khu vườn nghệ thuật VASchools.`;
   const imageStyle = {
     width: `${fitSize.width}px`,
     height: `${fitSize.height}px`,

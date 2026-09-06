@@ -147,7 +147,7 @@ export default function FeaturedArtworksPage() {
       <FeaturedHero
         kicker="Tác phẩm tiêu biểu"
         title="Những bức tranh khiến ta dừng lại"
-        description="Tuyển chọn từ khắp các cơ sở VAS — mỗi bức được đóng khung và treo trang trọng, đúng như cách một tác phẩm xứng đáng được nhìn ngắm."
+        description="Tuyển chọn từ khắp các cơ sở VASchools — mỗi bức được đóng khung và treo trang trọng, đúng như cách một tác phẩm xứng đáng được nhìn ngắm."
       />
       <section className="featured-gallery-section">
         <FeaturedGardenScene />

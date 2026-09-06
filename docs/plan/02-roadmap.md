@@ -168,14 +168,176 @@ chỉ xét object cũ hơn một khoảng an toàn (ví dụ 30 ngày).
 - [x] Đặt **trong cùng** chuỗi (sát mux nhất) để thấy được `Content-Type` do handler đặt
 - [x] Bỏ qua các định dạng đã nén sẵn — ảnh không bị nén lại
 
-### P2.4 — Trang 404 riêng
+### ~~P2.4 — Trang 404 riêng~~ ✅ Xong 2026-09-06
 
-Hiện mọi đường dẫn lạ đều rơi vào SPA và hiện trang chủ, gây bối rối.
+- [x] `<Route path="*">` lồng trong cả nhánh public (`/`) và nhánh admin (`/admin`) —
+  bắt mọi đường dẫn lạ ở cả hai khu vực, không chỉ ở gốc
+- [x] `pages/public/NotFoundPage.tsx` — theme "khu vườn tổ tiên" dùng lại
+  `FeaturedGardenScene`, mascot rồng (`vas-mascot-wave.png`) + biển gỗ "404", lối tắt về
+  3 trang public chính
+- [x] `pages/admin/NotFoundPage.tsx` — render trong `AdminLayout` (giữ sidebar/header),
+  phong cách tối giản riêng của khu quản trị, không lặp theme khu vườn (xem
+  [06-frontend.md §7](../detail_design/06-frontend.md))
+- [x] Tôn trọng `prefers-reduced-motion` ở cả hai trang
 
 ### P2.5 — Xuất danh sách tác phẩm
 
 Ban tổ chức cần bảng Excel/CSV để đối chiếu và in ấn. Có thể làm hoàn toàn ở frontend từ
 dữ liệu đã tải.
+
+### ~~P2.6 — Bulk-featured + chế độ xem Grid cho trang danh sách tác phẩm~~ ✅ Xong 2026-09-06
+
+Không nằm trong lộ trình gốc — làm theo yêu cầu trực tiếp cải thiện thao tác quản trị khi
+số lượng tác phẩm lớn (chọn tay từng ảnh để đưa vào tiêu biểu không còn khả thi ở quy mô
+hàng trăm tác phẩm). Chi tiết kỹ thuật ở
+[06-frontend.md §10](../detail_design/06-frontend.md), API ở
+[03-artwork-domain.md §8](../detail_design/03-artwork-domain.md) và [API.md](../API.md).
+
+- [x] `PATCH /api/v1/admin/artworks/bulk-featured` — bật/tắt tiêu biểu hàng loạt bằng 1 câu
+      `UPDATE ... WHERE id IN (...)`, thay vì frontend gọi lặp endpoint đơn lẻ
+- [x] Trang `/admin/artworks` thêm chế độ xem Grid (lưới ảnh) cạnh List, nhớ lựa chọn qua
+      `localStorage`
+- [x] Chọn nhiều bằng checkbox (cả List lẫn Grid) + thanh thao tác hàng loạt
+- [x] Nút "Đưa tác phẩm lên" rút gọn còn icon `+` (giữ `title`/`aria-label`)
+- [x] Hover phóng ảnh tại chỗ (CSS `scale`), tắt dưới `prefers-reduced-motion` và trên
+      thiết bị cảm ứng
+- [x] Test service cho `SetFeaturedBatch` (danh sách rỗng, tham số đúng, lỗi repository
+      được trả nguyên lên trên)
+- [x] `go build ./...`, `go test ./...`, `tsc --noEmit`, `vite build` đều sạch
+
+Không cần sửa gì ở trang public: `/tac-pham-tieu-bieu` và `/phong-trien-lam` đã tự động
+đọc đúng theo cờ `is_featured`/`is_published` có sẵn (xem
+[03-artwork-domain.md §1](../detail_design/03-artwork-domain.md)).
+
+### ~~P2.7 — Trang tải tác phẩm lên: 2 chế độ + nhóm chủ đề + nhiều giải/tác phẩm~~ ✅ Xong 2026-09-06
+
+Không nằm trong lộ trình gốc — làm theo yêu cầu trực tiếp nâng cấp trang
+`/admin/artworks/upload`: thêm chế độ đăng từng ảnh riêng lẻ (trước đây chỉ có đường hàng
+loạt), đổi cách trình bày hàng loạt sang bảng nhập liệu trực tiếp, và mở rộng nghiệp vụ tác
+phẩm sang nhóm chủ đề sáng tạo + nhiều giải mỗi tác phẩm. Chi tiết kỹ thuật ở
+[06-frontend.md §11](../detail_design/06-frontend.md), schema ở
+[01-database.md](../detail_design/01-database.md) (migration `015`, `016`), API ở
+[API.md](../API.md).
+
+- [x] `ArtworksUploadPage` (`/admin/artworks/upload`) có 2 tab: "Tải 1 ảnh" (preview lớn +
+      form đầy đủ) và "Tải nhiều ảnh" (`ArtworkBulkTable` — bảng, mỗi ảnh 1 hàng, sửa trực
+      tiếp trong ô, hover/focus thumbnail phóng to)
+- [x] Đổi thứ tự upload: ảnh chỉ preview ở client (`URL.createObjectURL`), chỉ chạm S3 lúc
+      bấm "Lưu"/"Lưu tất cả" — đánh đổi có ghi chú lại so với thiết kế bulk-upload gốc (xem
+      [03-artwork-domain.md](../detail_design/03-artwork-domain.md))
+- [x] Bảng `topic_categories` (migration `016`) + CRUD admin
+      (`GET/POST/PUT/DELETE /api/v1/admin/topic-categories`, cùng mẫu `awards`) — nhóm chủ
+      đề sáng tạo theo thể lệ, có thể giới hạn theo cấp học
+- [x] Trang quản lý `/admin/topic-categories` (`TopicCategoriesPage`) — API CRUD ở trên có
+      từ đầu nhưng ban đầu **không có giao diện nào gọi tới**, nên `topic_categories` luôn
+      rỗng và dropdown "Nhóm chủ đề" ở `ArtworkMetaForm` không có gì để chọn. Bổ sung
+      2026-09-06 sau khi phát hiện qua báo cáo dropdown trống, cùng mẫu `AwardsPage` — kéo-thả
+      để sắp `display_order`, nhưng tách **3 khối độc lập theo cấp học** vì thứ tự chỉ có ý
+      nghĩa trong cùng một cấp học (xem [06-frontend.md §12](../detail_design/06-frontend.md)).
+- [x] Nút "+" cạnh dropdown "Nhóm chủ đề sáng tạo" trong `ArtworkMetaForm` mở
+      `TopicCategoryQuickCreateModal` — tạo nhanh 1 nhóm ngay tại form đang nhập tác phẩm,
+      không phải rời sang `/admin/topic-categories`. Bổ sung cùng đợt 2026-09-06.
+- [x] `topic_categories.color_hex` (migration `017`) — màu tô icon nhóm chủ đề, cùng cơ chế
+      `awards.color_hex`. Color picker (dải màu preset + input tuỳ ý, `topicCategoryColors.ts`)
+      thêm vào cả `TopicCategoryQuickCreateModal` và `TopicCategoriesPage` để 2 nơi tạo/sửa
+      nhóm không lệch bảng màu. Bổ sung cùng đợt 2026-09-06.
+- [x] `/phong-trien-lam` (`GalleryPage`) thêm `GalleryTopicSection` — mỗi nhóm chủ đề đang
+      active là 1 section, đặt **sau** 2 section cấp học có sẵn, tự ẩn nếu nhóm chưa có tác
+      phẩm nào đã duyệt. Cần bổ sung parse `topic_category_id` ở
+      `PublicHandler.HandleListArtworks` (tham số đã có trong `ArtworkFilter`, mới chỉ dùng ở
+      nhánh admin) — xem [06-frontend.md §6](../detail_design/06-frontend.md).
+- [x] `awards.grade_level_id` (migration `015`) — giải có thể gắn riêng cho 1 khối lớp thay
+      vì chỉ dùng chung toàn hệ thống
+- [x] Một tác phẩm nhận **nhiều giải cùng lúc** (`award_ids` thay `award_id` ở
+      tạo/sửa tác phẩm) — bỏ giới hạn 1 giải/tác phẩm trước đây
+- [x] `go build ./...`, `go test ./...`, `tsc --noEmit`, `vite build` đều sạch
+
+⚠️ **Chưa làm trong đợt này** — nằm ngoài 3 mục được yêu cầu, cần hỏi lại nếu muốn triển
+khai tiếp: khái niệm "cuộc thi" (contest) độc lập để phân tách 2 đợt thi Tiểu học/THCS-THPT
+đang chạy chung một schema; vòng thi (sơ khảo/chung kết) và mốc thời gian; giới hạn số tác
+phẩm mỗi cơ sở được chọn vào vòng sau; ràng buộc số lượng giải theo loại (vd đúng 1 Nhất,
+2 Nhì — hiện admin tự tạo/gán không giới hạn); giới hạn số lượng tác phẩm tiêu biểu trưng
+bày cố định (hiện `is_featured` vẫn là cờ không giới hạn số lượng).
+
+### ~~P2.8 — Viết lại Dashboard: bỏ Recharts, thêm số liệu ra quyết định~~ ✅ Xong 2026-09-06
+
+Không nằm trong lộ trình gốc — làm theo yêu cầu trực tiếp cải thiện trang `/admin`. Ba biểu
+đồ Recharts (nhịp hoạt động, phân bổ khối lớp, top tác phẩm dạng bảng) không giúp ban tổ
+chức quyết định phải làm gì tiếp theo, chỉ mô tả quy mô. Chi tiết kỹ thuật ở
+[06-frontend.md §7](../detail_design/06-frontend.md), response API ở
+[API.md](../API.md#get-apiv1admindashboardstats).
+
+- [x] `DashboardRepository`/`DashboardService` trả thêm ba khối: `activity` (nhịp 14 ngày
+      gần nhất, đủ ngày kể cả ngày 0 hoạt động), `school_coverage` (mỗi trường đã có bài ở
+      bao nhiêu khối trên tổng số khối), `operations` (bài chờ xuất bản, bình luận đã ẩn,
+      tiến độ trao giải, tác phẩm chưa có tương tác) — gộp vào cùng response
+      `GET /api/v1/admin/dashboard/stats`, không thêm endpoint mới
+- [x] `Dashboard.tsx` đổi bố cục: 4 ô chỉ số (`StatCard` có sparkline SVG tự vẽ, không dùng
+      thư viện biểu đồ) + 3 card khu vực (Sài Gòn/Cần Thơ/Vũng Tàu) thay cho ba biểu đồ cũ
+- [x] Gỡ `recharts` khỏi `package.json` và nhánh `vendor-charts` khỏi `vite.config.ts` —
+      thư viện chỉ dùng ở đúng 1 trang, nặng ~400KB, không còn lý do tồn tại
+- [x] Test service cho `DashboardService.GetStats` (lỗi từng khối con được bọc ngữ cảnh và
+      trả nguyên lên trên, tham số `days` truyền đúng xuống `ActivityTrend`)
+- [x] `go build ./...`, `go test ./...`, `tsc --noEmit`, `vite build` đều sạch
+
+### ~~P2.9 — Nâng cấp UI/UX trang tải tác phẩm lên + chuẩn validate dùng chung~~ ✅ Xong 2026-09-06
+
+Không nằm trong lộ trình gốc — làm theo yêu cầu trực tiếp nâng cấp UI/UX của
+`/admin/artworks/upload` (cả 2 tab) và áp một chuẩn validate cho **toàn bộ form admin**:
+dấu `*` bắt buộc + lỗi hiện ngay tại field. Chi tiết ở
+[06-frontend.md §12](../detail_design/06-frontend.md).
+
+- [x] `validateMetaForm()` — nguồn sự thật duy nhất cho field bắt buộc của
+      `ArtworkMetaFormValues`, thay cho điều kiện rời rạc trước đây trong `isMetaFormValid()`
+- [x] `RequiredMark` — component dấu `*` dùng chung, không mỗi form tự viết kiểu riêng
+- [x] Lỗi hiện khi field "touched" (blur) hoặc khi bấm Lưu mà form còn thiếu
+      (`showAllErrors`/`forceShowErrors`) — áp dụng cho cả 3 nơi dùng `ArtworkMetaForm`
+      (tab 1 ảnh, `ArtworkBulkTable`, `ArtworkEditModal`) và form giải thưởng ở `AwardsPage`
+- [x] Tab "Tải nhiều ảnh" hiện badge số ảnh đã chọn; panel có thanh tóm tắt (đã lưu/chưa điền đủ)
+- [x] Preview ảnh tab "Tải 1 ảnh" có nút "Chọn ảnh khác" nổi trên góc, không chỉ ở footer
+- [x] CSS lỗi dùng chung (`.form-field--error`, `.form-field-error-text`) + biến thể cho ô
+      bảng hẹp (`.artwork-bulk-cell--error`, `.artwork-bulk-cell-error-text`)
+- [x] `go build ./...`, `tsc --noEmit`, `vite build` đều sạch
+
+### ~~P2.10 — Redesign trang tải tác phẩm lên: bỏ 2 tab, gộp 1 luồng lưới + panel~~ ✅ Xong 2026-09-06
+
+Không nằm trong lộ trình gốc — làm theo yêu cầu trực tiếp: giao diện 2 tab + bảng nhập liệu
+của P2.7/P2.9 bị đánh giá "xấu, không tối ưu", yêu cầu thay hẳn chứ không remix. Chi tiết kỹ
+thuật ở [06-frontend.md §11](../detail_design/06-frontend.md).
+
+- [x] Bỏ 2 tab "Tải 1 ảnh"/"Tải nhiều ảnh" — gộp thành 1 luồng: `ArtworkPickerGrid` (lưới thẻ
+      ảnh) bên trái + panel sửa bên phải, đổi theo số thẻ đang chọn
+- [x] Xoá hẳn `ArtworkBulkTable.tsx` (bảng HTML mỗi ảnh 1 hàng, phải cuộn ngang dưới 768px) —
+      thay bằng `ArtworkPickerGrid.tsx`, kiểu `BulkRow` chuyển sang `artworkUploadTypes.ts`
+- [x] Chọn ≥2 thẻ → panel "áp dụng cho N ảnh": field điền thì ghi đè mọi thẻ đang chọn, field
+      trống giữ nguyên riêng từng ảnh (`applyPatch()`) — tái dùng nguyên `ArtworkMetaForm`,
+      không thêm prop mới vào component dùng chung đó
+- [x] `AdminDropzone.tsx` mới — khung kéo-thả riêng cho khu quản trị, KHÔNG dùng chung
+      `Dropzone.tsx` (component đó phục vụ `/upload` độc lập, theme tối/glassmorphism qua
+      `index.css` nạp global). Bỏ hiệu ứng xoay 3D + viền chạy (framer-motion) khỏi bản admin,
+      giữ nguyên `Dropzone.tsx`/`/upload` không đổi
+- [x] Bỏ popover phóng to khi hover thumbnail (không còn cần — thẻ trong lưới đã đủ lớn)
+- [x] `go build ./...` (không đổi Go), `tsc --noEmit`, `vite build` đều sạch
+
+### ~~P2.11 — Dải card thống kê theo khu vực ở 3 trang quản trị~~ ✅ Xong 2026-09-06
+
+Không nằm trong lộ trình gốc — làm theo yêu cầu trực tiếp: thêm dải card nhỏ "số tác phẩm +
+số học sinh theo khu vực" ở đầu trang Tác phẩm/Giải thưởng/Nhóm chủ đề quản trị. Dashboard
+(`/admin`) giữ nguyên, không đổi. Chi tiết kỹ thuật ở
+[06-frontend.md §10](../detail_design/06-frontend.md), response API ở
+[API.md](../API.md#get-apiv1admindashboardregion-summary).
+
+- [x] `DashboardRepository.RegionSummaries` — endpoint mới nhẹ
+      `GET /api/v1/admin/dashboard/region-summary`, tách khỏi `/dashboard/stats` vì 3 trang
+      này không cần activity/top_schools/school_coverage/operations
+- [x] Số học sinh đếm **không dedupe theo tên** (`COUNT(*) students JOIN schools GROUP BY
+      region`) — đúng quy ước ở [01-database.md](../detail_design/01-database.md)
+- [x] `components/admin/RegionSummaryStrip.tsx` + `hooks/useRegionSummary.ts` (hook dùng
+      chung 3 trang, tiền lệ `useAdminAuth.ts`) — tái dùng `StatCard.tsx` qua 3 tone khu vực
+      mới thay vì viết component nhân bản; `Dashboard.tsx` không đổi
+- [x] Test service cho `DashboardService.GetRegionSummary` (thứ tự cố định 3 khu vực, lan
+      truyền lỗi từ repo)
+- [x] `go build ./...`, `go test ./...`, `tsc --noEmit`, `vite build` đều sạch
 
 ---
 
