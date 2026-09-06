@@ -7,8 +7,6 @@ type IconType = ComponentType<{ size?: number | string; strokeWidth?: number }>;
 type MenuItem = {
   id: string;
   label: string;
-  /** Một dòng mô tả ngắn hiện dưới nhãn - nói rõ bấm vào sẽ làm được gì. */
-  hint: string;
   path: string;
   icon: IconType;
   end?: boolean;
@@ -29,7 +27,6 @@ const MENU_SECTIONS: MenuSection[] = [
       {
         id: "dashboard",
         label: "Tổng quan",
-        hint: "Số liệu triển lãm hôm nay",
         path: "/admin",
         icon: LayoutDashboard,
         end: true,
@@ -43,7 +40,6 @@ const MENU_SECTIONS: MenuSection[] = [
       {
         id: "artworks",
         label: "Thư viện tác phẩm",
-        hint: "Tìm, sửa và chọn tác phẩm tiêu biểu",
         path: "/admin/artworks",
         icon: Image,
         end: true,
@@ -51,7 +47,6 @@ const MENU_SECTIONS: MenuSection[] = [
       {
         id: "upload",
         label: "Đưa tác phẩm lên",
-        hint: "Tải nhiều ảnh cùng lúc",
         path: "/admin/artworks/upload",
         icon: Upload,
       },
@@ -64,14 +59,12 @@ const MENU_SECTIONS: MenuSection[] = [
       {
         id: "awards",
         label: "Giải thưởng",
-        hint: "Tạo và sắp xếp các hạng mục",
         path: "/admin/awards",
         icon: Trophy,
       },
       {
         id: "topic-categories",
         label: "Nhóm chủ đề",
-        hint: "Quản lý nhóm chủ đề sáng tạo",
         path: "/admin/topic-categories",
         icon: Layers,
       },
@@ -83,7 +76,7 @@ const MENU_SECTIONS: MenuSection[] = [
  * Sidebar admin - port bố cục + hành vi AppSidebar.vue của va-workspace,
  * mở rộng phần nội dung cho thân thiện hơn:
  * - Brand logo lớn trên cùng (mark khi thu gọn, wordmark khi mở rộng).
- * - Mỗi mục menu có thêm một dòng gợi ý ngắn; icon nằm trong "well" bo góc.
+ * - Icon mỗi mục menu nằm trong "well" bo góc.
  * - Thẻ lời nhắn ở chân sidebar dẫn sang trang triển lãm công khai.
  * - Desktop (>=1280px): rail 4.5rem khi thu gọn + flyout nhãn khi hover;
  *   trạng thái collapsed do AdminLayout giữ (nút toggle nằm trên header,
@@ -178,12 +171,10 @@ export function AdminSidebar({
                     {showCollapsed ? (
                       <span className="admin-sidebar-flyout">
                         <strong>{item.label}</strong>
-                        <span>{item.hint}</span>
                       </span>
                     ) : (
                       <span className="admin-sidebar-copy">
                         <span className="admin-sidebar-label">{item.label}</span>
-                        <span className="admin-sidebar-hint">{item.hint}</span>
                       </span>
                     )}
                   </NavLink>

@@ -29,8 +29,8 @@ type LiveToast = ToastPayload & {
  * Toast host: lắng nghe toastBus, render qua Portal lên document.body (nổi
  * trên mọi layout kể cả modal), progress-bar tự đóng (pause khi hover), tối
  * đa MAX_VISIBLE toast cùng lúc (thêm mới sẽ đẩy toast cũ nhất ra nếu đầy).
- * Mount 1 lần duy nhất trong App.tsx, dùng chung cho UploadTool cũ + admin +
- * public (không phân biệt theo route).
+ * Mount 1 lần duy nhất trong App.tsx, dùng chung cho admin + public (không
+ * phân biệt theo route).
  */
 export function ToastHost() {
   const [toasts, setToasts] = useState<LiveToast[]>([]);

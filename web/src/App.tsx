@@ -11,8 +11,6 @@ import HomePage from "./pages/public/HomePage";
  * - "/" render thẳng trang triển lãm (PublicLayout + HomePage) — đây là
  *   trang chủ khi truy cập tên miền gốc, URL giữ nguyên là "/".
  * - "/trien-lam" là alias trỏ Navigate về "/" (giữ tương thích link cũ).
- * - "/upload" công cụ upload S3 nội bộ hiện có (trước đây ở "/"), giữ
- *   nguyên chức năng, chỉ đổi đường dẫn để nhường "/" cho trang triển lãm.
  * - "/admin/login" trang đăng nhập Google OAuth.
  * - "/admin/*" khu vực quản trị, bảo vệ bởi AdminLayout (redirect login nếu
  *   chưa đăng nhập).
@@ -22,17 +20,14 @@ import HomePage from "./pages/public/HomePage";
  * Tách bundle theo route (React.lazy):
  * PublicLayout + HomePage nạp tĩnh vì đó là điểm vào của gần như mọi khách
  * truy cập — lazy chúng chỉ thêm một vòng chờ mạng trước khi thấy nội dung.
- * Mọi thứ còn lại nạp theo nhu cầu. Quan trọng nhất là khu /admin và
- * /upload: trước đây phụ huynh vào xem tranh phải tải kèm cả dashboard quản
- * trị, thư viện biểu đồ recharts (~400KB) và công cụ upload S3 — toàn bộ
- * đều không truy cập được từ trang public.
+ * Mọi thứ còn lại nạp theo nhu cầu. Quan trọng nhất là khu /admin: trước
+ * đây phụ huynh vào xem tranh phải tải kèm cả dashboard quản trị và thư
+ * viện biểu đồ recharts (~400KB) — không truy cập được từ trang public.
  */
 
 const FeaturedArtworksPage = lazy(() => import("./pages/public/FeaturedArtworksPage"));
 const GalleryPage = lazy(() => import("./pages/public/GalleryPage"));
 const HallOfFamePage = lazy(() => import("./pages/public/HallOfFamePage"));
-
-const UploadTool = lazy(() => import("./pages/UploadTool"));
 
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminLogin = lazy(() => import("./pages/admin/Login"));
@@ -68,7 +63,6 @@ export default function App() {
             <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route path="/trien-lam" element={<Navigate to="/" replace />} />
-          <Route path="/upload" element={<UploadTool />} />
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Dashboard />} />

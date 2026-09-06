@@ -1,17 +1,17 @@
 /* Design tokens dùng riêng cho admin panel + trang public mới (20 năm VASchools).
-   UploadTool cũ tiếp tục dùng biến --red-deep etc. trong index.css - không
-   đụng vào để tránh phá vỡ giao diện đang chạy. 2 bộ token độc lập, không
-   xung đột vì tên biến khác nhau hoàn toàn (--vas-* vs --red-*). */
+   index.css vẫn khai báo --red-deep etc. ở :root cho .btn/.confirm-* dùng
+   chung (ConfirmDialog) - không đụng vào để tránh phá vỡ style đang chạy.
+   2 bộ token độc lập, không xung đột vì tên biến khác nhau hoàn toàn
+   (--vas-* vs --red-*). */
 
 /* ---------------------------------------------------------------------- */
 /* Bộ token gốc port nguyên từ va-workspace (resources/css/theme.css).      */
 /* Dùng cho khu vực /admin/* để header + sidebar giống hệt hệ thống gốc.    */
 /*                                                                          */
 /* CỐ Ý khai báo trong .admin-shell / .admin-login chứ KHÔNG phải :root:    */
-/* index.css (UploadTool) đã dùng --radius-sm / --shadow ở :root với giá    */
-/* trị khác hẳn (0.9rem vs 6px) và được nạp SAU file này, nên đặt ở :root   */
-/* sẽ bị ghi đè. Giới hạn phạm vi vào khung admin là cách duy nhất giữ được */
-/* cả 2 bộ token mà không phải sửa UploadTool đang chạy.                    */
+/* index.css đã dùng --radius ở :root với giá trị khác hẳn và được nạp SAU  */
+/* file này, nên đặt ở :root sẽ bị ghi đè. Giới hạn phạm vi vào khung admin */
+/* là cách duy nhất giữ được cả 2 bộ token mà không phải sửa index.css.     */
 /*                                                                          */
 /* Các biến --vas-* bên dưới GIỮ NGUYÊN ở :root (public.css phụ thuộc       */
 /* nhiều nơi), chỉ dùng lại giá trị tương ứng.                              */
