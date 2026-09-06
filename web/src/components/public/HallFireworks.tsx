@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { useDeviceTier } from "../../hooks/useDeviceTier";
 
 /** Một quả pháo: vị trí nổ, thời điểm, màu, cỡ. */
 type Burst = {
@@ -38,6 +39,22 @@ const BURSTS: Burst[] = [
 const SPARK_COUNT = 16;
 
 /**
+ * Lượng pháo theo sức máy. Bản đầy đủ là 10 quả × (1 đạn + 1 chớp + 16 tia)
+ * = 180 phần tử, tất cả đều animation vô hạn và cố ý không có khoảng lặng.
+ * Trên desktop thì không sao, nhưng đó chính là thứ làm điện thoại tầm trung
+ * giật khi cuộn trang Bảng vàng.
+ *
+ * Cắt theo hai chiều - ít quả hơn VÀ ít tia hơn mỗi quả - vì chi phí là tích
+ * của hai số này. Vẫn giữ vài quả lệch pha nhau để cảm giác "luôn có pháo"
+ * không mất đi.
+ */
+const BURST_BUDGET: Record<string, { bursts: number; sparks: number }> = {
+  full: { bursts: BURSTS.length, sparks: SPARK_COUNT },
+  light: { bursts: 6, sparks: 10 },
+  minimal: { bursts: 3, sparks: 6 },
+};
+
+/**
  * Pháo hoa nền cho bục vinh danh. Thuần CSS (không canvas, không thư
  * viện): mỗi quả gồm một viên đạn bay vọt lên, một chớp sáng ở tâm rồi
  * SPARK_COUNT tia bung ra, lặp vô hạn với độ trễ lệch nhau nên không bao
@@ -48,20 +65,52 @@ const SPARK_COUNT = 16;
  * điều hành sẽ không thấy gì (ẩn hẳn trong CSS).
  */
 export function HallFireworks() {
+  const tier = useDeviceTier();
+  const budget = BURST_BUDGET[tier] ?? BURST_BUDGET.full;
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Chỉ chạy khi khu vực pháo hoa thực sự nằm trong tầm nhìn. Trang Bảng
+  // vàng cuộn dài, mà pháo hoa chỉ ở phần bục vinh danh trên cùng - trước
+  // đây nó vẫn vẽ lại mỗi khung hình kể cả khi người xem đã cuộn xuống tận
+  // danh sách bên dưới và không còn nhìn thấy gì.
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setVisible(entry.isIntersecting),
+      // rootMargin dương: bật lại trước khi khu vực kịp lọt vào màn hình, để
+      // người cuộn ngược lên không thấy pháo "khởi động" giữa chừng.
+      { rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Lấy các quả rải đều trong danh sách thay vì cắt lấy phần đầu: BURSTS xếp
+  // theo delay tăng dần, cắt đầu sẽ dồn hết pháo vào 3 giây đầu chu kỳ rồi
+  // im lặng phần còn lại.
+  const bursts = useMemo(() => {
+    if (budget.bursts >= BURSTS.length) return BURSTS;
+    const step = BURSTS.length / budget.bursts;
+    return Array.from({ length: budget.bursts }, (_, i) => BURSTS[Math.floor(i * step)]);
+  }, [budget.bursts]);
+
   // Toạ độ tia tính một lần: mỗi tia là một góc trên đường tròn, dịch ra
   // bằng transform nên trình duyệt chỉ phải xử lý transform/opacity.
   const sparks = useMemo(
     () =>
-      Array.from({ length: SPARK_COUNT }, (_, i) => {
-        const angle = (360 / SPARK_COUNT) * i;
+      Array.from({ length: budget.sparks }, (_, i) => {
+        const angle = (360 / budget.sparks) * i;
         return { angle, key: i };
       }),
-    [],
+    [budget.sparks],
   );
 
   return (
-    <div className="hall-fireworks" aria-hidden>
-      {BURSTS.map((burst, i) => (
+    <div ref={rootRef} className="hall-fireworks" aria-hidden>
+      {visible && bursts.map((burst, i) => (
         <span
           key={i}
           className="hall-firework"

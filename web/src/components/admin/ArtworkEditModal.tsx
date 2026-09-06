@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { ArtworkMetaForm, type ArtworkMetaFormValues, isMetaFormValid } from "./ArtworkMetaForm";
 import type { ArtworkWithMeta, Award, GradeLevel, School } from "../../lib/artworkApi";
+import { artworkImageURL } from "../../lib/artworkImage";
 
 type ArtworkEditModalProps = {
   open: boolean;
@@ -98,7 +99,7 @@ export function ArtworkEditModal({
             <div className="artwork-modal-body">
               <div className="artwork-modal-grid">
                 <div className="artwork-modal-preview">
-                  <img src={artwork.thumbnail_url || artwork.image_url} alt={artwork.title} />
+                  <img src={artworkImageURL(artwork, "medium")} alt={artwork.title} />
                 </div>
                 <div className="artwork-modal-fields">
                   <ArtworkMetaForm

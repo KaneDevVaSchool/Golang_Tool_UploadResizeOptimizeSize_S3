@@ -1,4 +1,4 @@
-import { Image, LayoutDashboard, Trophy, Upload, X } from "lucide-react";
+import { Image, LayoutDashboard, Sparkles, Trophy, Upload, X } from "lucide-react";
 import { useEffect, type ComponentType } from "react";
 import { NavLink } from "react-router-dom";
 
@@ -7,6 +7,8 @@ type IconType = ComponentType<{ size?: number | string; strokeWidth?: number }>;
 type MenuItem = {
   id: string;
   label: string;
+  /** Một dòng mô tả ngắn hiện dưới nhãn - nói rõ bấm vào sẽ làm được gì. */
+  hint: string;
   path: string;
   icon: IconType;
   end?: boolean;
@@ -22,30 +24,61 @@ type MenuSection = {
 const MENU_SECTIONS: MenuSection[] = [
   {
     id: "general",
-    label: "Điều hướng",
-    items: [{ id: "dashboard", label: "Tổng quan", path: "/admin", icon: LayoutDashboard, end: true }],
+    label: "Bắt đầu",
+    items: [
+      {
+        id: "dashboard",
+        label: "Tổng quan",
+        hint: "Số liệu triển lãm hôm nay",
+        path: "/admin",
+        icon: LayoutDashboard,
+        end: true,
+      },
+    ],
   },
   {
     id: "content",
-    label: "Nội dung",
+    label: "Tác phẩm",
     items: [
-      { id: "artworks", label: "Quản lý tác phẩm", path: "/admin/artworks", icon: Image, end: true },
-      { id: "upload", label: "Tải tác phẩm mới", path: "/admin/artworks/upload", icon: Upload },
+      {
+        id: "artworks",
+        label: "Thư viện tác phẩm",
+        hint: "Tìm, sửa và chọn tác phẩm tiêu biểu",
+        path: "/admin/artworks",
+        icon: Image,
+        end: true,
+      },
+      {
+        id: "upload",
+        label: "Đưa tác phẩm lên",
+        hint: "Tải nhiều ảnh cùng lúc",
+        path: "/admin/artworks/upload",
+        icon: Upload,
+      },
     ],
   },
   {
     id: "config",
-    label: "Cấu hình",
-    items: [{ id: "awards", label: "Quản lý giải thưởng", path: "/admin/awards", icon: Trophy }],
+    label: "Vinh danh",
+    items: [
+      {
+        id: "awards",
+        label: "Giải thưởng",
+        hint: "Tạo và sắp xếp các hạng mục",
+        path: "/admin/awards",
+        icon: Trophy,
+      },
+    ],
   },
 ];
 
 /**
- * Sidebar admin - port nguyên bố cục + hành vi AppSidebar.vue của
- * va-workspace:
- * - Brand logo trên cùng (mark khi thu gọn, wordmark khi mở rộng).
- * - Menu chia nhóm có nhãn section chữ hoa nhỏ; icon nằm trong "well" bo góc.
- * - Desktop (>=1280px): rail 4rem khi thu gọn + flyout nhãn khi hover;
+ * Sidebar admin - port bố cục + hành vi AppSidebar.vue của va-workspace,
+ * mở rộng phần nội dung cho thân thiện hơn:
+ * - Brand logo lớn trên cùng (mark khi thu gọn, wordmark khi mở rộng).
+ * - Mỗi mục menu có thêm một dòng gợi ý ngắn; icon nằm trong "well" bo góc.
+ * - Thẻ lời nhắn ở chân sidebar dẫn sang trang triển lãm công khai.
+ * - Desktop (>=1280px): rail 4.5rem khi thu gọn + flyout nhãn khi hover;
  *   trạng thái collapsed do AdminLayout giữ (nút toggle nằm trên header,
  *   đúng như va-workspace) và lưu localStorage.
  * - Tablet/mobile (<1280px): off-canvas drawer + overlay, Escape để đóng,
@@ -105,6 +138,13 @@ export function AdminSidebar({
           </button>
         </div>
 
+        {!showCollapsed && (
+          <p className="admin-sidebar-tagline">
+            <Sparkles size={13} strokeWidth={2} aria-hidden />
+            Triển lãm tranh học sinh
+          </p>
+        )}
+
         <nav className="admin-sidebar-nav" aria-label="Điều hướng quản trị">
           {MENU_SECTIONS.map((section) => (
             <section key={section.id} className="admin-sidebar-section">
@@ -129,9 +169,15 @@ export function AdminSidebar({
                       <Icon size={18} strokeWidth={2} />
                     </span>
                     {showCollapsed ? (
-                      <span className="admin-sidebar-flyout">{item.label}</span>
+                      <span className="admin-sidebar-flyout">
+                        <strong>{item.label}</strong>
+                        <span>{item.hint}</span>
+                      </span>
                     ) : (
-                      <span className="admin-sidebar-label">{item.label}</span>
+                      <span className="admin-sidebar-copy">
+                        <span className="admin-sidebar-label">{item.label}</span>
+                        <span className="admin-sidebar-hint">{item.hint}</span>
+                      </span>
                     )}
                   </NavLink>
                 );
@@ -139,6 +185,18 @@ export function AdminSidebar({
             </section>
           ))}
         </nav>
+
+        {!showCollapsed && (
+          <div className="admin-sidebar-footer">
+            <a href="/" target="_blank" rel="noreferrer" className="admin-sidebar-promo">
+              <img src="/images/vas-mascot-wave.png" alt="" className="admin-sidebar-promo-art" aria-hidden />
+              <span className="admin-sidebar-promo-copy">
+                <strong>Xem triển lãm</strong>
+                <span>Ngắm tác phẩm như khách ghé thăm</span>
+              </span>
+            </a>
+          </div>
+        )}
       </aside>
     </div>
   );

@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Crown, Trophy } from "lucide-react";
 import { useState, type CSSProperties } from "react";
 import type { ArtworkWithMeta, Award } from "../../lib/artworkApi";
+import { artworkImageURL, artworkPictureSources } from "../../lib/artworkImage";
 
 /**
  * Khung tranh phòng trưng bày cho lưới Tác phẩm tiêu biểu.
@@ -93,17 +94,22 @@ export function FeaturedArtworkFrame({
             <span className="artwork-frame-window-slot">
               <span className="artwork-frame-window">
                 {!loaded && <span className="artwork-frame-skeleton" aria-hidden />}
-                <img
-                  src={item.thumbnail_url || item.image_url}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  width={item.width}
-                  height={item.height}
-                  onLoad={() => setLoaded(true)}
-                  onError={() => setLoaded(true)}
-                  data-loaded={loaded ? "true" : "false"}
-                />
+                <picture>
+                  {artworkPictureSources(item, "thumb").map((s) => (
+                    <source key={s.type} srcSet={s.srcSet} type={s.type} />
+                  ))}
+                  <img
+                    src={artworkImageURL(item, "thumb")}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    width={item.width}
+                    height={item.height}
+                    onLoad={() => setLoaded(true)}
+                    onError={() => setLoaded(true)}
+                    data-loaded={loaded ? "true" : "false"}
+                  />
+                </picture>
                 <span className="artwork-frame-glass" aria-hidden />
               </span>
             </span>

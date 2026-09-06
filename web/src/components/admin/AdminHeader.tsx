@@ -7,6 +7,20 @@ import { adminRequest } from "../../lib/adminApi";
 import { toast } from "../../lib/toastBus";
 import { useRegisterPageHeaderSlot } from "./pageHeaderPortal";
 
+/** Lời chào theo giờ máy người dùng - đổi giọng cho thân thiện hơn "Xin chào". */
+function greetingFor(hour: number): string {
+  if (hour < 11) return "Chào buổi sáng";
+  if (hour < 14) return "Chào buổi trưa";
+  if (hour < 18) return "Chào buổi chiều";
+  return "Chào buổi tối";
+}
+
+/** Tên gọi ngắn: lấy chữ cuối trong họ tên đầy đủ kiểu Việt Nam. */
+function shortName(full: string): string {
+  const parts = full.trim().split(/\s+/);
+  return parts.length > 1 ? parts[parts.length - 1] : full;
+}
+
 /**
  * Header admin - port AppHeader.vue (va-workspace): MỘT hàng thấp
  * (--admin-header-h) gồm
@@ -67,6 +81,8 @@ export function AdminHeader({
   }
 
   const initial = (user.name || user.email || "?").trim().charAt(0).toUpperCase();
+  const displayName = user.name || "Quản trị viên";
+  const greeting = `${greetingFor(new Date().getHours())}, ${shortName(displayName)}`;
 
   // Desktop: icon phản ánh trạng thái thu gọn; mobile: icon hamburger.
   const ToggleIcon = !isDesktop ? Menu : collapsed ? PanelLeftOpen : PanelLeftClose;
@@ -97,12 +113,15 @@ export function AdminHeader({
           href="/"
           target="_blank"
           rel="noreferrer"
-          className="admin-header-icon-btn admin-header-view-site"
-          aria-label="Xem trang triển lãm"
-          title="Xem trang triển lãm"
+          className="admin-header-visit"
+          aria-label="Mở trang triển lãm trong tab mới"
+          title="Mở trang triển lãm trong tab mới"
         >
-          <ExternalLink size={18} strokeWidth={2} />
+          <ExternalLink size={16} strokeWidth={2} />
+          <span className="admin-header-visit-label">Xem triển lãm</span>
         </a>
+
+        <span className="admin-header-divider" aria-hidden />
 
         <div className="admin-header-account" ref={menuRef}>
           <button
@@ -118,7 +137,12 @@ export function AdminHeader({
             ) : (
               <span className="admin-header-avatar admin-header-avatar--fallback">{initial}</span>
             )}
-            <span className="admin-header-account-name">{user.name || "Quản trị viên"}</span>
+            <span className="admin-header-account-name">
+              <span className="admin-header-account-greeting">{greeting}</span>
+              <span className="admin-header-account-role">
+                {user.role === "super_admin" ? "Quản trị cấp cao" : "Quản trị viên"}
+              </span>
+            </span>
             <ChevronDown
               size={16}
               className={`admin-header-chevron${menuOpen ? " admin-header-chevron--open" : ""}`}
@@ -128,12 +152,37 @@ export function AdminHeader({
           {menuOpen && (
             <div className="admin-header-dropdown" role="menu">
               <div className="admin-header-dropdown-info">
-                <strong>{user.name || "Quản trị viên"}</strong>
-                <span>{user.email}</span>
-                <span className="admin-header-role-badge">
-                  {user.role === "super_admin" ? "Quản trị cấp cao" : "Quản trị viên"}
+                {user.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt=""
+                    className="admin-header-dropdown-avatar"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="admin-header-dropdown-avatar admin-header-avatar--fallback">{initial}</span>
+                )}
+                <span className="admin-header-dropdown-identity">
+                  <strong>{displayName}</strong>
+                  <span>{user.email}</span>
+                  <span className="admin-header-role-badge">
+                    {user.role === "super_admin" ? "Quản trị cấp cao" : "Quản trị viên"}
+                  </span>
                 </span>
               </div>
+
+              <a
+                href="/"
+                target="_blank"
+                rel="noreferrer"
+                role="menuitem"
+                className="admin-header-dropdown-item admin-header-dropdown-item--visit"
+                onClick={() => setMenuOpen(false)}
+              >
+                <ExternalLink size={16} />
+                Xem trang triển lãm
+              </a>
+
               <button
                 type="button"
                 role="menuitem"
@@ -153,10 +202,10 @@ export function AdminHeader({
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Xác nhận đăng xuất"
-        message="Bạn có chắc muốn đăng xuất khỏi trang quản trị? Phiên làm việc hiện tại sẽ kết thúc."
+        title="Tạm biệt nhé?"
+        message="Bạn sắp rời khỏi trang quản trị. Mọi thay đổi đã lưu vẫn được giữ nguyên, hẹn gặp lại bạn lần sau!"
         confirmLabel="Đăng xuất"
-        cancelLabel="Ở lại"
+        cancelLabel="Ở lại tiếp"
         busyLabel="Đang đăng xuất…"
         busy={loggingOut}
         onConfirm={confirmLogout}

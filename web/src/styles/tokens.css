@@ -85,7 +85,7 @@
   --color-sidebar-focus: rgba(255, 255, 255, 0.45);
   --color-sidebar-flyout: var(--color-surface);
   --color-sidebar-overlay: color-mix(in srgb, #000000 55%, transparent);
-  --spacing-sidebar-rail: 4rem;
+  --spacing-sidebar-rail: 4.5rem;
   --spacing-sidebar-expanded: 15.5rem;
   --spacing-sidebar-drawer: 17rem;
 
@@ -144,7 +144,9 @@
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
 
   /* ---------- Chiều cao khung admin ---------- */
-  --admin-header-h: 3.25rem;
+  /* Cao dần theo bề ngang: mobile ưu tiên chỗ cho nội dung, desktop cho
+     header thở để tiêu đề trang + khối tài khoản không chật. */
+  --admin-header-h: clamp(3.25rem, 3rem + 1vw, 3.75rem);
 }
 
 :root {

@@ -8,6 +8,12 @@ export type BulkUploadItem = {
   file_size?: number;
   width?: number;
   height?: number;
+  /**
+   * Các cỡ ảnh backend đã sinh sẵn lúc upload. Vắng mặt nếu ảnh gốc nhỏ hơn
+   * mọi cỡ đích hoặc khâu sinh biến thể lỗi - lúc đó tác phẩm vẫn tạo được,
+   * chỉ là trang hiển thị bằng ảnh gốc.
+   */
+  variants?: Partial<Record<ArtworkVariantKey, string>>;
   error?: string;
 };
 
@@ -38,6 +44,8 @@ export type CreateArtworkPayload = {
   file_size: number;
   width?: number;
   height?: number;
+  /** Gửi lại nguyên vẹn từ kết quả bulk-upload để backend lưu vào DB. */
+  variants?: Partial<Record<ArtworkVariantKey, string>>;
   award_id?: number | null;
 };
 

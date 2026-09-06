@@ -704,6 +704,22 @@
 /* ---------------------------------------------------------------------- */
 /* Public page shell                                                       */
 /* ---------------------------------------------------------------------- */
+/* index.css khoá html/body/#root ở height:100%+overflow:hidden cho
+   UploadTool (1 màn hình cố định). useScrollableBody gắn class này để mở
+   khoá. Rule phải nằm TRONG public.css: khu public chỉ import public.css,
+   không import admin.css - đặt nhờ ở đó thì trang public vào thẳng "/" sẽ
+   không có rule nào khớp và mất cuộn hoàn toàn. */
+html.scrollable-page,
+body.scrollable-page,
+body.scrollable-page #root {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+html.scrollable-page {
+  overflow-y: auto;
+}
+
 .public-gallery-page {
   position: relative;
   font-family: var(--vas-font);
@@ -4328,7 +4344,7 @@
   opacity: 1;
 }
 .gallery-rail-cell {
-  flex: 0 0 min(23.5rem, 86vw);
+  flex: 0 0 min(21rem, 82vw);
   min-width: 0;
   padding-top: 1.15rem;
   scroll-snap-align: start;
@@ -4663,7 +4679,7 @@
 
 @media (min-width: 1100px) {
   .gallery-rail-cell {
-    flex-basis: min(25rem, 28vw);
+    flex-basis: min(22.5rem, 25vw);
   }
 }
 
@@ -4672,7 +4688,7 @@
     gap: 1.25rem;
   }
   .gallery-rail-cell {
-    flex-basis: min(21.5rem, 78vw);
+    flex-basis: min(19.5rem, 74vw);
   }
 }
 
@@ -4726,7 +4742,7 @@
     gap: 1.1rem;
   }
   .gallery-rail-cell {
-    flex-basis: min(20.5rem, 88vw);
+    flex-basis: min(18.5rem, 84vw);
   }
   .gallery-rail-nav {
     width: 2.3rem;
@@ -7010,5 +7026,59 @@
      nhánh phải, nếu không hai nhánh nguyệt quế sẽ cong cùng một chiều. */
   .hall-laurel--right {
     transform: translateY(-50%) scaleX(-1);
+  }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Giảm tải hiệu ứng trên máy yếu                                          */
+/*                                                                          */
+/* Nguyên tắc: desktop giữ NGUYÊN mọi hiệu ứng đã thiết kế; chỉ tablet và  */
+/* điện thoại mới cắt bớt. Đặt ở cuối file để thắng các quy tắc phía trên  */
+/* mà không phải sửa rải rác 26 chỗ khai báo backdrop-filter.              */
+/* ---------------------------------------------------------------------- */
+
+@media (max-width: 1023px) {
+  /* backdrop-filter là thứ đắt nhất ở đây. Trên một thanh navbar
+     position:fixed, nó buộc trình duyệt lấy mẫu lại toàn bộ vùng nền phía
+     sau rồi làm mờ ở MỖI khung hình khi cuộn - GPU di động trả giá rất
+     đậm cho việc này.
+
+     Bỏ blur nhưng tăng độ đục của nền để chữ vẫn tương phản tốt: khác biệt
+     gần như không nhận ra bằng mắt, còn độ mượt khi cuộn thì thấy ngay. */
+  .public-navbar,
+  .public-navbar-inner {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Trên điện thoại bỏ toàn bộ blur nền, kể cả ở các lớp phủ và thẻ. */
+  .public-navbar,
+  .public-navbar-inner,
+  .public-lightbox-backdrop,
+  .public-lightbox-header,
+  .gallery-search,
+  .hall-card,
+  .edu-card,
+  .public-footer {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  /* Các lớp trang trí thuần thẩm mỹ: ẩn hẳn thay vì chỉ dừng animation.
+     Chúng nằm dưới nội dung và không mang thông tin nào. */
+  .hero-parallax-leaf,
+  .hero-critter,
+  .featured-butterfly,
+  .hero-petal {
+    display: none;
+  }
+
+  /* Ken Burns trên ảnh nền: hai animation scale chạy đồng thời trên cùng
+     một bitmap, tốn bộ nhớ vẽ mà trên màn hình nhỏ gần như không thấy. */
+  .edu-card-stars,
+  .edu-card-stars--twinkle {
+    animation: none;
   }
 }

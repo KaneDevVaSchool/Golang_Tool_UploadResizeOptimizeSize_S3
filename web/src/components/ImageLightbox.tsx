@@ -126,10 +126,12 @@ export function ImageLightbox({
 
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
+    // Xoá inline style khi đóng, không khôi phục snapshot - xem giải thích
+    // ở PublicLightbox (StrictMode chạy effect hai lần, snapshot lần hai sẽ
+    // là "hidden" và khoá cuộn vĩnh viễn).
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.removeProperty("overflow");
     };
   }, [open]);
 

@@ -1,4 +1,5 @@
 import { adminRequest } from "./adminApi";
+import type { ArtworkWithMeta } from "./artworkApi";
 
 export type GradeLevelCount = {
   grade_level_id: number;
@@ -19,6 +20,8 @@ export type TopArtwork = {
   title: string;
   image_url: string;
   thumbnail_url?: string;
+  /** Xem ArtworkWithMeta.variants - backend trả cùng bộ cột artworks. */
+  variants?: ArtworkWithMeta["variants"];
   student_name: string;
   view_count: number;
   reaction_count: number;

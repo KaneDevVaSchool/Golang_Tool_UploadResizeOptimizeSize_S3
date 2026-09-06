@@ -154,6 +154,9 @@ export default function ArtworksUploadPage() {
           file_size: item.file_size ?? item.file.size,
           width: item.width,
           height: item.height,
+          // Trả nguyên vẹn các biến thể bulk-upload đã sinh - backend chỉ lưu
+          // lại chứ không sinh lần nữa ở bước này.
+          variants: item.variants,
           award_id: item.values.awardId ? Number(item.values.awardId) : null,
         });
         successCount++;
@@ -183,10 +186,10 @@ export default function ArtworksUploadPage() {
   return (
     <div className="artworks-upload-page">
       <AdminPageHeader
-        title="Tải tác phẩm mới"
-        subtitle={validCount > 0 ? `${doneCount}/${validCount} đã lưu` : undefined}
+        title="Đưa tác phẩm lên"
+        subtitle={validCount > 0 ? `Đã lưu ${doneCount}/${validCount} tác phẩm` : undefined}
         primaryAction={{
-          label: "Quay lại danh sách",
+          label: "Quay lại thư viện",
           icon: ArrowLeft,
           variant: "ghost",
           onClick: () => navigate("/admin/artworks"),
@@ -208,7 +211,7 @@ export default function ArtworksUploadPage() {
       {stage === "uploading" && (
         <div className="admin-page-placeholder artworks-upload-loading">
           <Loader2 className="spin" size={28} />
-          <p>Đang tải ảnh lên, vui lòng đợi…</p>
+          <p>Đang đưa ảnh lên máy chủ, chờ một chút nhé…</p>
         </div>
       )}
 

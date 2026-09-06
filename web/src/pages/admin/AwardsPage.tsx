@@ -142,16 +142,18 @@ export default function AwardsPage() {
   return (
     <div className="awards-page">
       <AdminPageHeader
-        title="Quản lý giải thưởng"
-        subtitle={awards.length > 0 ? `${awards.length} giải thưởng` : undefined}
+        title="Giải thưởng"
+        subtitle={awards.length > 0 ? `${awards.length} hạng mục vinh danh` : undefined}
       />
 
       <div className="awards-layout">
         <div className="awards-list">
           {loading ? (
-            <div className="admin-page-placeholder">Đang tải…</div>
+            <div className="admin-page-placeholder">Đang tải danh sách giải thưởng…</div>
           ) : sorted.length === 0 ? (
-            <div className="admin-page-placeholder">Chưa có giải thưởng nào. Thêm giải đầu tiên ở form bên phải.</div>
+            <div className="admin-page-placeholder">
+              Chưa có hạng mục nào. Hãy tạo giải thưởng đầu tiên ở biểu mẫu bên phải nhé!
+            </div>
           ) : (
             sorted.map((award) => {
               const Icon = iconFor(award.icon_key);

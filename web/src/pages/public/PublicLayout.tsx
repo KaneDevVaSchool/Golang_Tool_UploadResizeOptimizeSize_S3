@@ -1,8 +1,25 @@
 import { Outlet } from "react-router-dom";
 import { PublicFooter } from "../../components/public/PublicFooter";
 import { PublicNavbar } from "../../components/public/PublicNavbar";
+import { useDeviceTier } from "../../hooks/useDeviceTier";
 import { useScrollableBody } from "../../hooks/useScrollableBody";
 import "../../styles/public.css";
+
+/** Lá và hoa của lớp trang trí nền, xếp theo thứ tự xuất hiện trên màn hình. */
+const FOREST_LEAVES = ["🍃", "🌿", "🍂", "🌸", "🍁", "🌼", "🍃", "🌺"];
+
+/**
+ * Số lá theo sức máy. Mỗi lá là một phần tử position:fixed mang
+ * `will-change: transform` + `drop-shadow` và animation vô hạn - tức là một
+ * lớp compositor thường trú phải vẽ lại filter mỗi khung hình, nhân với số
+ * lá, trên MỌI trang public. Desktop kham được; điện thoại thì đây là chi
+ * phí nền cộng dồn vào mọi thứ khác đang chạy.
+ */
+const LEAF_BUDGET: Record<string, number> = {
+  full: FOREST_LEAVES.length,
+  light: 4,
+  minimal: 3,
+};
 
 /**
  * Layout gốc cho toàn bộ khu vực /trien-lam/*: navbar cố định dùng chung +
@@ -11,20 +28,21 @@ import "../../styles/public.css";
  */
 export default function PublicLayout() {
   useScrollableBody();
+  const tier = useDeviceTier();
+  const leafCount = LEAF_BUDGET[tier] ?? FOREST_LEAVES.length;
 
   return (
     <div className="public-gallery-page">
       {/* Lớp trang trí "khu vườn" cố định toàn màn hình: lá + hoa bay nhẹ,
-          thuần CSS (không ảnh, không JS), đứng sau mọi nội dung. */}
+          thuần CSS (không ảnh, không JS), đứng sau mọi nội dung.
+          Số lá giảm dần trên máy yếu - xem LEAF_BUDGET. Lấy cách quãng để
+          lá còn rải đều ngang màn hình thay vì dồn về một phía. */}
       <div className="forest-ambient" aria-hidden="true">
-        <span className="forest-leaf forest-leaf--1">🍃</span>
-        <span className="forest-leaf forest-leaf--2">🌿</span>
-        <span className="forest-leaf forest-leaf--3">🍂</span>
-        <span className="forest-leaf forest-leaf--4">🌸</span>
-        <span className="forest-leaf forest-leaf--5">🍁</span>
-        <span className="forest-leaf forest-leaf--6">🌼</span>
-        <span className="forest-leaf forest-leaf--7">🍃</span>
-        <span className="forest-leaf forest-leaf--8">🌺</span>
+        {FOREST_LEAVES.filter((_, i) => i % Math.ceil(FOREST_LEAVES.length / leafCount) === 0).map((leaf, i) => (
+          <span key={i} className={`forest-leaf forest-leaf--${i + 1}`}>
+            {leaf}
+          </span>
+        ))}
       </div>
       <PublicNavbar />
       <main className="public-page-main">

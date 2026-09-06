@@ -1,10 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import type { ArtworkWithMeta, GradeLevel } from "../../lib/artworkApi";
 import { fetchPublicArtworks } from "../../lib/publicApi";
+import { useDeviceTier } from "../../hooks/useDeviceTier";
 import { ArtworkRail } from "./ArtworkRail";
 import { GradeNode } from "./GradeNode";
 
-const PAGE_SIZE = 36;
+/**
+ * Số tranh nạp mỗi lượt, theo sức máy.
+ *
+ * Trang có HAI section (Tiểu học + Trung học) cùng nạp một lúc, nên con số
+ * này nhân đôi ngay ở lần vẽ đầu. Với 36, điện thoại phải dựng 72 khung
+ * tranh - mỗi khung khoảng 15 thẻ span lồng nhau cho phần khung/kính/tấm
+ * đồng, cộng một IntersectionObserver riêng của framer-motion. Dãy tranh
+ * cuộn ngang nên người xem chỉ thấy vài khung đầu; phần còn lại vẫn nạp
+ * thêm được qua nút "Xem thêm".
+ */
+const PAGE_SIZE_BY_TIER: Record<string, number> = {
+  full: 36,
+  light: 24,
+  minimal: 12,
+};
 
 type EduLevel = "primary" | "secondary";
 
@@ -39,13 +54,15 @@ export function GalleryLevelSection({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const selectedGrade = grades.find((g) => g.id === selectedGradeId) ?? null;
+  const tier = useDeviceTier();
+  const pageSize = PAGE_SIZE_BY_TIER[tier] ?? PAGE_SIZE_BY_TIER.full;
 
   function buildFilter(nextPage: number) {
     return {
       ...(selectedGradeId ? { grade_level_id: selectedGradeId } : { education_level: level }),
       ...(search ? { search } : {}),
       page: nextPage,
-      page_size: PAGE_SIZE,
+      page_size: pageSize,
     };
   }
 
@@ -68,7 +85,7 @@ export function GalleryLevelSection({
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [level, selectedGradeId, search]);
+  }, [level, selectedGradeId, search, pageSize]);
 
   const openedShareRef = useRef<number | null>(null);
   useEffect(() => {
@@ -80,16 +97,32 @@ export function GalleryLevelSection({
     onOpenArtwork(items, index);
   }, [loading, items, sharedArtworkId, onOpenArtwork]);
 
+  // Huỷ lượt "Xem thêm" đang bay khi component gỡ đi hoặc khi người dùng bấm
+  // liên tiếp: nếu không, phản hồi về muộn sẽ setState trên component đã
+  // unmount, và hai lượt về không đúng thứ tự sẽ nối tranh trùng/lộn xộn.
+  const loadMoreRef = useRef<AbortController | null>(null);
+  useEffect(() => () => loadMoreRef.current?.abort(), []);
+
   function handleLoadMore() {
+    loadMoreRef.current?.abort();
+    const controller = new AbortController();
+    loadMoreRef.current = controller;
+
     const next = page + 1;
     setLoading(true);
-    fetchPublicArtworks(buildFilter(next))
+    fetchPublicArtworks(buildFilter(next), controller.signal)
       .then((res) => {
+        if (controller.signal.aborted) return;
         setItems((prev) => [...prev, ...(res.items ?? [])]);
         setTotalCount(res.total_count ?? 0);
         setPage(next);
       })
-      .finally(() => setLoading(false));
+      .catch(() => {
+        // Huỷ chủ động không phải lỗi cần báo - danh sách hiện tại vẫn đúng.
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
   }
 
   const emptyLabel = selectedGrade ? selectedGrade.label : title;

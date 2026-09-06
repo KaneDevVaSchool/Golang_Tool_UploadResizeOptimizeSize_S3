@@ -4,6 +4,7 @@ import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import { ArtworkEditModal } from "../../components/admin/ArtworkEditModal";
 import { ReactionIcons } from "../../components/admin/ReactionIcons";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { artworkImageURL } from "../../lib/artworkImage";
 import {
   deleteArtwork,
   fetchArtworks,
@@ -143,9 +144,9 @@ export default function ArtworksListPage() {
   return (
     <div className="artworks-list-page">
       <AdminPageHeader
-        title="Quản lý tác phẩm"
-        subtitle={totalCount > 0 ? `${totalCount} tác phẩm` : undefined}
-        primaryAction={{ label: "Tải tác phẩm mới", icon: Plus, to: "/admin/artworks/upload" }}
+        title="Thư viện tác phẩm"
+        subtitle={totalCount > 0 ? `${totalCount} tác phẩm đang được lưu giữ` : undefined}
+        primaryAction={{ label: "Đưa tác phẩm lên", icon: Plus, to: "/admin/artworks/upload" }}
       />
 
       <div className="artworks-filter-bar">
@@ -239,7 +240,7 @@ export default function ArtworksListPage() {
           {items.map((item) => (
             <div className="artworks-table-row" role="row" key={item.id}>
               <span className="artworks-cell-thumb" role="cell">
-                <img src={item.thumbnail_url || item.image_url} alt={item.title} loading="lazy" />
+                <img src={artworkImageURL(item, "thumb")} alt={item.title} loading="lazy" />
               </span>
               <span className="artworks-cell-title" role="cell">
                 <strong title={item.title}>{item.title}</strong>

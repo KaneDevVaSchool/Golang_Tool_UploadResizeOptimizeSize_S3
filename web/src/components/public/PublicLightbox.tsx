@@ -26,6 +26,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import type { ArtworkWithMeta } from "../../lib/artworkApi";
+import { artworkImageURL, artworkPictureSources } from "../../lib/artworkImage";
 import type { ReactionCounts } from "../../lib/publicApi";
 import { toast } from "../../lib/toastBus";
 import { CommentBox } from "./CommentBox";
@@ -75,6 +76,10 @@ export function PublicLightbox({
     height: artwork?.height || 1,
   });
   const [fitSize, setFitSize] = useState<ImageSize>({ width: 1, height: 1 });
+  // Ảnh nét đã tải xong chưa. Trước khi xong, hiển thị bản thumb (đã nằm sẵn
+  // trong cache trình duyệt vì vừa thấy nó ở lưới) để lightbox mở ra là có
+  // hình ngay, thay vì một khung trống trong lúc chờ ảnh lớn về.
+  const [sharpLoaded, setSharpLoaded] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<Point | null>(null);
@@ -85,15 +90,21 @@ export function PublicLightbox({
     setRotation(0);
     setPan({ x: 0, y: 0 });
     setNaturalSize({ width: artwork?.width || 1, height: artwork?.height || 1 });
+    setSharpLoaded(false);
     setComposeOpen(false);
   }, [artwork?.id]);
 
   useEffect(() => {
     if (!open) return;
-    const prevOverflow = document.body.style.overflow;
+    // Gỡ hẳn inline style khi đóng thay vì khôi phục snapshot: dưới
+    // StrictMode effect chạy mount->unmount->mount, nên lần chạy thứ hai sẽ
+    // "snapshot" đúng giá trị hidden do lần đầu vừa đặt, và cleanup khôi
+    // phục lại hidden -> trang kẹt không cuộn được sau khi đóng lightbox.
+    // Trạng thái cuộn của trang do class scrollable-page quyết định, inline
+    // style ở đây chỉ là lớp phủ tạm thời nên xoá là về đúng mặc định.
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prevOverflow;
+      document.body.style.removeProperty("overflow");
     };
   }, [open]);
 
@@ -172,6 +183,13 @@ export function PublicLightbox({
     height: `${fitSize.height}px`,
     transform: `translate3d(${pan.x}px, ${pan.y}px, 0) rotate(${rotation}deg) scale(${zoom})`,
   } satisfies CSSProperties;
+
+  // Dùng bản "large" (cạnh dài 1600px) chứ không phải ảnh gốc: đủ nét cho cả
+  // màn hình lớn lẫn retina, mà nhẹ hơn ảnh dự thi gốc rất nhiều. Người muốn
+  // xem nguyên bản vẫn có nút tải về, vốn trỏ thẳng image_url.
+  // Tác phẩm chưa có biến thể thì helper tự lui về ảnh gốc.
+  const sharpImageURL = artworkImageURL(artwork, "large");
+  const sharpSources = artworkPictureSources(artwork, "large");
 
   function changeZoom(next: number) {
     const bounded = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
@@ -376,18 +394,40 @@ export function PublicLightbox({
                 <span className="public-lightbox-stage-leaf public-lightbox-stage-leaf--one" aria-hidden>❧</span>
                 <span className="public-lightbox-stage-leaf public-lightbox-stage-leaf--two" aria-hidden>❧</span>
 
-                <img
-                  src={artwork.image_url}
-                  alt={artwork.title}
-                  draggable={false}
-                  style={imageStyle}
-                  onLoad={(event) => {
-                    setNaturalSize({
-                      width: event.currentTarget.naturalWidth || artwork.width || 1,
-                      height: event.currentTarget.naturalHeight || artwork.height || 1,
-                    });
-                  }}
-                />
+                {/* Hai lớp ảnh chồng nhau: bản thumb hiện ngay (lấy từ cache
+                    của lưới) rồi mờ dần đi khi bản nét đã tải xong. Trình duyệt
+                    tự phóng to thumb nên trong khoảnh khắc đầu ảnh hơi nhoè,
+                    vẫn hơn hẳn việc nhìn vào khung trống. */}
+                {!sharpLoaded && artworkImageURL(artwork, "thumb") !== sharpImageURL && (
+                  <img
+                    src={artworkImageURL(artwork, "thumb")}
+                    alt=""
+                    aria-hidden
+                    draggable={false}
+                    style={{ ...imageStyle, position: "absolute", filter: "blur(6px)" }}
+                  />
+                )}
+
+                <picture>
+                  {sharpSources.map((s) => (
+                    <source key={s.type} srcSet={s.srcSet} type={s.type} />
+                  ))}
+                  <img
+                    src={sharpImageURL}
+                    alt={artwork.title}
+                    draggable={false}
+                    decoding="async"
+                    style={{ ...imageStyle, opacity: sharpLoaded ? 1 : 0, transition: "opacity 0.25s ease-out" }}
+                    onLoad={(event) => {
+                      setNaturalSize({
+                        width: event.currentTarget.naturalWidth || artwork.width || 1,
+                        height: event.currentTarget.naturalHeight || artwork.height || 1,
+                      });
+                      setSharpLoaded(true);
+                    }}
+                    onError={() => setSharpLoaded(true)}
+                  />
+                </picture>
 
                 {items.length > 1 && (
                   <>

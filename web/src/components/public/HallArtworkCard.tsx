@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Heart, Sparkles, Trophy } from "lucide-react";
 import { useState, type CSSProperties } from "react";
 import type { ArtworkWithMeta } from "../../lib/artworkApi";
+import { artworkImageURL, artworkPictureSources } from "../../lib/artworkImage";
 
 /** Giải hiển thị trên card - chỉ những trường thực sự dùng để vẽ. */
 export type HallCardAward = { name: string; color_hex: string };

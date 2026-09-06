@@ -55,16 +55,18 @@ export default function Dashboard() {
   if (loading && !stats) {
     return (
       <>
-        <AdminPageHeader title="Tổng quan" subtitle="Đang tải…" />
-        <div className="admin-page-placeholder">Đang tải số liệu…</div>
+        <AdminPageHeader title="Tổng quan" subtitle="Đang gom số liệu…" />
+        <div className="admin-page-placeholder">Đang tải số liệu triển lãm, chờ một chút nhé…</div>
       </>
     );
   }
   if (!stats) {
     return (
       <>
-        <AdminPageHeader title="Tổng quan" />
-        <div className="admin-page-placeholder">Không có dữ liệu để hiển thị.</div>
+        <AdminPageHeader title="Tổng quan" subtitle="Chưa có số liệu" />
+        <div className="admin-page-placeholder">
+          Chưa có dữ liệu để hiển thị. Hãy tải những tác phẩm đầu tiên lên nhé!
+        </div>
       </>
     );
   }
@@ -86,7 +88,7 @@ export default function Dashboard() {
     <div className="dashboard-page">
       <AdminPageHeader
         title="Tổng quan"
-        subtitle={`${stats.total_artworks} tác phẩm trong triển lãm`}
+        subtitle={`Triển lãm đang có ${stats.total_artworks} tác phẩm`}
       />
 
       <section className="dashboard-stat-grid">

@@ -1,4 +1,5 @@
 import { Eye, Heart } from "lucide-react";
+import { artworkImageURL } from "../../lib/artworkImage";
 import type { TopArtwork } from "../../lib/dashboardApi";
 
 /**
@@ -17,7 +18,7 @@ export function TopArtworksList({ items }: { items: TopArtwork[] }) {
           <span className="top-artworks-rank">{index + 1}</span>
           <img
             className="top-artworks-thumb"
-            src={item.thumbnail_url || item.image_url}
+            src={artworkImageURL(item, "thumb")}
             alt=""
             loading="lazy"
           />

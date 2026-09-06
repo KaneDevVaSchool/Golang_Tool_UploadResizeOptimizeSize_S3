@@ -69,10 +69,24 @@ export function ReactionPicker({
 
   useEffect(() => {
     if (!open) return;
-    const reposition = () => updateMenuPosition();
-    window.addEventListener("resize", reposition);
-    window.addEventListener("scroll", reposition, true);
+
+    // Gom về mỗi khung hình một lần. Listener này bắt scroll ở pha capture
+    // nên nó nhận mọi sự kiện cuộn của mọi phần tử lồng nhau trên trang, mà
+    // updateMenuPosition lại gọi getBoundingClientRect - đọc layout, tức là
+    // ép trình duyệt tính lại bố cục ngay giữa lúc đang cuộn.
+    let frame = 0;
+    const reposition = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        updateMenuPosition();
+      });
+    };
+
+    window.addEventListener("resize", reposition, { passive: true });
+    window.addEventListener("scroll", reposition, { capture: true, passive: true });
     return () => {
+      if (frame) cancelAnimationFrame(frame);
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
     };
