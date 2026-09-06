@@ -35,6 +35,9 @@ import { ReactionPicker } from "./ReactionPicker";
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.25;
+// Ngưỡng để phân biệt "đang vuốt chuyển ảnh" với "chạm nhầm"/"đang cuộn
+// dọc" - dưới ngưỡng này chưa tính là vuốt.
+const SWIPE_DISTANCE_THRESHOLD = 60;
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -83,6 +86,11 @@ export function PublicLightbox({
   const stageRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const dragStartRef = useRef<Point | null>(null);
+  // Theo dõi vuốt ngang trên cảm ứng khi CHƯA zoom - tách khỏi dragStartRef
+  // (dùng để pan ảnh đã phóng to) vì đây là 2 cử chỉ khác nhau, không được
+  // lẫn vào nhau: dragStartRef chỉ hoạt động khi zoom > 1 (xem
+  // handlePointerDown), swipeStartRef chỉ khi zoom <= 1.
+  const swipeStartRef = useRef<Point | null>(null);
 
   useEffect(() => {
     setReactionCounts(artwork?.reaction_counts ?? null);
@@ -209,23 +217,48 @@ export function PublicLightbox({
   }
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
-    if (zoom <= 1 || event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
+    if ((event.target as HTMLElement).closest("button")) return;
+    // Chưa zoom + ngón tay chạm: đây là ứng viên vuốt-chuyển-ảnh, không
+    // phải pan (pan chỉ có ý nghĩa khi ảnh đã phóng to hơn khung).
+    if (zoom <= 1) {
+      if (event.pointerType === "touch" && items.length > 1) {
+        swipeStartRef.current = { x: event.clientX, y: event.clientY };
+      }
+      return;
+    }
+    if (event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     dragStartRef.current = { x: event.clientX - pan.x, y: event.clientY - pan.y };
     setDragging(true);
   }
 
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
-    if (!dragStartRef.current) return;
-    setPan({
-      x: event.clientX - dragStartRef.current.x,
-      y: event.clientY - dragStartRef.current.y,
-    });
+    if (dragStartRef.current) {
+      setPan({
+        x: event.clientX - dragStartRef.current.x,
+        y: event.clientY - dragStartRef.current.y,
+      });
+      return;
+    }
   }
 
-  function stopDragging() {
+  function stopDragging(event: PointerEvent<HTMLDivElement>) {
     dragStartRef.current = null;
     setDragging(false);
+
+    const swipeStart = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!swipeStart) return;
+    const deltaX = event.clientX - swipeStart.x;
+    const deltaY = event.clientY - swipeStart.y;
+    // |deltaX| > |deltaY| loại trường hợp người dùng đang cuộn dọc (vuốt
+    // chéo lên/xuống) chứ không cố ý chuyển ảnh.
+    if (Math.abs(deltaX) < SWIPE_DISTANCE_THRESHOLD || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+    if (deltaX < 0) {
+      onNavigate((activeIndex + 1) % items.length);
+    } else {
+      onNavigate((activeIndex - 1 + items.length) % items.length);
+    }
   }
 
   async function copyLink() {

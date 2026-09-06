@@ -2545,6 +2545,19 @@ html.scrollable-page {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+/* Màn hẹp: nhãn "N tác phẩm đã chọn" + 3 nút hành động ép trên 1 hàng
+   space-between sẽ bị bóp rất chật (mỗi nút có icon+chữ) - xếp dọc để mỗi
+   phần đủ chỗ thở, nút hành động vẫn giữ flex-wrap để tự xuống dòng tiếp
+   nếu cần. */
+@media (max-width: 480px) {
+  .artworks-bulk-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .artworks-bulk-actions {
+    justify-content: flex-start;
+  }
+}
 .artworks-bulk-actions button {
   display: inline-flex;
   align-items: center;
