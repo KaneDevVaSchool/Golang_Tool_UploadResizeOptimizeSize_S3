@@ -1,10 +1,15 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { Download, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArtworkMetaForm, EMPTY_META_FORM_VALUES, type ArtworkMetaFormValues, isMetaFormValid } from "./ArtworkMetaForm";
 import type { ArtworkWithMeta, Award, GradeLevel, School } from "../../lib/artworkApi";
+import { downloadArtworkOriginal } from "../../lib/artworkApi";
+import { triggerBlobDownload } from "../../lib/artworkDownload";
 import type { TopicCategory } from "../../lib/topicCategoryApi";
 import { artworkImageURL } from "../../lib/artworkImage";
+import { formatBytes } from "../../lib/api";
+import { toast } from "../../lib/toastBus";
 
 type ArtworkEditModalProps = {
   open: boolean;
@@ -15,7 +20,7 @@ type ArtworkEditModalProps = {
   onTopicCategoryCreated?: (category: TopicCategory) => void;
   awards: Award[];
   busy?: boolean;
-  onSave: (values: ArtworkMetaFormValues) => void;
+  onSave: (values: ArtworkMetaFormValues, isPublished: boolean) => void;
   onClose: () => void;
 };
 
@@ -51,6 +56,8 @@ export function ArtworkEditModal({
   onClose,
 }: ArtworkEditModalProps) {
   const [values, setValues] = useState<ArtworkMetaFormValues>(EMPTY_META_FORM_VALUES);
+  const [isPublished, setIsPublished] = useState(true);
+  const [downloading, setDownloading] = useState(false);
   // Theo dõi artwork nào đã đồng bộ vào `values`, để phát hiện đổi tác phẩm
   // (đóng modal rồi bấm Sửa tác phẩm khác - component không unmount vì luôn
   // render, chỉ ẩn hiện qua `open`).
@@ -65,6 +72,20 @@ export function ArtworkEditModal({
   if (artwork && artwork.id !== syncedId) {
     setSyncedId(artwork.id);
     setValues(toFormValues(artwork, gradeLevels));
+    setIsPublished(artwork.is_published);
+  }
+
+  async function handleDownload() {
+    if (!artwork) return;
+    setDownloading(true);
+    try {
+      const { blob, fileName } = await downloadArtworkOriginal(artwork.id);
+      triggerBlobDownload(blob, fileName);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không tải được ảnh gốc");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   useEffect(() => {
@@ -118,8 +139,29 @@ export function ArtworkEditModal({
 
             <div className="artwork-modal-body">
               <div className="artwork-modal-grid">
-                <div className="artwork-modal-preview">
-                  <img src={artworkImageURL(artwork, "medium")} alt={artwork.title} />
+                <div className="artwork-modal-preview-col">
+                  <div className="artwork-modal-preview">
+                    <img src={artworkImageURL(artwork, "medium")} alt={artwork.title} />
+                  </div>
+                  <div className="artwork-modal-preview-meta">
+                    <span>{formatBytes(artwork.file_size)}</span>
+                    <button type="button" className="artwork-modal-download-btn" onClick={handleDownload} disabled={downloading}>
+                      {downloading ? <Loader2 size={14} className="spin" /> : <Download size={14} />}
+                      Tải ảnh gốc
+                    </button>
+                  </div>
+                  <label className="artwork-modal-publish-toggle">
+                    <input
+                      type="checkbox"
+                      checked={isPublished}
+                      disabled={busy}
+                      onChange={(e) => setIsPublished(e.target.checked)}
+                    />
+                    <span>
+                      Hiển thị công khai
+                      <small>Tắt để ẩn khỏi mọi trang public, không xoá dữ liệu.</small>
+                    </span>
+                  </label>
                 </div>
                 <div className="artwork-modal-fields">
                   <ArtworkMetaForm
@@ -144,7 +186,7 @@ export function ArtworkEditModal({
                 type="button"
                 className="btn btn-primary"
                 disabled={busy || !valid}
-                onClick={() => onSave(values)}
+                onClick={() => onSave(values, isPublished)}
               >
                 {busy ? "Đang lưu…" : "Lưu thay đổi"}
               </button>

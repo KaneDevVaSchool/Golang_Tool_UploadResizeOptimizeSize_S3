@@ -2,11 +2,11 @@
    Header + sidebar + page header port từ va-workspace (AppHeader.vue,
    AppSidebar.vue, AppLayout.vue, PageHeader.vue), dùng bộ token gốc
    --color, --space, --radius khai báo trong tokens.css cho .admin-shell.
-   KHÔNG đụng tới style UploadTool cũ. */
+   KHÔNG đụng tới .btn/.confirm-* dùng chung khai báo trong index.css. */
 
-/* index.css khoá html/body/#root overflow:hidden cho UploadTool (1 màn hình
-   cố định). Class này (gắn qua useScrollableBody hook) mở khoá lại cho các
-   trang cần cuộn theo body: /admin/login và khu vực public.
+/* index.css khoá html/body/#root overflow:hidden mặc định. Class này (gắn
+   qua useScrollableBody hook) mở khoá lại cho các trang cần cuộn theo body:
+   /admin/login và khu vực public.
    Khung /admin/* KHÔNG dùng nó - .admin-shell cao 100dvh và tự cuộn nội bộ
    trong .admin-content (xem AppLayout.vue của va-workspace). */
 html.scrollable-page,
@@ -1643,6 +1643,7 @@ html.scrollable-page {
    Gom vào 1 rule thay vì sửa rải rác từng component. */
 .admin-page-placeholder,
 .region-card,
+.dashboard-chart-card,
 .artworks-filter-bar,
 .artworks-table,
 .artwork-edit-panel,
@@ -2133,6 +2134,204 @@ html.scrollable-page {
 /* ---- Ba khu vực trưng bày ---------------------------------------------- */
 /* 3 cột đều nhau ở desktop - đúng bằng số khu vực, nên không cần auto-fit:
    một hàng luôn khớp, không bao giờ dư một ô lẻ xuống hàng dưới. */
+.dashboard-chart-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(16rem, 1fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.dashboard-chart-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1.05rem 1.15rem 1.1rem;
+  border-radius: var(--vas-radius-lg);
+  background: var(--vas-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-border),
+    var(--shadow-sm);
+}
+
+.dashboard-chart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-chart-header h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--vas-text);
+}
+
+.dashboard-chart-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.8rem;
+}
+
+.dashboard-chart-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--vas-text-muted);
+}
+
+.dashboard-chart-legend span {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+}
+
+/* Bộ chọn khoảng thời gian cho biểu đồ nhịp hoạt động - segmented control 3
+   nút + input tương ứng chế độ đang chọn. flex-wrap tự xuống dòng ở màn hẹp
+   thay vì cần breakpoint riêng. */
+.activity-range-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.activity-range-picker-modes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border-radius: var(--vas-radius-sm);
+  background: var(--vas-surface-muted);
+}
+
+.activity-range-picker-mode {
+  border: none;
+  background: transparent;
+  color: var(--vas-text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.32rem 0.6rem;
+  border-radius: calc(var(--vas-radius-sm) - 0.2rem);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.activity-range-picker-mode:hover:not(:disabled) {
+  color: var(--vas-text);
+}
+
+.activity-range-picker-mode:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.activity-range-picker-mode--active {
+  background: var(--vas-surface);
+  color: var(--vas-text);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.activity-range-picker-input {
+  font-size: 0.75rem;
+  color: var(--vas-text);
+  background: var(--vas-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--vas-radius-sm);
+  padding: 0.3rem 0.5rem;
+  min-width: 0;
+}
+
+.activity-range-picker-dates {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--vas-text-muted);
+  font-size: 0.75rem;
+}
+
+.activity-range-picker-dates .activity-range-picker-input {
+  flex: 1 1 7rem;
+}
+
+.dashboard-chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.dashboard-chart-grid {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.dashboard-chart-tick {
+  fill: var(--vas-text-muted);
+  font-size: 10px;
+  text-anchor: end;
+}
+
+.dashboard-chart-xlabel {
+  fill: var(--vas-text);
+  font-size: 10px;
+  text-anchor: middle;
+}
+
+.dashboard-grade-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  overflow-y: auto;
+  max-height: 16.5rem;
+}
+
+.dashboard-grade-bar {
+  display: grid;
+  grid-template-columns: 3.1rem minmax(0, 1fr) 2.1rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.dashboard-grade-bar-label {
+  color: var(--vas-text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-grade-bar-track {
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--vas-surface-muted);
+  overflow: hidden;
+}
+
+.dashboard-grade-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--vas-tri-thuc, #9a0036) 70%, var(--vas-khai-phong, #1750b5));
+}
+
+.dashboard-grade-bar-count {
+  color: var(--vas-text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .dashboard-region-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2363,6 +2562,10 @@ html.scrollable-page {
 }
 
 @media (max-width: 1080px) {
+  .dashboard-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-region-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2391,6 +2594,17 @@ html.scrollable-page {
   }
   .region-card-metric-label {
     display: none;
+  }
+
+  .activity-range-picker-mode {
+    font-size: 0.68rem;
+    padding: 0.3rem 0.5rem;
+  }
+  .activity-range-picker-dates {
+    width: 100%;
+  }
+  .activity-range-picker-dates .activity-range-picker-input {
+    flex: 1 1 0;
   }
 }
 
@@ -2447,21 +2661,23 @@ html.scrollable-page {
 
 .artworks-filter-bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.4rem;
   background: var(--vas-surface);
-  padding: 0.85rem;
+  padding: 0.6rem 0.7rem;
   border-radius: var(--vas-radius-md);
   box-shadow: var(--vas-shadow-sm);
+  overflow-x: auto;
 }
 
 .artworks-search-input {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  flex: 1 1 220px;
-  min-width: 0;
-  padding: 0.5rem 0.75rem;
+  gap: 0.35rem;
+  flex: 1 1 140px;
+  min-width: 100px;
+  padding: 0.4rem 0.6rem;
   border-radius: var(--vas-radius-sm);
   background: var(--vas-surface-muted);
   color: var(--vas-text-muted);
@@ -2471,34 +2687,48 @@ html.scrollable-page {
   min-width: 0;
   border: none;
   background: transparent;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   color: var(--vas-text);
   outline: none;
 }
 
 .artworks-filter-bar select {
-  padding: 0.5rem 0.6rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0.4rem 0.4rem;
   border-radius: var(--vas-radius-sm);
   border: 1px solid var(--vas-border);
   background: var(--vas-surface);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--vas-text);
-  max-width: 100%;
+  text-overflow: ellipsis;
+  max-width: 7rem;
+}
+/* Nhãn khu vực ngắn ("Tất cả khu vực") nhưng vẫn cần rộng hơn select khối. */
+.artworks-filter-bar select.artworks-filter-region {
+  max-width: 8.5rem;
+}
+/* Cơ sở có tên rất dài ("Trường Mầm non - Tiểu học - THCS..."), cần rộng
+   hơn hẳn các select còn lại để không bị cắt chữ quá sớm. */
+.artworks-filter-bar select.artworks-filter-school {
+  max-width: 11rem;
 }
 
 .artworks-featured-toggle {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
+  gap: 0.35rem;
+  font-size: 0.8rem;
   color: var(--vas-text-muted);
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 /* Chuyển đổi List <-> Grid - 2 icon-button dính liền như 1 khối segmented
    control, khớp phong cách các nút icon khác trong khu quản trị. */
 .artworks-view-switch {
   display: inline-flex;
+  flex: 0 0 auto;
   border-radius: var(--vas-radius-sm);
   overflow: hidden;
   border: 1px solid var(--vas-border);
@@ -2507,8 +2737,9 @@ html.scrollable-page {
 .artworks-view-switch button {
   display: grid;
   place-items: center;
-  width: 2.1rem;
-  height: 2.1rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  flex: 0 0 auto;
   border: none;
   background: var(--vas-surface);
   color: var(--vas-text-muted);
@@ -2526,61 +2757,143 @@ html.scrollable-page {
 }
 
 /* Thanh thao tác hàng loạt - nổi lên khi có tác phẩm được chọn, biến mất khi
-   bỏ chọn hết chứ không chiếm chỗ cố định trên trang. */
+   bỏ chọn hết chứ không chiếm chỗ cố định trên trang. Viền + bóng đổ (thay vì
+   chỉ đổi nền) để thanh đọc được là một lớp "nổi trên" danh sách, không phải
+   một dòng thông báo phẳng nằm giữa các phần tử khác. */
 .artworks-bulk-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.6rem;
-  padding: 0.65rem 1rem;
+  gap: 0.75rem;
+  padding: 0.6rem 0.7rem 0.6rem 1rem;
   background: var(--vas-tri-thuc-100);
-  color: var(--vas-tri-thuc);
+  border: 1px solid color-mix(in srgb, var(--vas-tri-thuc) 20%, transparent);
   border-radius: var(--vas-radius-md);
-  font-size: 0.85rem;
-  font-weight: 600;
+  box-shadow: var(--vas-shadow-sm);
 }
+.artworks-bulk-count {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--vas-tri-thuc);
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* Chấm số lượng: neo mắt vào một điểm tròn thay vì để con số trôi giữa chữ -
+   cùng ngôn ngữ với badge số lượng dùng ở những nơi khác trong admin. */
+.artworks-bulk-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.4rem;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--vas-tri-thuc);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.artworks-bulk-progress {
+  color: var(--vas-tri-thuc);
+  font-weight: 500;
+  opacity: 0.85;
+}
+
 .artworks-bulk-actions {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
-/* Màn hẹp: nhãn "N tác phẩm đã chọn" + 3 nút hành động ép trên 1 hàng
+/* Ranh giới trực quan trước nhóm nút nguy hiểm/thoát: một đường kẻ dọc mỏng
+   thay vì chỉ dựa vào màu, để mắt tách được "hành động lên tác phẩm" khỏi
+   "hành động xoá/thoát" ngay cả khi nhìn lướt. */
+.artworks-bulk-divider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 1.5rem;
+  background: color-mix(in srgb, var(--vas-tri-thuc) 22%, transparent);
+  margin: 0 0.2rem;
+}
+/* Màn hẹp: nhãn "N tác phẩm đã chọn" + nút hành động ép trên 1 hàng
    space-between sẽ bị bóp rất chật (mỗi nút có icon+chữ) - xếp dọc để mỗi
    phần đủ chỗ thở, nút hành động vẫn giữ flex-wrap để tự xuống dòng tiếp
    nếu cần. */
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .artworks-bulk-bar {
     flex-direction: column;
     align-items: stretch;
+    padding: 0.75rem;
   }
   .artworks-bulk-actions {
     justify-content: flex-start;
   }
+  .artworks-bulk-divider {
+    display: none;
+  }
 }
+@media (max-width: 480px) {
+  .artworks-bulk-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .artworks-bulk-actions button {
+    justify-content: center;
+  }
+}
+
 .artworks-bulk-actions button {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem 0.75rem;
-  border: none;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid transparent;
   border-radius: var(--vas-radius-sm);
   background: var(--vas-surface);
   color: var(--vas-text);
   font-size: 0.82rem;
   font-weight: 600;
+  line-height: 1.2;
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
-.artworks-bulk-actions button:hover {
+.artworks-bulk-actions button svg {
+  flex: 0 0 auto;
+}
+.artworks-bulk-actions button:hover:not(:disabled) {
   background: var(--vas-surface-muted);
+  border-color: color-mix(in srgb, var(--vas-tri-thuc) 18%, transparent);
+}
+.artworks-bulk-actions button:focus-visible {
+  outline: 2px solid var(--vas-tri-thuc);
+  outline-offset: 2px;
 }
 .artworks-bulk-actions button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
+/* "Bỏ chọn" là hành động thoát, không phải nghiệp vụ trên tác phẩm - để
+   trong suốt/không viền cho nó nhẹ hơn hẳn 3 nút thao tác thật, đồng thời
+   tách khỏi cụm bằng .artworks-bulk-divider ở trên. */
 .artworks-bulk-actions .artworks-bulk-clear {
   background: transparent;
+  border-color: transparent;
   color: var(--vas-tri-thuc);
+}
+.artworks-bulk-actions .artworks-bulk-clear:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--vas-tri-thuc) 10%, transparent);
+}
+.artworks-bulk-actions .artworks-bulk-danger {
+  background: var(--vas-surface);
+  border-color: var(--color-danger-tint-border, #f6c6cf);
+  color: var(--vas-danger);
+}
+.artworks-bulk-actions .artworks-bulk-danger:hover:not(:disabled) {
+  background: var(--color-danger-tint-bg, #fdecec);
+  border-color: var(--vas-danger);
 }
 
 /* Danh sách tác phẩm: CSS Grid với cột cố định qua minmax() để không rớt
@@ -2598,8 +2911,11 @@ html.scrollable-page {
 .artworks-table-head,
 .artworks-table-row {
   display: grid;
-  grid-template-columns: 1.75rem 3.5rem minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 0.9fr) 4.5rem minmax(0, 1fr) 4.5rem 6.5rem;
-  gap: 0.75rem;
+  /* 7 cột: chọn, ảnh, tên, cơ sở/khối (rộng hơn), giải, tương tác gộp, thao tác.
+     Trước đây 3 cột xem/cảm xúc/bình luận ăn hết ~11rem nên tên cơ sở dài
+     ("Trường Mầm non - Tiểu học - THCS - THPT Việt Mỹ - Bình Thới") bị cắt. */
+  grid-template-columns: 1.75rem 3.5rem minmax(0, 1.25fr) minmax(11rem, 1.7fr) minmax(0, 0.7fr) minmax(6.75rem, 0.7fr) 6.5rem;
+  gap: 0.65rem;
   align-items: center;
   padding: 0.65rem 1rem;
 }
@@ -2772,20 +3088,27 @@ html.scrollable-page {
   color: var(--vas-text-muted);
 }
 
+/* Dòng nhỏ hiển thị dung lượng file gốc - cùng cỡ chữ nhạt như tên học sinh,
+   dùng chung ở cả List (.artworks-cell-title) và Grid (.artworks-grid-body). */
+.artworks-cell-filesize {
+  font-size: 0.72rem;
+  color: var(--vas-text-muted);
+  opacity: 0.8;
+}
+
 .artworks-cell-meta {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: 0.1rem;
+  gap: 0.15rem;
   font-size: 0.78rem;
   color: var(--vas-text-muted);
 }
 .artworks-cell-meta > span:first-child {
   color: var(--vas-text);
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.3;
+  overflow-wrap: break-word;
 }
 .artworks-cell-region {
   color: var(--vas-tri-thuc);
@@ -2811,25 +3134,44 @@ html.scrollable-page {
   color: var(--vas-text-muted);
 }
 
-.artworks-cell-views,
-.artworks-cell-comments {
+/* Một cột gộp: lượt xem + bình luận trên hàng 1, cảm xúc (nếu có) hàng 2. */
+.artworks-cell-engagement {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.artworks-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.artworks-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  text-align: center;
+  color: var(--vas-text);
+  line-height: 1;
+}
+.artworks-stat svg {
+  flex-shrink: 0;
+  color: var(--vas-text-muted);
 }
 
 .reaction-icons {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  font-size: 0.78rem;
-}
-.reaction-icons--empty {
-  color: var(--vas-text-muted);
+  gap: 0.25rem 0.4rem;
+  font-size: 0.72rem;
+  min-width: 0;
 }
 .reaction-icon-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: 0.12rem;
 }
 
 .artworks-cell-actions {
@@ -2885,18 +3227,13 @@ html.scrollable-page {
   .artworks-table-head {
     display: none;
   }
-  /* Mỗi ô thống kê có grid-area RIÊNG. Trước đây views/reactions/comments
-     cùng gán area "stats" nên grid xếp chồng cả 3 lên nhau (số lượt xem in
-     đè lên hàng cảm xúc). Nay: lượt xem + bình luận đứng cạnh nhau ở dòng
-     "stats", cảm xúc chiếm dòng riêng vì có thể xuống nhiều hàng. */
   .artworks-table-row {
     grid-template-columns: 1.5rem 3.25rem auto minmax(0, 1fr);
     grid-template-areas:
       "sel   thumb title    title"
       "sel   thumb meta     meta"
       "award award award    award"
-      "views views comments ."
-      "react react react    react"
+      "stats stats stats    stats"
       "acts  acts  acts     acts";
     row-gap: 0.4rem;
     padding: 0.75rem;
@@ -2906,23 +3243,7 @@ html.scrollable-page {
   .artworks-cell-title { grid-area: title; }
   .artworks-cell-meta { grid-area: meta; }
   .artworks-cell-award { grid-area: award; }
-
-  .artworks-cell-views,
-  .artworks-cell-comments {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    text-align: left;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--vas-text-muted);
-  }
-  .artworks-cell-views { grid-area: views; }
-  .artworks-cell-comments { grid-area: comments; }
-  .artworks-cell-reactions { grid-area: react; }
-
-  .artworks-cell-views::before { content: "👁"; }
-  .artworks-cell-comments::before { content: "💬"; }
+  .artworks-cell-engagement { grid-area: stats; }
 
   /* Hàng nút thao tác tách khỏi phần dữ liệu bằng 1 đường kẻ mảnh. */
   .artworks-cell-actions {
@@ -3007,6 +3328,13 @@ html.scrollable-page {
   gap: 1.25rem;
 }
 
+.artwork-modal-preview-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
 .artwork-modal-preview {
   border-radius: var(--vas-radius-md);
   overflow: hidden;
@@ -3018,6 +3346,64 @@ html.scrollable-page {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.artwork-modal-preview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--vas-text-muted);
+}
+
+.artwork-modal-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--vas-border);
+  border-radius: var(--vas-radius-sm);
+  background: var(--vas-surface);
+  color: var(--vas-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.artwork-modal-download-btn:hover:not(:disabled) {
+  background: var(--vas-surface-muted);
+}
+.artwork-modal-download-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Toggle "Hiển thị công khai" (is_published) - đặt cạnh ảnh thay vì trong
+   ArtworkMetaForm vì đây là quyết định TRẠNG THÁI của tác phẩm (giống
+   is_featured, đặt riêng ở nút icon ngoài form), không phải METADATA biên
+   tập nội dung mà ArtworkMetaForm dùng chung cho cả 3 nơi (kể cả lúc tạo
+   mới, khi "công khai" luôn mặc định true). */
+.artwork-modal-publish-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border-radius: var(--vas-radius-sm);
+  background: var(--vas-surface-muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--vas-text);
+}
+.artwork-modal-publish-toggle input {
+  margin-top: 0.2rem;
+}
+.artwork-modal-publish-toggle small {
+  display: block;
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--vas-text-muted);
+  margin-top: 0.1rem;
 }
 
 .artwork-modal-footer {

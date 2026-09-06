@@ -4,22 +4,18 @@ import {
   Check,
   EyeOff,
   GripVertical,
-  Images,
   Medal,
   Pencil,
   Plus,
   Star,
   Trash2,
   Trophy,
-  Users,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
-import { RegionSummaryStrip } from "../../components/admin/RegionSummaryStrip";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { RequiredMark } from "../../components/admin/ArtworkMetaForm";
-import { useRegionSummary } from "../../hooks/useRegionSummary";
 import { createAward, deleteAward, fetchAwards, updateAward, type Award } from "../../lib/awardApi";
 import { fetchGradeLevels, type GradeLevel } from "../../lib/artworkApi";
 import { toast } from "../../lib/toastBus";
@@ -108,8 +104,6 @@ export default function AwardsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Award | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const regionSummary = useRegionSummary();
 
   // Bản nháp thứ tự đang kéo - chỉ ghi lên server khi người dùng buông và
   // thứ tự thực sự đổi, tránh gọi API dồn dập theo từng khung hình kéo.
@@ -300,13 +294,6 @@ export default function AwardsPage() {
         title="Giải thưởng"
         subtitle={awards.length > 0 ? `${awards.length} hạng mục vinh danh · kéo để đổi thứ tự` : undefined}
         primaryAction={{ label: "Thêm giải thưởng", icon: Plus, onClick: startCreate, iconOnly: true }}
-      />
-
-      <RegionSummaryStrip
-        data={regionSummary.data}
-        loading={regionSummary.loading}
-        artworkIcon={Images}
-        studentIcon={Users}
       />
 
       <div className="awards-layout">

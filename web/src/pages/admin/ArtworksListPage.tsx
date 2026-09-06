@@ -1,14 +1,15 @@
-import { Images, LayoutGrid, List, Pencil, Plus, Search, Star, Trash2, Users } from "lucide-react";
+import { Download, Eye, LayoutGrid, List, Loader2, MessageCircle, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import { ArtworkEditModal } from "../../components/admin/ArtworkEditModal";
 import { ReactionIcons } from "../../components/admin/ReactionIcons";
-import { RegionSummaryStrip } from "../../components/admin/RegionSummaryStrip";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { useRegionSummary } from "../../hooks/useRegionSummary";
 import { artworkImageURL } from "../../lib/artworkImage";
+import { formatBytes } from "../../lib/api";
+import { buildArtworkZip, triggerBlobDownload, type BulkDownloadProgress } from "../../lib/artworkDownload";
 import {
   deleteArtwork,
+  deleteArtworkBatch,
   fetchArtworks,
   fetchGradeLevels,
   fetchSchools,
@@ -21,7 +22,7 @@ import {
 } from "../../lib/artworkApi";
 import { fetchAwards } from "../../lib/awardApi";
 import type { Award } from "../../lib/artworkApi";
-import { REGION_LABEL } from "../../lib/chartTheme";
+import { formatNumber, REGION_LABEL, REGION_ORDER, type RegionKey } from "../../lib/chartTheme";
 import { fetchTopicCategories, type TopicCategory } from "../../lib/topicCategoryApi";
 import type { ArtworkMetaFormValues } from "../../components/admin/ArtworkMetaForm";
 import { toast } from "../../lib/toastBus";
@@ -50,6 +51,7 @@ export default function ArtworksListPage() {
   const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState("");
+  const [regionFilter, setRegionFilter] = useState<RegionKey | "">("");
   const [schoolFilter, setSchoolFilter] = useState<number | "">("");
   const [gradeFilter, setGradeFilter] = useState<number | "">("");
   const [topicFilter, setTopicFilter] = useState<number | "">("");
@@ -69,8 +71,9 @@ export default function ArtworksListPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ArtworkWithMeta | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const regionSummary = useRegionSummary();
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDownloadProgress, setBulkDownloadProgress] = useState<BulkDownloadProgress | null>(null);
 
   useEffect(() => {
     Promise.all([fetchSchools(), fetchGradeLevels(), fetchTopicCategories(true), fetchAwards(true)])
@@ -89,6 +92,7 @@ export default function ArtworksListPage() {
       fetchArtworks(
         {
           search: search || undefined,
+          region: regionFilter || undefined,
           school_id: schoolFilter || undefined,
           grade_level_id: gradeFilter || undefined,
           topic_category_id: topicFilter || undefined,
@@ -114,7 +118,7 @@ export default function ArtworksListPage() {
           if (!controller?.signal.aborted) setLoading(false);
         });
     },
-    [search, schoolFilter, gradeFilter, topicFilter, awardFilter, featuredOnly, page],
+    [search, regionFilter, schoolFilter, gradeFilter, topicFilter, awardFilter, featuredOnly, page],
   );
 
   useEffect(() => {
@@ -145,7 +149,7 @@ export default function ArtworksListPage() {
     setSelected((prev) => (prev.size === items.length ? new Set() : new Set(items.map((i) => i.id))));
   }
 
-  async function handleSave(values: ArtworkMetaFormValues) {
+  async function handleSave(values: ArtworkMetaFormValues, isPublished: boolean) {
     if (!editing) return;
     setSaving(true);
     try {
@@ -156,7 +160,7 @@ export default function ArtworksListPage() {
         grade_level_id: Number(values.gradeLevelId),
         topic_category_id: values.topicCategoryId ? Number(values.topicCategoryId) : null,
         is_featured: editing.is_featured,
-        is_published: editing.is_published,
+        is_published: isPublished,
         award_ids: values.awardIds,
       });
       toast.success("Đã cập nhật tác phẩm.");
@@ -214,6 +218,50 @@ export default function ArtworksListPage() {
     }
   }
 
+  async function handleBulkDelete() {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      const result = await deleteArtworkBatch(ids);
+      if (result.deleted < result.requested) {
+        toast.error(`Chỉ xoá được ${result.deleted}/${result.requested} tác phẩm - một vài ảnh gặp lỗi khi xoá trên kho lưu trữ.`);
+      } else {
+        toast.success(`Đã xoá ${result.deleted} tác phẩm.`);
+      }
+      setBulkDeleteOpen(false);
+      setSelected(new Set());
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không xoá được các tác phẩm đã chọn");
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  async function handleBulkDownload() {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setBulkDownloadProgress({ done: 0, total: ids.length });
+    try {
+      const { blob, succeeded, failed } = await buildArtworkZip(ids, setBulkDownloadProgress);
+      if (succeeded === 0) {
+        toast.error("Không tải được ảnh nào - vui lòng thử lại.");
+        return;
+      }
+      triggerBlobDownload(blob, `tac-pham-${new Date().toISOString().slice(0, 10)}.zip`);
+      if (failed.length > 0) {
+        toast.error(`Đã tải ${succeeded}/${ids.length} ảnh - ${failed.length} ảnh lỗi không có trong file zip.`);
+      } else {
+        toast.success(`Đã tải xong ${succeeded} ảnh, đóng gói thành 1 file zip.`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không tải được ảnh hàng loạt");
+    } finally {
+      setBulkDownloadProgress(null);
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return (
@@ -222,13 +270,6 @@ export default function ArtworksListPage() {
         title="Thư viện tác phẩm"
         subtitle={totalCount > 0 ? `${totalCount} tác phẩm đang được lưu giữ` : undefined}
         primaryAction={{ label: "Đưa tác phẩm lên", icon: Plus, to: "/admin/artworks/upload", iconOnly: true }}
-      />
-
-      <RegionSummaryStrip
-        data={regionSummary.data}
-        loading={regionSummary.loading}
-        artworkIcon={Images}
-        studentIcon={Users}
       />
 
       <div className="artworks-filter-bar">
@@ -246,6 +287,31 @@ export default function ArtworksListPage() {
         </div>
 
         <select
+          className="artworks-filter-region"
+          value={regionFilter}
+          onChange={(e) => {
+            const next = (e.target.value || "") as RegionKey | "";
+            setPage(1);
+            setRegionFilter(next);
+            // Cơ sở đang chọn không thuộc khu vực mới thì bỏ, tránh lọc AND
+            // ra danh sách rỗng.
+            if (next && schoolFilter) {
+              const current = schools.find((s) => s.id === schoolFilter);
+              if (current && current.region !== next) setSchoolFilter("");
+            }
+          }}
+          aria-label="Lọc theo khu vực"
+        >
+          <option value="">Tất cả khu vực</option>
+          {REGION_ORDER.map((key) => (
+            <option key={key} value={key}>
+              {REGION_LABEL[key]}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="artworks-filter-school"
           value={schoolFilter}
           onChange={(e) => {
             setPage(1);
@@ -253,7 +319,7 @@ export default function ArtworksListPage() {
           }}
         >
           <option value="">Tất cả cơ sở</option>
-          {schools.map((s) => (
+          {(regionFilter ? schools.filter((s) => s.region === regionFilter) : schools).map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
             </option>
@@ -341,13 +407,33 @@ export default function ArtworksListPage() {
 
       {selected.size > 0 && (
         <div className="artworks-bulk-bar">
-          <span>{selected.size} tác phẩm đã chọn</span>
+          <span className="artworks-bulk-count">
+            <span className="artworks-bulk-count-badge">{selected.size}</span>
+            tác phẩm đã chọn
+            {bulkDownloadProgress && (
+              <span className="artworks-bulk-progress">
+                · đang tải {bulkDownloadProgress.done}/{bulkDownloadProgress.total}…
+              </span>
+            )}
+          </span>
           <div className="artworks-bulk-actions">
             <button type="button" disabled={bulkBusy} onClick={() => handleBulkSetFeatured(true)}>
               <Star size={14} /> Đánh dấu tiêu biểu
             </button>
             <button type="button" disabled={bulkBusy} onClick={() => handleBulkSetFeatured(false)}>
               <Star size={14} /> Bỏ tiêu biểu
+            </button>
+            <button type="button" disabled={Boolean(bulkDownloadProgress)} onClick={handleBulkDownload}>
+              {bulkDownloadProgress ? <Loader2 size={14} className="spin" /> : <Download size={14} />} Tải ảnh xuống (.zip)
+            </button>
+            <span className="artworks-bulk-divider" aria-hidden="true" />
+            <button
+              type="button"
+              className="artworks-bulk-danger"
+              disabled={bulkBusy}
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              <Trash2 size={14} /> Xoá
             </button>
             <button type="button" className="artworks-bulk-clear" disabled={bulkBusy} onClick={() => setSelected(new Set())}>
               Bỏ chọn
@@ -381,6 +467,7 @@ export default function ArtworksListPage() {
                 <span className="artworks-grid-meta">
                   {item.school_name} · {item.grade_label}
                 </span>
+                <span className="artworks-cell-filesize">{formatBytes(item.file_size)}</span>
                 {item.awards && item.awards.length > 0 && (
                   <span className="artworks-cell-award">
                     {item.awards.map((a) => (
@@ -430,9 +517,7 @@ export default function ArtworksListPage() {
             <span>Tác phẩm / Học sinh</span>
             <span>Cơ sở / Khối</span>
             <span>Giải</span>
-            <span>Lượt xem</span>
-            <span>Cảm xúc</span>
-            <span>Bình luận</span>
+            <span>Tương tác</span>
             <span>Thao tác</span>
           </div>
           {items.map((item) => (
@@ -451,11 +536,14 @@ export default function ArtworksListPage() {
               <span className="artworks-cell-title" role="cell">
                 <strong title={item.title}>{item.title}</strong>
                 <span title={item.student_name}>{item.student_name}</span>
+                <span className="artworks-cell-filesize">{formatBytes(item.file_size)}</span>
               </span>
               <span className="artworks-cell-meta" role="cell">
                 <span>{item.school_name}</span>
-                <span className="artworks-cell-region">{REGION_LABEL[item.region] ?? item.region}</span>
-                <span>{item.grade_label}</span>
+                <span className="artworks-cell-region">
+                  {REGION_LABEL[item.region] ?? item.region}
+                  {item.grade_label ? ` · ${item.grade_label}` : ""}
+                </span>
               </span>
               <span className="artworks-cell-award" role="cell">
                 {item.awards && item.awards.length > 0 ? (
@@ -468,14 +556,22 @@ export default function ArtworksListPage() {
                   <span className="artworks-cell-empty">—</span>
                 )}
               </span>
-              <span className="artworks-cell-views" role="cell">
-                {item.view_count}
-              </span>
-              <span className="artworks-cell-reactions" role="cell">
+              <span
+                className="artworks-cell-engagement"
+                role="cell"
+                aria-label={`Lượt xem ${formatNumber(item.view_count)}, bình luận ${formatNumber(item.comment_count)}`}
+              >
+                <span className="artworks-stat-row">
+                  <span className="artworks-stat" title="Lượt xem">
+                    <Eye size={13} strokeWidth={1.75} aria-hidden />
+                    <span>{formatNumber(item.view_count)}</span>
+                  </span>
+                  <span className="artworks-stat" title="Bình luận">
+                    <MessageCircle size={13} strokeWidth={1.75} aria-hidden />
+                    <span>{formatNumber(item.comment_count)}</span>
+                  </span>
+                </span>
                 <ReactionIcons counts={item.reaction_counts} />
-              </span>
-              <span className="artworks-cell-comments" role="cell">
-                {item.comment_count}
               </span>
               <span className="artworks-cell-actions" role="cell">
                 <button
@@ -538,13 +634,25 @@ export default function ArtworksListPage() {
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         title="Xoá tác phẩm này?"
-        message={`"${deleteTarget?.title ?? ""}" sẽ bị xoá khỏi hệ thống. Hành động này không thể hoàn tác.`}
+        message={`"${deleteTarget?.title ?? ""}" sẽ bị xoá khỏi hệ thống. Hành động này không thể hoàn tác`}
         confirmLabel="Xoá"
         cancelLabel="Huỷ"
         busyLabel="Đang xoá…"
         busy={deleting}
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title={`Xoá ${selected.size} tác phẩm đã chọn?`}
+        message="Toàn bộ tác phẩm đang chọn sẽ bị xoá khỏi hệ thống. Hành động này không thể hoàn tác"
+        confirmLabel="Xoá tất cả"
+        cancelLabel="Huỷ"
+        busyLabel="Đang xoá…"
+        busy={bulkDeleting}
+        onConfirm={handleBulkDelete}
+        onCancel={() => setBulkDeleteOpen(false)}
       />
     </div>
   );

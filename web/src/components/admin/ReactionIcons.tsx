@@ -20,7 +20,7 @@ export function ReactionIcons({ counts }: { counts: Record<string, number> | nul
   );
 
   if (entries.length === 0) {
-    return <span className="reaction-icons reaction-icons--empty">—</span>;
+    return null;
   }
 
   return (

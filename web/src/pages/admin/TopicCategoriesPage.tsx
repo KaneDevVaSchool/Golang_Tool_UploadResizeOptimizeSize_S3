@@ -1,11 +1,9 @@
 import { AnimatePresence, Reorder, motion, useDragControls } from "framer-motion";
-import { Check, GripVertical, Images, Layers, Pencil, Plus, Trash2, Users, X } from "lucide-react";
+import { Check, GripVertical, Layers, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
-import { RegionSummaryStrip } from "../../components/admin/RegionSummaryStrip";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { RequiredMark } from "../../components/admin/ArtworkMetaForm";
-import { useRegionSummary } from "../../hooks/useRegionSummary";
 import { TOPIC_CATEGORY_COLOR_PRESETS, TOPIC_CATEGORY_DEFAULT_COLOR } from "../../components/admin/topicCategoryColors";
 import {
   createTopicCategory,
@@ -69,8 +67,6 @@ export default function TopicCategoriesPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TopicCategory | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const regionSummary = useRegionSummary();
 
   // Bản nháp thứ tự đang kéo, theo từng nhóm cấp học - cùng lý do tách khỏi
   // `categories` như AwardsPage: chỉ ghi API khi buông tay và thứ tự thực sự đổi.
@@ -265,13 +261,6 @@ export default function TopicCategoriesPage() {
         title="Nhóm chủ đề sáng tạo"
         subtitle={categories.length > 0 ? `${categories.length} nhóm chủ đề theo thể lệ hội thi · kéo để đổi thứ tự` : undefined}
         primaryAction={{ label: "Thêm nhóm chủ đề", icon: Plus, onClick: startCreate, iconOnly: true }}
-      />
-
-      <RegionSummaryStrip
-        data={regionSummary.data}
-        loading={regionSummary.loading}
-        artworkIcon={Images}
-        studentIcon={Users}
       />
 
       <div className="awards-layout">

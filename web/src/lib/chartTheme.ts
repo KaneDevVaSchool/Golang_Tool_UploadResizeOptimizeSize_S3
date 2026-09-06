@@ -27,6 +27,10 @@ export const REGION_LABEL: Record<string, string> = {
   vungtau: "Vũng Tàu",
 };
 
+export const REGION_ORDER = ["saigon", "cantho", "vungtau"] as const;
+
+export type RegionKey = (typeof REGION_ORDER)[number];
+
 /** Định dạng số kiểu Việt Nam (1.284) - dùng thống nhất mọi nơi. */
 export function formatNumber(value: number): string {
   return value.toLocaleString("vi-VN");
