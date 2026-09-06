@@ -25,6 +25,11 @@ type ArtworkRepository interface {
 	// UI (tổng số trang), tính bằng query COUNT(*) riêng cùng điều kiện WHERE.
 	List(ctx context.Context, filter models.ArtworkFilter) ([]*models.Artwork, int64, error)
 	SetFeatured(ctx context.Context, id int64, featured bool) error
+	// SetFeaturedBatch cập nhật is_featured cho nhiều id trong 1 câu UPDATE -
+	// dùng cho thao tác bulk ở trang quản trị, tránh N round-trip khi admin
+	// chọn hàng chục tác phẩm cùng lúc. Id không tồn tại bị bỏ qua lặng lẽ
+	// (không coi là lỗi) vì RowsAffected < len(ids) không tự nó là bất thường.
+	SetFeaturedBatch(ctx context.Context, ids []int64, featured bool) error
 }
 
 type artworkRepository struct {
@@ -35,16 +40,17 @@ func NewArtworkRepository(db *database.DB) ArtworkRepository {
 	return &artworkRepository{db: db}
 }
 
-const artworkSelectColumns = `id, title, student_id, school_id, grade_level_id, s3_key, s3_url, thumbnail_url, variants, file_size, width, height, is_featured, is_published, view_count, upload_id, created_by, created_at, updated_at`
+const artworkSelectColumns = `id, title, student_id, school_id, grade_level_id, topic_category_id, s3_key, s3_url, thumbnail_url, variants, file_size, width, height, is_featured, is_published, view_count, upload_id, created_by, created_at, updated_at`
 
 func scanArtwork(scanner interface{ Scan(dest ...any) error }) (*models.Artwork, error) {
 	a := &models.Artwork{}
 	var thumbnailURL sql.NullString
 	var width, height sql.NullInt64
 	var uploadID, createdBy sql.NullInt64
+	var topicCategoryID sql.NullInt64
 
 	err := scanner.Scan(
-		&a.ID, &a.Title, &a.StudentID, &a.SchoolID, &a.GradeLevelID, &a.S3Key, &a.S3URL, &thumbnailURL,
+		&a.ID, &a.Title, &a.StudentID, &a.SchoolID, &a.GradeLevelID, &topicCategoryID, &a.S3Key, &a.S3URL, &thumbnailURL,
 		&a.Variants,
 		&a.FileSize, &width, &height, &a.IsFeatured, &a.IsPublished, &a.ViewCount, &uploadID, &createdBy,
 		&a.CreatedAt, &a.UpdatedAt,
@@ -69,6 +75,9 @@ func scanArtwork(scanner interface{ Scan(dest ...any) error }) (*models.Artwork,
 	if createdBy.Valid {
 		a.CreatedBy = &createdBy.Int64
 	}
+	if topicCategoryID.Valid {
+		a.TopicCategoryID = &topicCategoryID.Int64
+	}
 	return a, nil
 }
 
@@ -76,13 +85,13 @@ func (r *artworkRepository) Create(ctx context.Context, tx *database.Tx, artwork
 	now := time.Now()
 	query := `
 		INSERT INTO artworks (
-			title, student_id, school_id, grade_level_id, s3_key, s3_url, thumbnail_url, variants,
+			title, student_id, school_id, grade_level_id, topic_category_id, s3_key, s3_url, thumbnail_url, variants,
 			file_size, width, height, is_featured, is_published, view_count, upload_id, created_by,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
 	`
 	result, err := tx.ExecContext(ctx, query,
-		artwork.Title, artwork.StudentID, artwork.SchoolID, artwork.GradeLevelID, artwork.S3Key, artwork.S3URL, artwork.ThumbnailURL, artwork.Variants,
+		artwork.Title, artwork.StudentID, artwork.SchoolID, artwork.GradeLevelID, artwork.TopicCategoryID, artwork.S3Key, artwork.S3URL, artwork.ThumbnailURL, artwork.Variants,
 		artwork.FileSize, artwork.Width, artwork.Height, artwork.IsFeatured, artwork.IsPublished, artwork.UploadID, artwork.CreatedBy,
 		now, now,
 	)
@@ -105,13 +114,13 @@ func (r *artworkRepository) Create(ctx context.Context, tx *database.Tx, artwork
 func (r *artworkRepository) Update(ctx context.Context, artwork *models.Artwork) error {
 	query := `
 		UPDATE artworks
-		SET title = ?, student_id = ?, school_id = ?, grade_level_id = ?,
+		SET title = ?, student_id = ?, school_id = ?, grade_level_id = ?, topic_category_id = ?,
 		    is_featured = ?, is_published = ?, updated_at = ?
 		WHERE id = ?
 	`
 	now := time.Now()
 	result, err := r.db.ExecContext(ctx, query,
-		artwork.Title, artwork.StudentID, artwork.SchoolID, artwork.GradeLevelID,
+		artwork.Title, artwork.StudentID, artwork.SchoolID, artwork.GradeLevelID, artwork.TopicCategoryID,
 		artwork.IsFeatured, artwork.IsPublished, now, artwork.ID,
 	)
 	if err != nil {
@@ -170,6 +179,29 @@ func (r *artworkRepository) SetFeatured(ctx context.Context, id int64, featured 
 	return nil
 }
 
+func (r *artworkRepository) SetFeaturedBatch(ctx context.Context, ids []int64, featured bool) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids)+2)
+	args = append(args, featured, time.Now())
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(
+		`UPDATE artworks SET is_featured = ?, updated_at = ? WHERE id IN (%s)`,
+		strings.Join(placeholders, ","),
+	)
+	if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
+		return fmt.Errorf("failed to set featured batch: %w", err)
+	}
+	return nil
+}
+
 // List xây WHERE động theo filter, dùng LIKE cho search (an toàn với dấu
 // tiếng Việt hơn FULLTEXT - xem docs/plan phase 3, mục rủi ro #2: FULLTEXT
 // tokenizer tiếng Việt có dấu có thể không khớp chính xác, LIKE chấp nhận
@@ -199,6 +231,10 @@ func (r *artworkRepository) List(ctx context.Context, filter models.ArtworkFilte
 	if filter.EducationLevel != "" {
 		where = append(where, "artworks.grade_level_id IN (SELECT id FROM grade_levels WHERE education_level = ?)")
 		args = append(args, filter.EducationLevel)
+	}
+	if filter.TopicCategoryID != nil {
+		where = append(where, "artworks.topic_category_id = ?")
+		args = append(args, *filter.TopicCategoryID)
 	}
 	if filter.AwardID != nil {
 		where = append(where, "artworks.id IN (SELECT artwork_id FROM artwork_awards WHERE award_id = ?)")

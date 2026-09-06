@@ -19,7 +19,7 @@ Miền nghiệp vụ trung tâm: từ file ảnh thô đến tác phẩm hiển 
    artworks(is_published=1, is_featured=0)  ─── hiện ở /phong-trien-lam
             │
             ├─ ③ PATCH .../featured=true  ──▶ hiện thêm ở /tac-pham-tieu-bieu
-            ├─ ④ PUT ... {award_id}       ──▶ hiện thêm ở /bang-vang
+            ├─ ④ PUT ... {award_ids}      ──▶ hiện thêm ở /bang-vang
             ├─ ⑤ PUT ... {is_published:0} ──▶ ẩn khỏi mọi trang public
             └─ ⑥ DELETE                   ──▶ xoá bản ghi (⚠️ file S3 vẫn còn)
 ```
@@ -83,16 +83,22 @@ mất toàn bộ dữ liệu tác phẩm chỉ vì lỗi phụ.
 ảnh phải xoá tác phẩm và tạo mới. Chủ đích: tránh trường hợp bản ghi trỏ tới ảnh này nhưng
 lượt xem/bình luận lại thuộc về ảnh cũ.
 
-**Ngữ nghĩa ba trạng thái của `AwardID`** (`artwork_service.go:65`):
+**Ngữ nghĩa ba trạng thái của `AwardIDs`** (`artwork_service.go:76-80`):
 
 | Giá trị | Ý nghĩa |
 |---|---|
-| `nil` (không gửi trường) | Giữ nguyên giải hiện tại |
-| `0` | Gỡ hết giải |
-| `> 0` | Gỡ giải cũ rồi gắn giải này |
+| `nil` (không gửi trường trong JSON) | Giữ nguyên giải hiện tại |
+| `[]int64{}` (mảng rỗng) | Gỡ hết giải |
+| Danh sách khác rỗng | Gỡ giải cũ rồi gắn **toàn bộ** danh sách này |
 
-Việc "gỡ hết rồi gắn lại" phản ánh giới hạn của UI (một giải mỗi tác phẩm) trên một schema
-vốn hỗ trợ N:N. Nếu sau này UI cho nhiều giải, chỗ này phải sửa lại.
+Một tác phẩm có thể nhận nhiều giải cùng lúc (vd giải chính Nhất/Nhì/Ba + giải Đặc biệt
+phụ) — `ArtworkMetaForm` cho chọn nhiều giải qua checkbox (`awardIds: number[]`), không còn
+giới hạn một giải/tác phẩm như bản UI ban đầu. Giới hạn cũ (single-select) chưa từng nằm ở
+schema: `artwork_awards` (migration 009) vốn đã là bảng nối N:N; giới hạn chỉ do UI cũ chọn
+1 giải áp lên request. Phân biệt "không gửi trường" với "gửi mảng rỗng" dựa vào hành vi có
+sẵn của `encoding/json` trên slice thường (`AwardIDs []int64` trong `updateArtworkBody`,
+`artwork_handler.go:210`): key vắng mặt trong JSON giữ `AwardIDs` là `nil`, còn `"award_ids":
+[]` giải mã ra slice rỗng khác `nil` — không cần kiểu con trỏ.
 
 ⚠️ `UpdateArtwork` sửa `school_id`/`grade_level_id` trên bảng `artworks` nhưng **không đồng
 bộ ngược** về `students`. Hai bảng có thể lệch nhau. Chi tiết trong
@@ -124,6 +130,7 @@ duy nhất là public luôn ép `IsPublished=true`.
 | `SchoolID` | `artworks.school_id = ?` |
 | `GradeLevelID` | `artworks.grade_level_id = ?` |
 | `EducationLevel` | `grade_level_id IN (SELECT id FROM grade_levels WHERE education_level = ?)` |
+| `TopicCategoryID` | `artworks.topic_category_id = ?` |
 | `AwardID` | `id IN (SELECT artwork_id FROM artwork_awards WHERE award_id = ?)` |
 | `IsFeatured` / `IsPublished` | So sánh trực tiếp |
 
@@ -145,27 +152,28 @@ Sắp xếp cố định `ORDER BY artworks.created_at DESC` — mới nhất tr
 
 ## 6. Enrich — tránh N+1
 
-`ArtworkWithMeta` gộp tác phẩm với dữ liệu từ 6 bảng khác. Nếu truy vấn ngây thơ, hiển thị
-24 tác phẩm sẽ tốn ~150 truy vấn.
+`ArtworkWithMeta` gộp tác phẩm với dữ liệu từ nhiều bảng khác. Nếu truy vấn ngây thơ, hiển
+thị 24 tác phẩm sẽ tốn hàng trăm truy vấn.
 
-`enrichArtworks()` (`artwork_service.go:354`) gom lại thành **truy vấn theo lô**:
+`enrichArtworks()` (`artwork_service.go`) gom lại thành **truy vấn theo lô**:
 
 ```text
 1 query  → awards theo danh sách artwork_id     (ListByArtworkIDs)
 1 query  → đếm reaction theo lô                 (CountByArtworkBatch)
 1 query  → đếm comment theo lô                  (CountByArtworkBatch)
-1 query  → toàn bộ schools      (ít dòng, nạp hết rồi map trong bộ nhớ)
-1 query  → toàn bộ grade_levels (12 dòng, tương tự)
+1 query  → toàn bộ schools          (ít dòng, nạp hết rồi map trong bộ nhớ)
+1 query  → toàn bộ grade_levels     (12 dòng, tương tự)
+1 query  → toàn bộ topic_categories (vài chục dòng, tương tự)
 N query  → student theo từng artwork   ⚠️ CHƯA gom lô
 ```
 
-⚠️ **Vòng lặp student còn sót lại** (`artwork_service.go:397`): mỗi tác phẩm vẫn tốn một
-truy vấn lấy tên học sinh. Với `page_size` 24 là 24 truy vấn thêm mỗi lần tải trang. Đây là
-nợ kỹ thuật đã xác định — cần thêm `StudentRepository.GetByIDs()`. Xem
-[plan/02-roadmap.md](../plan/02-roadmap.md).
+⚠️ **Vòng lặp student còn sót lại**: mỗi tác phẩm vẫn tốn một truy vấn lấy tên học sinh. Với
+`page_size` 24 là 24 truy vấn thêm mỗi lần tải trang. Đây là nợ kỹ thuật đã xác định — cần
+thêm `StudentRepository.GetByIDs()`. Xem [plan/02-roadmap.md](../plan/02-roadmap.md).
 
-`schools` và `grade_levels` được nạp **toàn bộ** rồi map trong bộ nhớ vì chúng là danh mục
-tĩnh rất nhỏ (5 và 12 dòng) — rẻ hơn nhiều so với JOIN hay truy vấn theo lô.
+`schools`, `grade_levels`, và `topic_categories` được nạp **toàn bộ** rồi map trong bộ nhớ
+vì chúng là danh mục tĩnh rất nhỏ (5, 12, và vài chục dòng) — rẻ hơn nhiều so với JOIN hay
+truy vấn theo lô. Cache dùng chung một TTL (`refCacheTTL`, 5 phút) cho cả ba.
 
 ## 7. Bảng vàng
 
@@ -197,7 +205,8 @@ thầm. Với quy mô hội thi hiện tại thì chấp nhận được, nhưng
 | GET | `/api/v1/admin/artworks/{id}` | Chi tiết |
 | PUT | `/api/v1/admin/artworks/{id}` | Cập nhật metadata |
 | DELETE | `/api/v1/admin/artworks/{id}` | Xoá bản ghi |
-| PATCH | `/api/v1/admin/artworks/{id}/featured` | Bật/tắt tiêu biểu |
+| PATCH | `/api/v1/admin/artworks/{id}/featured` | Bật/tắt tiêu biểu (1 tác phẩm) |
+| PATCH | `/api/v1/admin/artworks/bulk-featured` | Bật/tắt tiêu biểu hàng loạt — `{ids, featured}`, 1 câu `UPDATE ... WHERE id IN (...)` |
 
 `ParseMultipartForm(maxUploadSize × 20)` ở bulk-upload (`artwork_handler.go:44`) cho phép
 lô lớn nằm trong bộ nhớ trước khi ghi đĩa — với mặc định 20MB là 400MB bộ nhớ đệm.
@@ -211,6 +220,24 @@ lô lớn nằm trong bộ nhớ trước khi ghi đĩa — với mặc định 
 | GET | `/api/v1/public/artworks/featured` | Tiêu biểu, lọc theo `region` |
 | GET | `/api/v1/public/artworks/{id}` | Chi tiết + ghi nhận lượt xem |
 | GET | `/api/v1/public/billboard` | Bảng vàng |
+| GET | `/api/v1/awards` | Danh mục giải thưởng đang hoạt động |
+| GET | `/api/v1/topic-categories` | Danh mục nhóm chủ đề sáng tạo đang hoạt động |
+
+### Giải thưởng và nhóm chủ đề (admin, yêu cầu session)
+
+CRUD giống nhau về hình dạng, tách 2 handler/service/repository riêng vì hai domain độc lập
+(`internal/handlers/award_handler.go`, `internal/handlers/topic_category_handler.go`):
+
+| Method | Đường dẫn | Việc |
+|---|---|---|
+| GET | `/api/v1/admin/awards` | Danh sách (gồm cả giải đã tắt) |
+| POST | `/api/v1/admin/awards` | Tạo giải mới |
+| PUT | `/api/v1/admin/awards/{id}` | Cập nhật |
+| DELETE | `/api/v1/admin/awards/{id}` | Xoá — 409 nếu đang gắn cho tác phẩm |
+| GET | `/api/v1/admin/topic-categories` | Danh sách (gồm cả nhóm đã tắt) |
+| POST | `/api/v1/admin/topic-categories` | Tạo nhóm mới |
+| PUT | `/api/v1/admin/topic-categories/{id}` | Cập nhật |
+| DELETE | `/api/v1/admin/topic-categories/{id}` | Xoá — 409 nếu đang gắn cho tác phẩm |
 
 ⚠️ **Lọc theo `region` làm ở tầng ứng dụng, không phải SQL.** `HandleListFeatured` lấy về
 tối đa 100 tác phẩm featured rồi lọc trong bộ nhớ theo `region`

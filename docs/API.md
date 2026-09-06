@@ -215,7 +215,17 @@ Danh sách 12 khối. Lọc tuỳ chọn: `?education_level=primary|secondary`.
 
 ## `GET /api/v1/awards`
 
-Danh sách giải thưởng **đang hoạt động** (bản public chỉ trả `is_active=true`).
+Danh sách giải thưởng **đang hoạt động** (bản public chỉ trả `is_active=true`). Mỗi giải có
+thể mang `grade_level_id` — `null`/vắng mặt nghĩa là giải dùng chung toàn hệ thống (vd
+"Đặc biệt"); một số nguyên nghĩa là giải chỉ áp dụng cho đúng khối lớp đó (vd hội thi chia
+giải riêng theo khối: mỗi khối Tiểu học có 1 Nhất/1 Nhì/2 Ba).
+
+## `GET /api/v1/topic-categories`
+
+Danh sách nhóm chủ đề sáng tạo **đang hoạt động** (bản public chỉ trả `is_active=true`).
+Mỗi nhóm có thể mang `education_level` (`primary`/`secondary`) để giới hạn nhóm đó chỉ áp
+dụng cho một cấp học — thể lệ Tiểu học và THCS-THPT dùng bộ nhóm chủ đề khác nhau; `null`
+nghĩa là nhóm dùng chung mọi cấp.
 
 ---
 
@@ -234,6 +244,7 @@ qua API này.
 | `school_id` | int | — | |
 | `grade_level_id` | int | — | |
 | `education_level` | string | — | `primary` / `secondary` |
+| `topic_category_id` | int | — | |
 | `page` | int | 1 | |
 | `page_size` | int | 24 | **Trần cứng 100** |
 
@@ -278,11 +289,17 @@ qua API này.
   "region": "saigon",
   "grade_label": "Khối 3",
   "education_level": "primary",
+  "topic_category_id": 5,               // có thể vắng mặt - tác phẩm cũ chưa gán nhóm chủ đề
+  "topic_category_name": "Mái trường Việt Mỹ - Nơi những điều đẹp đẽ được lắng nghe",
   "class_name": "3A2",
   "comment_count": 15,
   "reaction_counts": { "like": 30, "love": 45 },
-  "awards": [ { "id": 1, "name": "Giải Nhất", "slug": "giai-nhat",
-                "rank_order": 1, "color_hex": "#c49c57" } ]
+  "awards": [                            // 1 tác phẩm có thể nhận nhiều giải cùng lúc
+    { "id": 1, "name": "Giải Nhất", "slug": "giai-nhat",
+      "grade_level_id": 3, "rank_order": 1, "color_hex": "#c49c57" },
+    { "id": 9, "name": "Giải Đặc biệt - Nét vẽ Việt Mỹ", "slug": "dac-biet-net-ve",
+      "rank_order": 9, "color_hex": "#725139" }
+  ]
 }
 ```
 
@@ -450,23 +467,26 @@ Bước ② — tạo bản ghi từ ảnh đã có trên S3.
   "student_name": "Nguyễn Văn A",
   "school_id": 1,
   "grade_level_id": 3,
+  "topic_category_id": 5,
   "class_name": "3A2",
   "s3_key": "images/…",
   "s3_url": "https://…",
   "file_size": 2458000,
   "width": 1920,
   "height": 1080,
-  "award_id": 1
+  "award_ids": [1, 9]
 }
 ```
 
 Bắt buộc: `title`, `student_name`, `school_id`, `grade_level_id`, `s3_key`, `s3_url`.
-Thiếu → **400 `VALIDATION_ERROR`** kèm thông báo tiếng Việt cụ thể.
+Thiếu → **400 `VALIDATION_ERROR`** kèm thông báo tiếng Việt cụ thể. `topic_category_id` và
+`award_ids` đều tuỳ chọn — `award_ids` cho phép gán nhiều giải ngay lúc tạo (vd giải chính
++ giải Đặc biệt phụ); vắng mặt hoặc rỗng nghĩa là chưa gán giải nào.
 
 ### `GET /api/v1/admin/artworks`
 
 Như bản public nhưng **không** ép `is_published`, và có thêm `is_featured`, `is_published`,
-`award_id` trong bộ lọc.
+`award_id`, `topic_category_id` trong bộ lọc.
 
 ### `GET /api/v1/admin/artworks/{id}`
 
@@ -475,11 +495,15 @@ Như bản public nhưng **không** ép `is_published`, và có thêm `is_featur
 ```json
 {
   "title": "…", "student_id": 108, "school_id": 1, "grade_level_id": 3,
-  "is_featured": true, "is_published": true, "award_id": 2
+  "topic_category_id": 5,
+  "is_featured": true, "is_published": true, "award_ids": [2, 9]
 }
 ```
 
-Ngữ nghĩa `award_id`: bỏ trường = giữ nguyên · `0` = gỡ hết giải · `>0` = thay bằng giải đó.
+Ngữ nghĩa `award_ids`: **không gửi trường** (key vắng mặt trong JSON) = giữ nguyên giải hiện
+tại · gửi `[]` = gỡ hết giải · gửi danh sách = thay **toàn bộ** giải hiện tại bằng danh sách
+đó. Không còn giới hạn 1 giải/tác phẩm — một tác phẩm có thể nhận nhiều giải cùng lúc (vd
+giải chính Nhất/Nhì/Ba + giải Đặc biệt phụ).
 
 ⚠️ **Không đổi được ảnh** qua endpoint này.
 
@@ -491,8 +515,26 @@ Xoá bản ghi và các dữ liệu liên quan (cảm xúc/bình luận/lượt 
 ### `PATCH /api/v1/admin/artworks/{id}/featured`
 
 ```json
-{ "is_featured": true }
+{ "featured": true }
 ```
+
+Body dùng khoá `featured` (không phải `is_featured`) - khác tên với trường trên chính
+`Artwork`, xem `artwork_handler.go` `HandleSetFeatured`.
+
+### `PATCH /api/v1/admin/artworks/bulk-featured`
+
+Bật/tắt tiêu biểu cho nhiều tác phẩm cùng lúc - 1 câu `UPDATE ... WHERE id IN (...)` thay vì
+gọi lặp endpoint đơn lẻ ở trên, dùng cho thao tác chọn nhiều trên trang danh sách quản trị.
+
+```json
+{ "ids": [12, 15, 22], "featured": true }
+```
+
+```json
+{ "success": true, "data": { "updated": 3, "is_featured": true } }
+```
+
+`ids` rỗng → **400 `VALIDATION_ERROR`**. Id không tồn tại bị bỏ qua lặng lẽ, không coi là lỗi.
 
 ## Giải thưởng
 
@@ -504,11 +546,37 @@ Xoá bản ghi và các dữ liệu liên quan (cảm xúc/bình luận/lượt 
 | DELETE | `/api/v1/admin/awards/{id}` |
 
 ```json
-{ "name": "Giải Nhất", "slug": "giai-nhat", "rank_order": 1,
+{ "name": "Giải Nhất", "slug": "giai-nhat", "grade_level_id": 3, "rank_order": 1,
   "color_hex": "#c49c57", "icon_key": "trophy", "is_active": true }
 ```
 
 `slug` là **duy nhất**. `rank_order` quyết định thứ tự trên bảng vàng (nhỏ = hạng cao).
+`grade_level_id` tuỳ chọn: `null`/vắng mặt = giải dùng chung toàn hệ thống (vd "Đặc biệt");
+một số nguyên = giải chỉ áp dụng cho đúng khối lớp đó (hội thi chia giải riêng theo khối).
+
+DELETE trả **409 `AWARD_IN_USE`** nếu giải đang gắn cho tác phẩm nào đó (ràng buộc khoá
+ngoại `artwork_awards`).
+
+## Nhóm chủ đề sáng tạo
+
+| Method | Đường dẫn |
+|---|---|
+| GET | `/api/v1/admin/topic-categories` (gồm cả nhóm đã tắt) |
+| POST | `/api/v1/admin/topic-categories` |
+| PUT | `/api/v1/admin/topic-categories/{id}` |
+| DELETE | `/api/v1/admin/topic-categories/{id}` |
+
+```json
+{ "name": "Mái trường Việt Mỹ - Nơi những điều đẹp đẽ được lắng nghe",
+  "slug": "mai-truong-viet-my", "education_level": "secondary",
+  "display_order": 3, "is_active": true }
+```
+
+`slug` là **duy nhất**. `education_level` tuỳ chọn: `null`/vắng mặt = nhóm dùng chung mọi
+cấp học; `primary`/`secondary` = nhóm chỉ áp dụng cho đúng cấp đó (thể lệ Tiểu học và
+THCS-THPT dùng bộ nhóm chủ đề khác nhau).
+
+DELETE trả **409 `TOPIC_CATEGORY_IN_USE`** nếu nhóm đang gắn cho tác phẩm nào đó.
 
 ## Bảng điều khiển
 
@@ -563,6 +631,8 @@ Gộp toàn bộ số liệu vào **một** lần gọi, để frontend không p
 | `INVALID_API_KEY` | 403 | Sai API key |
 | `INVALID_CSRF` | 403 | Token CSRF sai/thiếu |
 | `NOT_FOUND` / `COMMENT_NOT_FOUND` | 404 | Không tìm thấy |
+| `AWARD_IN_USE` | 409 | Xoá giải đang gắn cho tác phẩm |
+| `TOPIC_CATEGORY_IN_USE` | 409 | Xoá nhóm chủ đề đang gắn cho tác phẩm |
 | — | 429 | Vượt giới hạn tần suất |
 | `CREATE_FAILED` / `UPLOAD_FAILED` / `REACTION_FAILED` / `COMMENT_FAILED` | 5xx | Lỗi xử lý |
 | `INTERNAL_ERROR` | 500 | Lỗi không xác định |

@@ -2,7 +2,7 @@
 
 **Hệ quản trị**: MySQL 8+ · InnoDB · `utf8mb4` / `utf8mb4_unicode_ci`
 **Driver**: `github.com/go-sql-driver/mysql`
-**Migration**: `internal/database/migrations/001..014_*.sql`, chạy tự động lúc khởi động
+**Migration**: `internal/database/migrations/001..016_*.sql`, chạy tự động lúc khởi động
 
 > `utf8mb4` là bắt buộc, không phải tuỳ chọn: dữ liệu chứa tiếng Việt có dấu và emoji
 > (bình luận, tên tác phẩm). `utf8` của MySQL chỉ 3 byte và sẽ làm hỏng emoji.
@@ -14,18 +14,20 @@
         │                     (id = chính token, xoá theo CASCADE)
         │ created_by (SET NULL)
         ▼
-   ┌─────────────────────────────────────────────────┐
-   │                  artworks                       │
-   │  bảng trung tâm                                 │
-   └─┬────┬────┬─────────┬─────────┬─────────┬───────┘
+   ┌───────────────────────────────────────────────────────────┐
+   │                       artworks                            │
+   │                     bảng trung tâm                        │
+   └─┬────┬────┬─────────┬─────────┬─────────┬─────────┬───────┘
+     │    │    │         │         │         │         │
+     │    │    │         │         │         │         └──N:1──▶ uploads (SET NULL)
      │    │    │         │         │         │
-     │    │    │         │         │         └──N:1──▶ uploads (SET NULL)
-     │    │    │         │         │
-     │    │    │         │         └──1:N──▶ artwork_views      (CASCADE)
-     │    │    │         └──1:N──▶ artwork_comments             (CASCADE)
-     │    │    └──1:N──▶ artwork_reactions                      (CASCADE)
+     │    │    │         │         │         └──1:N──▶ artwork_views      (CASCADE)
+     │    │    │         │         └──1:N──▶ artwork_comments             (CASCADE)
+     │    │    │         └──1:N──▶ artwork_reactions                      (CASCADE)
+     │    │    │
+     │    │    └──N:1──▶ topic_categories (RESTRICT mặc định)
      │    │
-     │    └──N:N──▶ artwork_awards ──N:1──▶ awards              (CASCADE cả hai)
+     │    └──N:N──▶ artwork_awards ──N:1──▶ awards ──N:1──▶ grade_levels (RESTRICT)
      │
      └──N:1──▶ students ──N:1──▶ schools
                        └──N:1──▶ grade_levels
@@ -38,7 +40,8 @@ Chính sách xoá được chọn có chủ đích:
 | `artworks` → tương tác (reaction/comment/view) | `CASCADE` | Xoá tranh thì cảm xúc/bình luận về nó vô nghĩa |
 | `artworks` → `uploads` | `SET NULL` | Lịch sử upload là bản ghi audit, giữ lại dù tranh đã xoá |
 | `artworks` → `admin_users` (created_by) | `SET NULL` | Xoá tài khoản admin không được xoá tác phẩm họ đã đăng |
-| `artworks` → `students`/`schools`/`grade_levels` | **Không** cascade (RESTRICT mặc định) | Chặn xoá nhầm một trường đang có tác phẩm |
+| `artworks` → `students`/`schools`/`grade_levels`/`topic_categories` | **Không** cascade (RESTRICT mặc định) | Chặn xoá nhầm một trường/nhóm chủ đề đang có tác phẩm |
+| `awards` → `grade_levels` | **Không** cascade (RESTRICT mặc định) | Chặn xoá nhầm một khối lớp đang có giải gắn riêng |
 | `admin_users` → `admin_sessions` | `CASCADE` | Vô hiệu hoá tài khoản là phải cắt mọi phiên |
 
 ## Bảng theo nhóm
@@ -104,18 +107,41 @@ nhập liệu chính xác cơ sở.
 Seed: khối 1–5 = `primary`, khối 6–12 = `secondary`. Lưu ý `secondary` gộp **cả THCS và
 THPT** — hệ thống chỉ phân hai cấp, không tách ba.
 
-#### `awards` — cấu hình giải thưởng (migration 008)
+#### `awards` — cấu hình giải thưởng (migration 008, `grade_level_id` thêm ở migration 015)
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
 | `name` | VARCHAR(100) | "Giải Nhất"… |
 | `slug` | VARCHAR(100) UNIQUE | Định danh ổn định |
+| `grade_level_id` | BIGINT UNSIGNED FK NULL | `NULL` = giải dùng chung toàn hệ thống (vd "Đặc biệt"); có giá trị = giải chỉ áp dụng cho đúng khối lớp đó |
 | `rank_order` | INT | Thứ tự xếp hạng, nhỏ = cao |
 | `color_hex` | VARCHAR(7) | Màu badge, mặc định `#c49c57` |
 | `icon_key` | VARCHAR(50) | Khoá icon FE tự map |
 | `is_active` | TINYINT(1) | Ẩn giải không dùng |
 
 Không seed — admin tự tạo qua `/admin/awards`. `rank_order` quyết định thứ tự bảng vàng.
+
+`grade_level_id` (migration `015`) đáp ứng thể lệ hội thi chia giải riêng theo từng khối
+(vd Tiểu học: mỗi khối 1–5 có 1 Nhất/1 Nhì/2 Ba, tổng 20 giải) thay vì một bộ giải chung cho
+toàn trường. RESTRICT mặc định khi xoá `grade_levels` — chặn xoá nhầm một khối đang có giải
+gắn riêng.
+
+#### `topic_categories` — nhóm chủ đề sáng tạo (migration 016)
+
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| `name` | VARCHAR(255) | Vd "Trí tưởng tượng & thế giới thần tiên" |
+| `slug` | VARCHAR(100) UNIQUE | Định danh ổn định |
+| `education_level` | ENUM(`primary`,`secondary`) NULL | `NULL` = dùng chung mọi cấp; có giá trị = chỉ áp dụng cho đúng cấp đó |
+| `display_order` | INT | Thứ tự hiển thị |
+| `is_active` | TINYINT(1) | Ẩn nhóm không dùng |
+
+Không seed — admin tự tạo qua `/admin` (giao diện tương tự `awards`). Tách bảng danh mục
+riêng thay vì lưu text tự do trên `artworks` để lọc/thống kê được theo nhóm và tránh admin
+gõ sai chính tả tên nhóm — cùng lý do thiết kế với `schools`/`awards`.
+
+`artworks.topic_category_id` (migration `016`) tham chiếu bảng này, RESTRICT mặc định, cho
+phép `NULL` vì tác phẩm nộp trước khi có tính năng này chưa gán nhóm chủ đề nào.
 
 ### Nhóm nghiệp vụ chính
 
@@ -140,6 +166,7 @@ em cùng tên còn tệ hơn để trùng lặp.
 | `title` | VARCHAR(255) | Tên tác phẩm |
 | `student_id` | FK | Tác giả |
 | `school_id`, `grade_level_id` | FK | **Denormalize** từ `students` |
+| `topic_category_id` | FK NULL | Nhóm chủ đề sáng tạo (migration `016`); `NULL` với tác phẩm cũ chưa gán |
 | `s3_key` | VARCHAR(500) | Không lộ ra JSON (`json:"-"`) |
 | `s3_url` | VARCHAR(1000) | Trả FE dưới tên `image_url` |
 | `thumbnail_url` | VARCHAR(1000) NULL | Trỏ `thumb_jpg`; `NULL` với ảnh cũ hoặc ảnh gốc nhỏ hơn cỡ thumb |
@@ -150,8 +177,8 @@ em cùng tên còn tệ hơn để trùng lặp.
 | `view_count` | BIGINT UNSIGNED | Đếm dồn, chống trùng qua `artwork_views` |
 | `upload_id`, `created_by` | FK NULL | Truy vết nguồn gốc |
 
-**Index**: `school_id`, `grade_level_id`, `is_featured`, `is_published`, và
-`FULLTEXT(title)`.
+**Index**: `school_id`, `grade_level_id`, `topic_category_id`, `is_featured`, `is_published`,
+và `FULLTEXT(title)`.
 
 Hai điểm thiết kế quan trọng:
 
@@ -193,9 +220,11 @@ này vừa lọc vừa cho sẵn thứ tự, nên MySQL đọc đúng số dòng
 
 **Unique**: `(artwork_id, award_id)` — không gán trùng một giải hai lần.
 
-UI hiện chỉ cho một giải mỗi tác phẩm, nhưng schema thiết kế N:N để mở rộng (một tác phẩm
-nhận nhiều giải ở nhiều hạng mục). Service phản ánh giới hạn UI bằng cách gỡ hết giải cũ
-trước khi gắn giải mới (`artwork_service.go:275-291`).
+Một tác phẩm có thể nhận **nhiều giải cùng lúc** (vd giải chính Nhất/Nhì/Ba theo khối +
+một giải Đặc biệt phụ dùng chung toàn hệ thống) — quan hệ N:N không còn chỉ là chỗ để ngỏ
+cho tương lai. `AwardIDs` (`artwork_service.go:60-80`) phân biệt ba trạng thái ở update:
+`nil` (client không gửi trường) = giữ nguyên giải hiện tại; `[]int64{}` = gỡ hết; danh sách
+= thay **toàn bộ** giải hiện tại bằng danh sách đó (`artwork_service.go:396-411`).
 
 ### Nhóm tương tác ẩn danh
 

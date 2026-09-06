@@ -36,17 +36,21 @@ func NewAwardRepository(db *database.DB) AwardRepository {
 	return &awardRepository{db: db}
 }
 
-const awardSelectColumns = `id, name, slug, rank_order, color_hex, icon_key, is_active, created_at, updated_at`
+const awardSelectColumns = `id, name, slug, grade_level_id, rank_order, color_hex, icon_key, is_active, created_at, updated_at`
 
 func scanAward(scanner interface{ Scan(dest ...any) error }) (*models.Award, error) {
 	a := &models.Award{}
 	var iconKey sql.NullString
-	err := scanner.Scan(&a.ID, &a.Name, &a.Slug, &a.RankOrder, &a.ColorHex, &iconKey, &a.IsActive, &a.CreatedAt, &a.UpdatedAt)
+	var gradeLevelID sql.NullInt64
+	err := scanner.Scan(&a.ID, &a.Name, &a.Slug, &gradeLevelID, &a.RankOrder, &a.ColorHex, &iconKey, &a.IsActive, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
 	if iconKey.Valid {
 		a.IconKey = &iconKey.String
+	}
+	if gradeLevelID.Valid {
+		a.GradeLevelID = &gradeLevelID.Int64
 	}
 	return a, nil
 }
@@ -90,10 +94,10 @@ func (r *awardRepository) GetByID(ctx context.Context, id int64) (*models.Award,
 func (r *awardRepository) Create(ctx context.Context, award *models.Award) (*models.Award, error) {
 	now := time.Now()
 	query := `
-		INSERT INTO awards (name, slug, rank_order, color_hex, icon_key, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO awards (name, slug, grade_level_id, rank_order, color_hex, icon_key, is_active, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	result, err := r.db.ExecContext(ctx, query, award.Name, award.Slug, award.RankOrder, award.ColorHex, award.IconKey, award.IsActive, now, now)
+	result, err := r.db.ExecContext(ctx, query, award.Name, award.Slug, award.GradeLevelID, award.RankOrder, award.ColorHex, award.IconKey, award.IsActive, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create award: %w", err)
 	}
@@ -110,11 +114,11 @@ func (r *awardRepository) Create(ctx context.Context, award *models.Award) (*mod
 func (r *awardRepository) Update(ctx context.Context, award *models.Award) error {
 	query := `
 		UPDATE awards
-		SET name = ?, slug = ?, rank_order = ?, color_hex = ?, icon_key = ?, is_active = ?, updated_at = ?
+		SET name = ?, slug = ?, grade_level_id = ?, rank_order = ?, color_hex = ?, icon_key = ?, is_active = ?, updated_at = ?
 		WHERE id = ?
 	`
 	now := time.Now()
-	result, err := r.db.ExecContext(ctx, query, award.Name, award.Slug, award.RankOrder, award.ColorHex, award.IconKey, award.IsActive, now, award.ID)
+	result, err := r.db.ExecContext(ctx, query, award.Name, award.Slug, award.GradeLevelID, award.RankOrder, award.ColorHex, award.IconKey, award.IsActive, now, award.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update award: %w", err)
 	}
@@ -220,12 +224,16 @@ func (r *awardRepository) ListByArtworkIDs(ctx context.Context, artworkIDs []int
 		var artworkID int64
 		a := &models.Award{}
 		var iconKey sql.NullString
-		err := rows.Scan(&artworkID, &a.ID, &a.Name, &a.Slug, &a.RankOrder, &a.ColorHex, &iconKey, &a.IsActive, &a.CreatedAt, &a.UpdatedAt)
+		var gradeLevelID sql.NullInt64
+		err := rows.Scan(&artworkID, &a.ID, &a.Name, &a.Slug, &gradeLevelID, &a.RankOrder, &a.ColorHex, &iconKey, &a.IsActive, &a.CreatedAt, &a.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan award row: %w", err)
 		}
 		if iconKey.Valid {
 			a.IconKey = &iconKey.String
+		}
+		if gradeLevelID.Valid {
+			a.GradeLevelID = &gradeLevelID.Int64
 		}
 		result[artworkID] = append(result[artworkID], a)
 	}

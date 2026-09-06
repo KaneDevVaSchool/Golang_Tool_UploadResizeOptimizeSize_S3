@@ -106,21 +106,24 @@ func (h *ArtworkHandler) HandleBulkUpload(w http.ResponseWriter, r *http.Request
 }
 
 type createArtworkBody struct {
-	Title        string `json:"title"`
-	StudentName  string `json:"student_name"`
-	SchoolID     int64  `json:"school_id"`
-	GradeLevelID int64  `json:"grade_level_id"`
-	ClassName    string `json:"class_name"`
-	S3Key        string `json:"s3_key"`
-	S3URL        string `json:"s3_url"`
-	FileSize     int64  `json:"file_size"`
-	Width        int    `json:"width"`
-	Height       int    `json:"height"`
+	Title           string `json:"title"`
+	StudentName     string `json:"student_name"`
+	SchoolID        int64  `json:"school_id"`
+	GradeLevelID    int64  `json:"grade_level_id"`
+	TopicCategoryID *int64 `json:"topic_category_id"`
+	ClassName       string `json:"class_name"`
+	S3Key           string `json:"s3_key"`
+	S3URL           string `json:"s3_url"`
+	FileSize        int64  `json:"file_size"`
+	Width           int    `json:"width"`
+	Height          int    `json:"height"`
 	// Variants do bulk-upload trả về ở bước 1, FE gửi lại nguyên vẹn. Không
 	// bắt buộc: ảnh gốc nhỏ hoặc khâu sinh biến thể lỗi thì trường này rỗng
 	// và trang vẫn chạy bằng ảnh gốc.
 	Variants models.ArtworkVariants `json:"variants"`
-	AwardID  *int64                 `json:"award_id"`
+	// AwardIDs cho phép gán nhiều giải ngay lúc tạo (vd giải chính + giải Đặc
+	// biệt phụ). Rỗng hoặc thiếu trường = chưa gán giải nào.
+	AwardIDs []int64 `json:"award_ids"`
 }
 
 // HandleCreate POST /api/v1/admin/artworks - bước 2 sau bulk-upload: nhận
@@ -148,19 +151,20 @@ func (h *ArtworkHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	artwork, err := h.service.CreateArtworkFromUpload(r.Context(), service.CreateArtworkRequest{
-		Title:        body.Title,
-		StudentName:  body.StudentName,
-		SchoolID:     body.SchoolID,
-		GradeLevelID: body.GradeLevelID,
-		ClassName:    body.ClassName,
-		S3Key:        body.S3Key,
-		S3URL:        body.S3URL,
-		FileSize:     body.FileSize,
-		Width:        body.Width,
-		Height:       body.Height,
-		Variants:     body.Variants,
-		AwardID:      body.AwardID,
-		CreatedBy:    createdBy,
+		Title:           body.Title,
+		StudentName:     body.StudentName,
+		SchoolID:        body.SchoolID,
+		GradeLevelID:    body.GradeLevelID,
+		TopicCategoryID: body.TopicCategoryID,
+		ClassName:       body.ClassName,
+		S3Key:           body.S3Key,
+		S3URL:           body.S3URL,
+		FileSize:        body.FileSize,
+		Width:           body.Width,
+		Height:          body.Height,
+		Variants:        body.Variants,
+		AwardIDs:        body.AwardIDs,
+		CreatedBy:       createdBy,
 	})
 	if err != nil {
 		log.Printf("[ArtworkHandler] Tạo tác phẩm thất bại: %v", err)
@@ -191,13 +195,19 @@ func validateCreateArtworkBody(b createArtworkBody) error {
 }
 
 type updateArtworkBody struct {
-	Title        string `json:"title"`
-	StudentID    int64  `json:"student_id"`
-	SchoolID     int64  `json:"school_id"`
-	GradeLevelID int64  `json:"grade_level_id"`
-	IsFeatured   bool   `json:"is_featured"`
-	IsPublished  bool   `json:"is_published"`
-	AwardID      *int64 `json:"award_id"`
+	Title           string `json:"title"`
+	StudentID       int64  `json:"student_id"`
+	SchoolID        int64  `json:"school_id"`
+	GradeLevelID    int64  `json:"grade_level_id"`
+	TopicCategoryID *int64 `json:"topic_category_id"`
+	IsFeatured      bool   `json:"is_featured"`
+	IsPublished     bool   `json:"is_published"`
+	// AwardIDs: trường không có trong JSON (client không gửi key) = nil =
+	// giữ nguyên giải hiện tại; gửi [] = gỡ hết giải; gửi danh sách = thay
+	// toàn bộ giải hiện tại bằng danh sách này. Dùng con trỏ để phân biệt
+	// "không gửi" với "gửi mảng rỗng" - json.Unmarshal để AwardIDs là nil
+	// nếu key vắng mặt, khác []int64{} nếu client gửi mảng rỗng tường minh.
+	AwardIDs []int64 `json:"award_ids"`
 }
 
 // HandleUpdate PUT /api/v1/admin/artworks/{id}
@@ -219,13 +229,14 @@ func (h *ArtworkHandler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	artwork, err := h.service.UpdateArtwork(r.Context(), id, service.UpdateArtworkRequest{
-		Title:        body.Title,
-		StudentID:    body.StudentID,
-		SchoolID:     body.SchoolID,
-		GradeLevelID: body.GradeLevelID,
-		IsFeatured:   body.IsFeatured,
-		IsPublished:  body.IsPublished,
-		AwardID:      body.AwardID,
+		Title:           body.Title,
+		StudentID:       body.StudentID,
+		SchoolID:        body.SchoolID,
+		GradeLevelID:    body.GradeLevelID,
+		TopicCategoryID: body.TopicCategoryID,
+		IsFeatured:      body.IsFeatured,
+		IsPublished:     body.IsPublished,
+		AwardIDs:        body.AwardIDs,
 	})
 	if err != nil {
 		h.SendError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Không cập nhật được tác phẩm")
@@ -320,6 +331,34 @@ func (h *ArtworkHandler) HandleSetFeatured(w http.ResponseWriter, r *http.Reques
 	h.SendSuccess(w, map[string]bool{"is_featured": body.Featured})
 }
 
+// HandleSetFeaturedBatch PATCH /api/v1/admin/artworks/bulk-featured - bật/tắt
+// tiêu biểu cho nhiều tác phẩm cùng lúc (thao tác bulk trên trang danh sách).
+func (h *ArtworkHandler) HandleSetFeaturedBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		h.SendError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Chỉ hỗ trợ PATCH")
+		return
+	}
+
+	var body struct {
+		IDs      []int64 `json:"ids"`
+		Featured bool    `json:"featured"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		h.SendError(w, http.StatusBadRequest, "INVALID_BODY", "Dữ liệu gửi lên không hợp lệ")
+		return
+	}
+	if len(body.IDs) == 0 {
+		h.SendError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Chưa chọn tác phẩm nào")
+		return
+	}
+
+	if err := h.service.SetFeaturedBatch(r.Context(), body.IDs, body.Featured); err != nil {
+		h.SendError(w, http.StatusInternalServerError, "UPDATE_FAILED", "Không cập nhật được trạng thái tiêu biểu")
+		return
+	}
+	h.SendSuccess(w, map[string]any{"updated": len(body.IDs), "is_featured": body.Featured})
+}
+
 func parseArtworkFilter(r *http.Request) models.ArtworkFilter {
 	q := r.URL.Query()
 	filter := models.ArtworkFilter{
@@ -334,6 +373,9 @@ func parseArtworkFilter(r *http.Request) models.ArtworkFilter {
 	}
 	if v, err := strconv.ParseInt(q.Get("grade_level_id"), 10, 64); err == nil && v > 0 {
 		filter.GradeLevelID = &v
+	}
+	if v, err := strconv.ParseInt(q.Get("topic_category_id"), 10, 64); err == nil && v > 0 {
+		filter.TopicCategoryID = &v
 	}
 	if v, err := strconv.ParseInt(q.Get("award_id"), 10, 64); err == nil && v > 0 {
 		filter.AwardID = &v

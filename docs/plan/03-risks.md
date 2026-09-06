@@ -182,6 +182,26 @@ khỏi luồng khởi động.
 
 ---
 
+## R11 — `ADD COLUMN IF NOT EXISTS` gây lỗi cú pháp trên MySQL 8.1 (ServBay) 🟡
+
+**Khả năng**: Chắc chắn xảy ra nếu còn dùng cú pháp này — không phải rủi ro xác suất, mà là
+lỗi đã xảy ra thật (migration 015, 016 khiến server không khởi động được cho tới khi sửa).
+**Ảnh hưởng**: Cao khi xảy ra — server không start được, toàn bộ API 404/không phản hồi.
+
+MySQL chính thức hỗ trợ `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` từ 8.0.29, nhưng bản
+MySQL 8.1.0 cài qua ServBay dùng ở máy dev báo lỗi cú pháp 1064 với cú pháp này (đã kiểm
+chứng trực tiếp bằng `mysql` CLI, không phải lỗi driver Go). Chưa xác định được đây là đặc
+thù build ServBay hay khác biệt phiên bản/`sql_mode` nào khác — chỉ biết là đo được thật
+trên môi trường dev hiện tại. `DROP COLUMN IF EXISTS` cũng lỗi tương tự.
+
+**Xử lý**: không dùng `ADD COLUMN IF NOT EXISTS` / `DROP COLUMN IF EXISTS` trong migration
+mới. Dùng `ADD COLUMN` trần, dựa vào bảng `schema_migrations` để đảm bảo idempotency (không
+chạy lại file đã áp dụng) — cùng cách `014_add_perf_indexes.sql` đã làm với `CREATE INDEX`.
+Trước khi viết migration có DDL mới, thử chạy trực tiếp qua `mysql` CLI trên môi trường dev
+thật thay vì tin vào tài liệu phiên bản MySQL chính thức.
+
+---
+
 ## Bảng tổng hợp
 
 | Mã | Rủi ro | Mức | Xử lý |
@@ -196,6 +216,7 @@ khỏi luồng khởi động.
 | R8 | Lạm dụng ẩn danh | 🟡 | P2.1 + trực theo dõi |
 | R9 | Mất phiên upload | 🟢 | Chấp nhận |
 | R10 | Migration song song | 🟢 | Chấp nhận ở quy mô hiện tại |
+| R11 | `ADD COLUMN IF NOT EXISTS` lỗi cú pháp MySQL 8.1 | 🟡 | Đã sửa 015/016, tránh cú pháp này về sau |
 
 ## Ba việc cần làm trước khi công bố
 

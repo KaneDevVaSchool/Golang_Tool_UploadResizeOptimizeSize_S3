@@ -84,7 +84,8 @@ giá trị cấu hình.
 ## `internal/database` — Kết nối MySQL
 
 **Files**: [database.go](../internal/database/database.go) (150),
-[migrate.go](../internal/database/migrate.go) (160), `migrations/*.sql` (13 file)
+[migrate.go](../internal/database/migrate.go) (160), `migrations/*.sql` (đánh số tăng dần từ
+`001`, xem thư mục để biết số lượng hiện tại)
 
 Lớp bọc mỏng quanh `*sql.DB`/`*sql.Tx`, driver `go-sql-driver/mysql`. ⚠️ Trường `Driver`
 đặt tên chung chung nhưng **chỉ hỗ trợ MySQL** (đã chuyển từ PostgreSQL trước đây).
@@ -101,7 +102,9 @@ vào `time.Time` sẽ lỗi.
 
 ## `internal/models` — Cấu trúc dữ liệu
 
-12 file, 13 struct. Thuần dữ liệu — không nghiệp vụ, không I/O.
+Thuần dữ liệu — không nghiệp vụ, không I/O. Một file một nhóm domain (`artwork.go`,
+`award.go`, `topic_category.go`...), có file khai nhiều struct liên quan (model + request/filter
+đi kèm).
 
 Quy ước thẻ: `db:"cột"` cho SQL, `json:"tên"` cho API. Vài ánh xạ **không hiển nhiên**:
 
@@ -199,14 +202,15 @@ hướng xuyên site, `Strict` sẽ không gửi cookie và người dùng vừa
 
 ## `internal/repository` — Truy cập dữ liệu
 
-13 file. Không biết gì về HTTP.
+16 file. Không biết gì về HTTP.
 
 | File | Dòng | Ghi chú |
 |---|---|---|
 | `s3_repository.go` | 97 | Upload, presigned URL, kiểm tra kết nối |
 | `upload_repository.go` | 222 | Bản ghi audit `uploads`, có transaction |
-| `artwork_repository.go` | 265 | CRUD + WHERE động + phân trang |
-| `award_repository.go` | 244 | Giải thưởng + gán/gỡ N:N |
+| `artwork_repository.go` | 309 | CRUD + WHERE động + phân trang + `SetFeaturedBatch` |
+| `award_repository.go` | 252 | Giải thưởng + gán/gỡ N:N + lọc theo `grade_level_id` |
+| `topic_category_repository.go` | | Nhóm chủ đề sáng tạo — CRUD, cùng mẫu `award_repository.go` |
 | `dashboard_repository.go` | 222 | Truy vấn tổng hợp |
 | `comment_repository.go` | 163 | Gồm `DeleteOwned` kiểm tra quyền sở hữu |
 | `reaction_repository.go` | 114 | `INSERT IGNORE` → idempotent |
@@ -214,6 +218,7 @@ hướng xuyên site, `Strict` sẽ không gửi cookie và người dùng vừa
 | `session_repository.go` | 92 | Gồm `DeleteExpired` |
 | `artwork_view_repository.go` | 69 | `RecordView` chống trùng 24 giờ |
 | `school_repository.go` · `student_repository.go` · `grade_level_repository.go` | | Danh mục và học sinh |
+| `errors.go` | | Lỗi dùng chung tầng repository |
 | `factory.go` | 31 | **Chỉ** cho S3/upload — không dùng cho miền nghiệp vụ |
 
 Điểm cần biết khi sửa:
@@ -235,14 +240,15 @@ qua `?` — không bao giờ nối giá trị vào SQL.
 
 ## `internal/service` — Nghiệp vụ
 
-10 file. Tầng duy nhất được mở/commit/rollback transaction.
+12 file. Tầng duy nhất được mở/commit/rollback transaction.
 
 | File | Dòng | Ghi chú |
 |---|---|---|
 | `upload_service.go` | 349 | Upload đơn + upload có transaction |
 | `chunk_upload.go` | ~400 | Phiên chunk in-memory, TTL 45 phút |
-| `artwork_service.go` | 437 | Bulk upload, tạo/sửa/xoá, enrich |
+| `artwork_service.go` | 629 | Bulk upload, tạo/sửa/xoá, enrich (topic category + nhiều giải/tác phẩm + `SetFeaturedBatch`, có test ở `artwork_bulk_featured_test.go`) |
 | `award_service.go` | | CRUD giải |
+| `topic_category_service.go` | | CRUD nhóm chủ đề sáng tạo, cùng mẫu `award_service.go` |
 | `dashboard_service.go` | 67 | Gộp số liệu thành 1 DTO |
 | `image_resize.go` | 534 | Resize kiểu WordPress |
 | `image_optimizer.go` | 440 | Chất lượng thích ứng theo dung lượng |
@@ -258,29 +264,31 @@ cỡ nào lớn hơn ảnh gốc (`skipVariant`) — không phóng to ảnh nh�
 
 **Xử lý panic trong transaction.** `defer` bắt `recover()` → rollback → **panic lại**. Không
 nuốt panic, cũng không để transaction treo. Mẫu này lặp ở `upload_service.go:229` và
-`artwork_service.go:187`.
+`artwork_service.go:296`.
 
 **`io.Copy` không nhận context.** Nên chạy trong goroutine, quá hạn thì **đóng file** để cắt
 I/O, chờ goroutine thoát tối đa 3 giây. Xem `upload_service.go:118-166`.
 
 **Giới hạn đồng thời trong bulk upload**: semaphore 5 luồng, lỗi một file không hỏng cả lô.
 
-⚠️ **N+1 còn sót**: `enrichArtworks` gom được awards/reactions/comments theo lô, nhưng vẫn
-lặp truy vấn cho `student` mỗi tác phẩm (`artwork_service.go:397`).
+`enrichArtworks` (`artwork_service.go:551`) gom awards/reactions/comments/student theo lô
+qua các hàm `*ByIDs`/`*Batch` — N+1 cho `student` từng tồn tại, đã hết từ khi
+`StudentRepository.ListByIDs` được thêm.
 
 ## `internal/handlers` — Tầng HTTP
 
-12 file. Chỉ: kiểm tra method → parse input → gọi service → map lỗi → trả JSON.
+13 file. Chỉ: kiểm tra method → parse input → gọi service → map lỗi → trả JSON.
 
 | File | Dòng | Phục vụ |
 |---|---|---|
-| `public_handler.go` | 530 | Toàn bộ `/api/v1/public/*` + trang chia sẻ OG |
-| `artwork_handler.go` | 357 | Quản trị tác phẩm |
+| `public_handler.go` | 560 | Toàn bộ `/api/v1/public/*` + trang chia sẻ OG |
+| `artwork_handler.go` | 404 | Quản trị tác phẩm (gồm `HandleSetFeaturedBatch`) |
 | `api_handler.go` | 369 | Upload + health |
 | `admin_auth_handler.go` | 274 | Luồng OAuth + phiên |
 | `chunk_handler.go` | 237 | Upload chia phần |
 | `wp_handler.go` | 166 | Resize WordPress |
 | `award_handler.go` | 155 | Giải thưởng |
+| `topic_category_handler.go` | 137 | Nhóm chủ đề sáng tạo, cùng mẫu `award_handler.go` |
 | `error_mapper.go` | 95 | Chuẩn hoá lỗi, `sanitizeError` |
 | `meta_handler.go` | 62 | Trường + khối lớp |
 | `base_handler.go` | 54 | `SendSuccess`/`SendError` |

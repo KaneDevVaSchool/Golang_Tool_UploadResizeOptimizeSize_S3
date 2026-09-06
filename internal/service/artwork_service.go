@@ -45,31 +45,39 @@ type BulkUploadFile struct {
 // CreateArtworkRequest là input để tạo 1 artwork record (bước 2, sau khi
 // ảnh đã có sẵn trên S3 từ BulkUploadToS3 hoặc upload đơn).
 type CreateArtworkRequest struct {
-	Title        string
-	StudentName  string
-	SchoolID     int64
-	GradeLevelID int64
-	ClassName    string
-	S3Key        string
-	S3URL        string
-	FileSize     int64
-	Width        int
-	Height       int
-	Variants     models.ArtworkVariants
-	AwardID      *int64
-	CreatedBy    *int64
+	Title           string
+	StudentName     string
+	SchoolID        int64
+	GradeLevelID    int64
+	TopicCategoryID *int64
+	ClassName       string
+	S3Key           string
+	S3URL           string
+	FileSize        int64
+	Width           int
+	Height          int
+	Variants        models.ArtworkVariants
+	// AwardIDs là danh sách giải gán ngay lúc tạo - một tác phẩm có thể nhận
+	// nhiều giải cùng lúc (vd giải chính Nhất/Nhì/Ba + giải Đặc biệt phụ).
+	AwardIDs  []int64
+	CreatedBy *int64
 }
 
 // UpdateArtworkRequest là input để cập nhật metadata artwork - KHÔNG đổi
 // lại file S3 (đổi ảnh nghĩa là xoá tác phẩm cũ, tạo tác phẩm mới).
 type UpdateArtworkRequest struct {
-	Title        string
-	StudentID    int64
-	SchoolID     int64
-	GradeLevelID int64
-	IsFeatured   bool
-	IsPublished  bool
-	AwardID      *int64 // nil = không đổi gán giải; set rõ ID hoặc 0 để gỡ giải hiện tại
+	Title           string
+	StudentID       int64
+	SchoolID        int64
+	GradeLevelID    int64
+	TopicCategoryID *int64
+	IsFeatured      bool
+	IsPublished     bool
+	// AwardIDs: nil = không đổi giải hiện tại; []int64{} (rỗng, không nil) =
+	// gỡ hết giải; danh sách khác rỗng = thay toàn bộ giải hiện tại bằng
+	// danh sách này. Không còn giới hạn 1 giải/tác phẩm - schema artwork_awards
+	// vốn đã N:N, giới hạn cũ chỉ do UI single-select áp lên.
+	AwardIDs []int64
 }
 
 // ArtworkListResult gộp danh sách + tổng số + reaction/comment counts thành
@@ -100,29 +108,34 @@ type ArtworkService interface {
 	GetArtwork(ctx context.Context, id int64) (*models.ArtworkWithMeta, error)
 	ListArtworks(ctx context.Context, filter models.ArtworkFilter) (*ArtworkListResult, error)
 	SetFeatured(ctx context.Context, id int64, featured bool) error
+	// SetFeaturedBatch bật/tắt tiêu biểu hàng loạt cho thao tác bulk ở trang
+	// quản trị - 1 câu UPDATE thay vì N request PATCH đơn lẻ từ frontend.
+	SetFeaturedBatch(ctx context.Context, ids []int64, featured bool) error
 }
 
 type artworkService struct {
-	db              *database.DB
-	uploadService   UploadService
-	artworkRepo     repository.ArtworkRepository
-	studentRepo     repository.StudentRepository
-	schoolRepo      repository.SchoolRepository
-	gradeRepo       repository.GradeLevelRepository
-	awardRepo       repository.AwardRepository
-	reactionRepo    repository.ReactionRepository
-	commentRepo     repository.CommentRepository
-	bulkConcurrency int
+	db                *database.DB
+	uploadService     UploadService
+	artworkRepo       repository.ArtworkRepository
+	studentRepo       repository.StudentRepository
+	schoolRepo        repository.SchoolRepository
+	gradeRepo         repository.GradeLevelRepository
+	topicCategoryRepo repository.TopicCategoryRepository
+	awardRepo         repository.AwardRepository
+	reactionRepo      repository.ReactionRepository
+	commentRepo       repository.CommentRepository
+	bulkConcurrency   int
 
-	// Cache trường + khối lớp. Đây là hai bảng tham chiếu tĩnh (5 và 12 dòng,
-	// seed sẵn trong migration, chỉ đổi khi mở cơ sở mới) nhưng enrichArtworks
-	// lại nạp TOÀN BỘ cả hai ở mọi lần gọi - kể cả khi chỉ lấy chi tiết một
-	// tác phẩm. Giữ trong tiến trình với TTL ngắn: đủ để thay đổi hiếm hoi tự
-	// hiện ra sau vài phút mà không cần khởi động lại.
-	refMu         sync.RWMutex
-	refExpiresAt  time.Time
-	cachedSchools map[int64]*models.School
-	cachedGrades  map[int64]*models.GradeLevel
+	// Cache trường + khối lớp + nhóm chủ đề. Đây là các bảng tham chiếu tĩnh
+	// (5, 12, và vài chục dòng, seed sẵn hoặc admin hiếm khi đổi) nhưng
+	// enrichArtworks lại nạp TOÀN BỘ ở mọi lần gọi - kể cả khi chỉ lấy chi
+	// tiết một tác phẩm. Giữ trong tiến trình với TTL ngắn: đủ để thay đổi
+	// hiếm hoi tự hiện ra sau vài phút mà không cần khởi động lại.
+	refMu                 sync.RWMutex
+	refExpiresAt          time.Time
+	cachedSchools         map[int64]*models.School
+	cachedGrades          map[int64]*models.GradeLevel
+	cachedTopicCategories map[int64]*models.TopicCategory
 }
 
 // refCacheTTL - đủ ngắn để thêm trường/khối mới tự xuất hiện, đủ dài để loại
@@ -136,21 +149,23 @@ func NewArtworkService(
 	studentRepo repository.StudentRepository,
 	schoolRepo repository.SchoolRepository,
 	gradeRepo repository.GradeLevelRepository,
+	topicCategoryRepo repository.TopicCategoryRepository,
 	awardRepo repository.AwardRepository,
 	reactionRepo repository.ReactionRepository,
 	commentRepo repository.CommentRepository,
 ) ArtworkService {
 	return &artworkService{
-		db:              db,
-		uploadService:   uploadService,
-		artworkRepo:     artworkRepo,
-		studentRepo:     studentRepo,
-		schoolRepo:      schoolRepo,
-		gradeRepo:       gradeRepo,
-		awardRepo:       awardRepo,
-		reactionRepo:    reactionRepo,
-		commentRepo:     commentRepo,
-		bulkConcurrency: 5, // giới hạn upload song song, tránh áp đảo S3/mạng khi admin chọn hàng chục ảnh cùng lúc
+		db:                db,
+		uploadService:     uploadService,
+		artworkRepo:       artworkRepo,
+		studentRepo:       studentRepo,
+		schoolRepo:        schoolRepo,
+		gradeRepo:         gradeRepo,
+		topicCategoryRepo: topicCategoryRepo,
+		awardRepo:         awardRepo,
+		reactionRepo:      reactionRepo,
+		commentRepo:       commentRepo,
+		bulkConcurrency:   5, // giới hạn upload song song, tránh áp đảo S3/mạng khi admin chọn hàng chục ảnh cùng lúc
 	}
 }
 
@@ -306,16 +321,17 @@ func (s *artworkService) CreateArtworkFromUpload(ctx context.Context, req Create
 	}
 
 	artwork := &models.Artwork{
-		Title:        req.Title,
-		StudentID:    student.ID,
-		SchoolID:     req.SchoolID,
-		GradeLevelID: req.GradeLevelID,
-		S3Key:        req.S3Key,
-		S3URL:        req.S3URL,
-		Variants:     req.Variants,
-		FileSize:     req.FileSize,
-		IsPublished:  true,
-		CreatedBy:    req.CreatedBy,
+		Title:           req.Title,
+		StudentID:       student.ID,
+		SchoolID:        req.SchoolID,
+		GradeLevelID:    req.GradeLevelID,
+		TopicCategoryID: req.TopicCategoryID,
+		S3Key:           req.S3Key,
+		S3URL:           req.S3URL,
+		Variants:        req.Variants,
+		FileSize:        req.FileSize,
+		IsPublished:     true,
+		CreatedBy:       req.CreatedBy,
 	}
 	// thumbnail_url vẫn được ghi song song với variants: trang admin và các
 	// component cũ đọc trường này, và nó là bước lui một nấc trước khi phải
@@ -345,10 +361,11 @@ func (s *artworkService) CreateArtworkFromUpload(ctx context.Context, req Create
 	}
 
 	// Gán giải (nếu có) sau khi commit - artwork_awards có FK riêng, không
-	// bắt buộc phải cùng transaction với việc tạo artwork.
-	if req.AwardID != nil {
-		if err := s.awardRepo.AttachToArtwork(ctx, created.ID, *req.AwardID); err != nil {
-			log.Printf("[ArtworkService] Tạo artwork thành công nhưng gán giải thất bại (id=%d, award=%d): %v", created.ID, *req.AwardID, err)
+	// bắt buộc phải cùng transaction với việc tạo artwork. Một tác phẩm có
+	// thể nhận nhiều giải cùng lúc (giải chính + giải Đặc biệt phụ).
+	for _, awardID := range req.AwardIDs {
+		if err := s.awardRepo.AttachToArtwork(ctx, created.ID, awardID); err != nil {
+			log.Printf("[ArtworkService] Tạo artwork thành công nhưng gán giải thất bại (id=%d, award=%d): %v", created.ID, awardID, err)
 		}
 	}
 
@@ -368,6 +385,7 @@ func (s *artworkService) UpdateArtwork(ctx context.Context, id int64, req Update
 	existing.StudentID = req.StudentID
 	existing.SchoolID = req.SchoolID
 	existing.GradeLevelID = req.GradeLevelID
+	existing.TopicCategoryID = req.TopicCategoryID
 	existing.IsFeatured = req.IsFeatured
 	existing.IsPublished = req.IsPublished
 
@@ -375,7 +393,11 @@ func (s *artworkService) UpdateArtwork(ctx context.Context, id int64, req Update
 		return nil, fmt.Errorf("failed to update artwork: %w", err)
 	}
 
-	if req.AwardID != nil {
+	// req.AwardIDs nil = giữ nguyên giải hiện tại (client không gửi trường
+	// này). Khác rỗng hay không đều là "đặt lại toàn bộ danh sách giải":
+	// gỡ hết giải cũ rồi gắn đúng danh sách mới - đơn giản hơn diff từng
+	// phần tử, và số giải mỗi tác phẩm luôn nhỏ nên không đáng lo hiệu năng.
+	if req.AwardIDs != nil {
 		current, err := s.awardRepo.ListByArtworkID(ctx, id)
 		if err != nil {
 			log.Printf("[ArtworkService] Không đọc được giải hiện tại của artwork %d: %v", id, err)
@@ -386,9 +408,12 @@ func (s *artworkService) UpdateArtwork(ctx context.Context, id int64, req Update
 				}
 			}
 		}
-		if *req.AwardID > 0 {
-			if err := s.awardRepo.AttachToArtwork(ctx, id, *req.AwardID); err != nil {
-				log.Printf("[ArtworkService] Gán giải mới thất bại (artwork=%d, award=%d): %v", id, *req.AwardID, err)
+		for _, awardID := range req.AwardIDs {
+			if awardID <= 0 {
+				continue
+			}
+			if err := s.awardRepo.AttachToArtwork(ctx, id, awardID); err != nil {
+				log.Printf("[ArtworkService] Gán giải mới thất bại (artwork=%d, award=%d): %v", id, awardID, err)
 			}
 		}
 	}
@@ -451,6 +476,13 @@ func (s *artworkService) SetFeatured(ctx context.Context, id int64, featured boo
 	return s.artworkRepo.SetFeatured(ctx, id, featured)
 }
 
+func (s *artworkService) SetFeaturedBatch(ctx context.Context, ids []int64, featured bool) error {
+	if len(ids) == 0 {
+		return fmt.Errorf("chưa chọn tác phẩm nào")
+	}
+	return s.artworkRepo.SetFeaturedBatch(ctx, ids, featured)
+}
+
 // enrichArtworks gộp thông tin học sinh/trường/khối lớp/giải/reaction/comment
 // cho 1 danh sách artworks bằng batch query (tránh N+1) - dùng chung cho cả
 // GetArtwork (1 item) và ListArtworks (nhiều item).
@@ -468,18 +500,18 @@ func (s *artworkService) SetFeatured(ctx context.Context, id int64, featured boo
 // Nếu hai request cùng gặp lúc cache hết hạn thì cả hai sẽ cùng nạp lại - chấp
 // nhận được, vì đây chỉ là hai truy vấn nhỏ và mỗi 5 phút mới xảy ra một lần;
 // đổi lại tránh được singleflight hay khoá ghi giữ suốt thời gian truy vấn.
-func (s *artworkService) referenceData(ctx context.Context) (map[int64]*models.School, map[int64]*models.GradeLevel, error) {
+func (s *artworkService) referenceData(ctx context.Context) (map[int64]*models.School, map[int64]*models.GradeLevel, map[int64]*models.TopicCategory, error) {
 	s.refMu.RLock()
 	if time.Now().Before(s.refExpiresAt) && s.cachedSchools != nil {
-		schools, grades := s.cachedSchools, s.cachedGrades
+		schools, grades, topics := s.cachedSchools, s.cachedGrades, s.cachedTopicCategories
 		s.refMu.RUnlock()
-		return schools, grades, nil
+		return schools, grades, topics, nil
 	}
 	s.refMu.RUnlock()
 
 	schools, err := s.schoolRepo.List(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load schools: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to load schools: %w", err)
 	}
 	schoolByID := make(map[int64]*models.School, len(schools))
 	for _, sc := range schools {
@@ -488,22 +520,32 @@ func (s *artworkService) referenceData(ctx context.Context) (map[int64]*models.S
 
 	grades, err := s.gradeRepo.List(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load grade levels: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to load grade levels: %w", err)
 	}
 	gradeByID := make(map[int64]*models.GradeLevel, len(grades))
 	for _, g := range grades {
 		gradeByID[g.ID] = g
 	}
 
+	topics, err := s.topicCategoryRepo.List(ctx, true)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to load topic categories: %w", err)
+	}
+	topicByID := make(map[int64]*models.TopicCategory, len(topics))
+	for _, t := range topics {
+		topicByID[t.ID] = t
+	}
+
 	s.refMu.Lock()
 	s.cachedSchools = schoolByID
 	s.cachedGrades = gradeByID
+	s.cachedTopicCategories = topicByID
 	s.refExpiresAt = time.Now().Add(refCacheTTL)
 	s.refMu.Unlock()
 
 	// Trả map vừa dựng chứ không đọc lại từ struct: giữa Unlock và lần đọc
 	// tiếp theo có thể có goroutine khác đã ghi đè.
-	return schoolByID, gradeByID, nil
+	return schoolByID, gradeByID, topicByID, nil
 }
 
 func (s *artworkService) enrichArtworks(ctx context.Context, artworks []*models.Artwork) ([]*models.ArtworkWithMeta, error) {
@@ -536,7 +578,7 @@ func (s *artworkService) enrichArtworks(ctx context.Context, artworks []*models.
 		return nil, fmt.Errorf("failed to load comment counts: %w", err)
 	}
 
-	schoolByID, gradeByID, err := s.referenceData(ctx)
+	schoolByID, gradeByID, topicByID, err := s.referenceData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -562,6 +604,11 @@ func (s *artworkService) enrichArtworks(ctx context.Context, artworks []*models.
 		if g, ok := gradeByID[a.GradeLevelID]; ok {
 			meta.GradeLabel = g.Label
 			meta.EducationLevel = g.EducationLevel
+		}
+		if a.TopicCategoryID != nil {
+			if t, ok := topicByID[*a.TopicCategoryID]; ok {
+				meta.TopicCategoryName = t.Name
+			}
 		}
 
 		result = append(result, meta)

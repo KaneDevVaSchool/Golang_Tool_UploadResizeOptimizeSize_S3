@@ -51,25 +51,28 @@ type Container struct {
 
 	// Domain: artwork/award/dashboard/meta - chỉ khởi tạo đầy đủ khi DB bật
 	// (cùng điều kiện với admin auth ở trên, vì mọi bảng domain đều ở MySQL).
-	SchoolRepository      repository.SchoolRepository
-	GradeLevelRepository  repository.GradeLevelRepository
-	StudentRepository     repository.StudentRepository
-	ArtworkRepository     repository.ArtworkRepository
-	AwardRepository       repository.AwardRepository
-	ReactionRepository    repository.ReactionRepository
-	CommentRepository     repository.CommentRepository
-	ArtworkViewRepository repository.ArtworkViewRepository
-	DashboardRepository   repository.DashboardRepository
+	SchoolRepository        repository.SchoolRepository
+	GradeLevelRepository    repository.GradeLevelRepository
+	TopicCategoryRepository repository.TopicCategoryRepository
+	StudentRepository       repository.StudentRepository
+	ArtworkRepository       repository.ArtworkRepository
+	AwardRepository         repository.AwardRepository
+	ReactionRepository      repository.ReactionRepository
+	CommentRepository       repository.CommentRepository
+	ArtworkViewRepository   repository.ArtworkViewRepository
+	DashboardRepository     repository.DashboardRepository
 
-	ArtworkService   service.ArtworkService
-	AwardService     service.AwardService
-	DashboardService service.DashboardService
+	ArtworkService       service.ArtworkService
+	AwardService         service.AwardService
+	TopicCategoryService service.TopicCategoryService
+	DashboardService     service.DashboardService
 
-	ArtworkHandler   *handlers.ArtworkHandler
-	AwardHandler     *handlers.AwardHandler
-	DashboardHandler *handlers.DashboardHandler
-	MetaHandler      *handlers.MetaHandler
-	PublicHandler    *handlers.PublicHandler
+	ArtworkHandler       *handlers.ArtworkHandler
+	AwardHandler         *handlers.AwardHandler
+	TopicCategoryHandler *handlers.TopicCategoryHandler
+	DashboardHandler     *handlers.DashboardHandler
+	MetaHandler          *handlers.MetaHandler
+	PublicHandler        *handlers.PublicHandler
 }
 
 func NewContainer() (*Container, error) {
@@ -267,27 +270,31 @@ func NewContainer() (*Container, error) {
 	// RepoFactory/ServiceFactory - factory đó chỉ dành cho S3/upload
 	// strategy), theo đúng convention đã áp dụng cho admin auth ở trên.
 	var (
-		schoolRepo     repository.SchoolRepository
-		gradeRepo      repository.GradeLevelRepository
-		studentRepo    repository.StudentRepository
-		artworkRepo    repository.ArtworkRepository
-		awardRepo      repository.AwardRepository
-		reactionRepo   repository.ReactionRepository
-		commentRepo    repository.CommentRepository
-		viewRepo       repository.ArtworkViewRepository
-		dashboardRepo  repository.DashboardRepository
-		artworkSvc     service.ArtworkService
-		awardSvc       service.AwardService
-		dashboardSvc   service.DashboardService
-		artworkHandler *handlers.ArtworkHandler
-		awardHandler   *handlers.AwardHandler
-		dashboardHdlr  *handlers.DashboardHandler
-		metaHandler    *handlers.MetaHandler
-		publicHandler  *handlers.PublicHandler
+		schoolRepo        repository.SchoolRepository
+		gradeRepo         repository.GradeLevelRepository
+		topicCategoryRepo repository.TopicCategoryRepository
+		studentRepo       repository.StudentRepository
+		artworkRepo       repository.ArtworkRepository
+		awardRepo         repository.AwardRepository
+		reactionRepo      repository.ReactionRepository
+		commentRepo       repository.CommentRepository
+		viewRepo          repository.ArtworkViewRepository
+		dashboardRepo     repository.DashboardRepository
+		artworkSvc        service.ArtworkService
+		awardSvc          service.AwardService
+		topicCategorySvc  service.TopicCategoryService
+		dashboardSvc      service.DashboardService
+		artworkHandler    *handlers.ArtworkHandler
+		awardHandler      *handlers.AwardHandler
+		topicCategoryHdlr *handlers.TopicCategoryHandler
+		dashboardHdlr     *handlers.DashboardHandler
+		metaHandler       *handlers.MetaHandler
+		publicHandler     *handlers.PublicHandler
 	)
 	if db != nil {
 		schoolRepo = repository.NewSchoolRepository(db)
 		gradeRepo = repository.NewGradeLevelRepository(db)
+		topicCategoryRepo = repository.NewTopicCategoryRepository(db)
 		studentRepo = repository.NewStudentRepository(db)
 		artworkRepo = repository.NewArtworkRepository(db)
 		awardRepo = repository.NewAwardRepository(db)
@@ -297,13 +304,15 @@ func NewContainer() (*Container, error) {
 		dashboardRepo = repository.NewDashboardRepository(db)
 
 		artworkSvc = service.NewArtworkService(
-			db, uploadService, artworkRepo, studentRepo, schoolRepo, gradeRepo, awardRepo, reactionRepo, commentRepo,
+			db, uploadService, artworkRepo, studentRepo, schoolRepo, gradeRepo, topicCategoryRepo, awardRepo, reactionRepo, commentRepo,
 		)
 		awardSvc = service.NewAwardService(awardRepo)
+		topicCategorySvc = service.NewTopicCategoryService(topicCategoryRepo)
 		dashboardSvc = service.NewDashboardService(dashboardRepo)
 
 		artworkHandler = handlers.NewArtworkHandler(artworkSvc, cfg.Upload.MaxSize)
 		awardHandler = handlers.NewAwardHandler(awardSvc)
+		topicCategoryHdlr = handlers.NewTopicCategoryHandler(topicCategorySvc)
 		dashboardHdlr = handlers.NewDashboardHandler(dashboardSvc)
 		metaHandler = handlers.NewMetaHandler(schoolRepo, gradeRepo)
 		publicHandler = handlers.NewPublicHandler(artworkSvc, reactionRepo, commentRepo, viewRepo, awardRepo)
@@ -361,23 +370,26 @@ func NewContainer() (*Container, error) {
 		SessionManager:      sessionMgr,
 		AdminAuthHandler:    adminAuthHandler,
 
-		SchoolRepository:      schoolRepo,
-		GradeLevelRepository:  gradeRepo,
-		StudentRepository:     studentRepo,
-		ArtworkRepository:     artworkRepo,
-		AwardRepository:       awardRepo,
-		ReactionRepository:    reactionRepo,
-		CommentRepository:     commentRepo,
-		ArtworkViewRepository: viewRepo,
-		DashboardRepository:   dashboardRepo,
-		ArtworkService:        artworkSvc,
-		AwardService:          awardSvc,
-		DashboardService:      dashboardSvc,
-		ArtworkHandler:        artworkHandler,
-		AwardHandler:          awardHandler,
-		DashboardHandler:      dashboardHdlr,
-		MetaHandler:           metaHandler,
-		PublicHandler:         publicHandler,
+		SchoolRepository:        schoolRepo,
+		GradeLevelRepository:    gradeRepo,
+		TopicCategoryRepository: topicCategoryRepo,
+		StudentRepository:       studentRepo,
+		ArtworkRepository:       artworkRepo,
+		AwardRepository:         awardRepo,
+		ReactionRepository:      reactionRepo,
+		CommentRepository:       commentRepo,
+		ArtworkViewRepository:   viewRepo,
+		DashboardRepository:     dashboardRepo,
+		ArtworkService:          artworkSvc,
+		AwardService:            awardSvc,
+		TopicCategoryService:    topicCategorySvc,
+		DashboardService:        dashboardSvc,
+		ArtworkHandler:          artworkHandler,
+		AwardHandler:            awardHandler,
+		TopicCategoryHandler:    topicCategoryHdlr,
+		DashboardHandler:        dashboardHdlr,
+		MetaHandler:             metaHandler,
+		PublicHandler:           publicHandler,
 	}
 
 	if sessionRepo != nil {
@@ -464,12 +476,19 @@ func (c *Container) GetServerHandler() http.Handler {
 			adminAPIMux.HandleFunc("PUT /api/v1/admin/artworks/{id}", c.ArtworkHandler.HandleUpdate)
 			adminAPIMux.HandleFunc("DELETE /api/v1/admin/artworks/{id}", c.ArtworkHandler.HandleDelete)
 			adminAPIMux.HandleFunc("PATCH /api/v1/admin/artworks/{id}/featured", c.ArtworkHandler.HandleSetFeatured)
+			adminAPIMux.HandleFunc("PATCH /api/v1/admin/artworks/bulk-featured", c.ArtworkHandler.HandleSetFeaturedBatch)
 		}
 		if c.AwardHandler != nil {
 			adminAPIMux.HandleFunc("GET /api/v1/admin/awards", c.AwardHandler.HandleListAwards(true))
 			adminAPIMux.HandleFunc("POST /api/v1/admin/awards", c.AwardHandler.HandleCreateAward)
 			adminAPIMux.HandleFunc("PUT /api/v1/admin/awards/{id}", c.AwardHandler.HandleUpdateAward)
 			adminAPIMux.HandleFunc("DELETE /api/v1/admin/awards/{id}", c.AwardHandler.HandleDeleteAward)
+		}
+		if c.TopicCategoryHandler != nil {
+			adminAPIMux.HandleFunc("GET /api/v1/admin/topic-categories", c.TopicCategoryHandler.HandleListTopicCategories(true))
+			adminAPIMux.HandleFunc("POST /api/v1/admin/topic-categories", c.TopicCategoryHandler.HandleCreateTopicCategory)
+			adminAPIMux.HandleFunc("PUT /api/v1/admin/topic-categories/{id}", c.TopicCategoryHandler.HandleUpdateTopicCategory)
+			adminAPIMux.HandleFunc("DELETE /api/v1/admin/topic-categories/{id}", c.TopicCategoryHandler.HandleDeleteTopicCategory)
 		}
 		if c.DashboardHandler != nil {
 			adminAPIMux.HandleFunc("/api/v1/admin/dashboard/stats", c.DashboardHandler.HandleStats)
@@ -493,8 +512,11 @@ func (c *Container) GetServerHandler() http.Handler {
 	if c.AwardHandler != nil {
 		apiMux.HandleFunc("/api/v1/awards", c.AwardHandler.HandleListAwards(false))
 	}
+	if c.TopicCategoryHandler != nil {
+		apiMux.HandleFunc("/api/v1/topic-categories", c.TopicCategoryHandler.HandleListTopicCategories(false))
+	}
 
-	// Public API ẩn danh: reaction/comment/view cho trang "20 năm VAS". Toàn
+	// Public API ẩn danh: reaction/comment/view cho trang "20 năm VASchools". Toàn
 	// bộ route (GET lẫn POST/DELETE) đăng ký trên 1 mux duy nhất để tránh
 	// đụng pattern khi 2 mux cùng khớp 1 path; rate limiter NGHIÊM HƠN
 	// (20 req/phút/IP, tách biệt với rate limiter chung toàn API) chỉ áp

@@ -90,7 +90,7 @@ func NewPublicHandler(
 	}
 }
 
-// HandleListArtworks GET /api/v1/public/artworks?search=&region=&grade_level_id=&education_level=&page=&page_size=
+// HandleListArtworks GET /api/v1/public/artworks?search=&region=&grade_level_id=&education_level=&topic_category_id=&page=&page_size=
 // Luôn ép is_published=true - không public/trả về draft.
 func (h *PublicHandler) HandleListArtworks(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -116,6 +116,9 @@ func (h *PublicHandler) HandleListArtworks(w http.ResponseWriter, r *http.Reques
 	// đơn lẻ do metaHandler cung cấp danh sách trường theo region).
 	if v, err := strconv.ParseInt(r.URL.Query().Get("school_id"), 10, 64); err == nil && v > 0 {
 		filter.SchoolID = &v
+	}
+	if v, err := strconv.ParseInt(r.URL.Query().Get("topic_category_id"), 10, 64); err == nil && v > 0 {
+		filter.TopicCategoryID = &v
 	}
 
 	result, err := h.artworkService.ListArtworks(r.Context(), filter)
