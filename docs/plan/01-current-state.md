@@ -88,7 +88,7 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 |---|---|
 | Script triển khai | 6 bước, chạy lại nhiều lần được, có kiểm tra sức khoẻ |
 | systemd + Nginx | Có sẵn file cấu hình mẫu trong repo |
-| Migration tự động | 12 file, idempotent qua `schema_migrations` |
+| Migration tự động | 14 file, idempotent qua `schema_migrations` |
 | Log theo ngày | Ghi đồng thời stdout + file |
 | Tắt máy an toàn | Drain request trước, đóng tài nguyên sau |
 | Chỉ số vận hành | `/api/v1/metrics` |
@@ -102,6 +102,9 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 | Frontend chọn cỡ | `web/src/lib/artworkImage.ts` dựng `<picture>`/`srcset`, có đường lui khi tác phẩm chưa có biến thể |
 | Nén phản hồi HTTP | `internal/middleware/compress.go` **đã nối** vào chuỗi tại `internal/container/container.go:575` |
 | Tách chunk vendor | `web/vite.config.ts` — recharts/d3 tách riêng nên khách xem tranh không tải tới |
+| Gom truy vấn học sinh | `StudentRepository.ListByIDs` gộp một truy vấn, khử id trùng; `enrichArtworks` hết N+1 |
+| Bảng vinh danh một truy vấn | `HasAward` trong `ArtworkFilter` cho phép lấy mọi tác phẩm có giải một lần rồi tự nhóm, thay vì gọi `ListArtworks` cho từng giải |
+| Index cho truy vấn nóng | Migration `014`: `(is_published, created_at DESC)` và `(artwork_id, is_hidden, created_at DESC)` — bỏ được filesort |
 
 ## 3. Đang làm dở 🚧
 
@@ -111,14 +114,6 @@ Không còn hạng mục nào dở dang ở nhánh này. Việc tiếp theo xem
 ## 4. Nợ kỹ thuật ⚠️
 
 Xếp theo mức độ ảnh hưởng thực tế:
-
-### N+1 khi lấy tên học sinh
-
-`enrichArtworks` gom được hầu hết dữ liệu theo lô, nhưng vẫn lặp một truy vấn cho mỗi tác
-phẩm để lấy tên học sinh (`artwork_service.go:397`). Với `page_size=24` là 24 truy vấn thừa
-mỗi lần tải trang.
-
-**Cách sửa**: thêm `StudentRepository.GetByIDs()` và gom vào cùng mẫu batch đã có.
 
 ### API key chặn cả trang public
 
@@ -160,15 +155,10 @@ phải `UPDATE` bằng SQL tay.
 
 `ValidateFileContent` chỉ chạy ở đường chunked. Upload đơn tin vào đuôi file.
 
-### Bảng vàng gọi lặp
-
-Mỗi giải là một lần `ListArtworks` kèm enrich riêng; số truy vấn tăng tuyến tính theo số
-giải, và trần 100 tác phẩm mỗi giải bị cắt âm thầm.
-
 ### Độ phủ kiểm thử thấp
 
-7 file test, tập trung ở `utils` và `middleware`. **Không có test** cho `service` (trừ phần
-đang dở), `repository`, `container`. Không có test nào cho frontend.
+Test tập trung ở `utils`, `middleware`, và phần sinh biến thể ảnh của `service`. **Chưa có
+test** cho `repository` và `container`, cũng như cho frontend.
 
 ## 5. Chưa có 📋
 

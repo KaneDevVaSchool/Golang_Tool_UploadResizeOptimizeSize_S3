@@ -80,17 +80,18 @@ truy vấn chống trùng vốn chạy ở **mỗi lượt xem tranh**.
 - [ ] Bản ghi cũ hơn 2 ngày bị xoá tự động
 - [ ] Số dòng `artwork_views` ổn định sau một tuần theo dõi
 
-### P1.2 — Gom truy vấn học sinh theo lô
+### ~~P1.2 — Gom truy vấn học sinh theo lô~~ ✅ Xong 2026-09-06
 
-**Vấn đề.** N+1: mỗi tác phẩm một truy vấn lấy tên học sinh.
+Đặt tên `ListByIDs` thay vì `GetByIDs` cho khớp `awardRepo.ListByArtworkIDs` sẵn có.
 
-**Cách làm.** Thêm `StudentRepository.GetByIDs(ctx, ids)` trả `map[int64]*Student`, dùng
-trong `enrichArtworks` đúng theo mẫu `awardRepo.ListByArtworkIDs` đã có.
+- [x] `StudentRepository.ListByIDs` trả `map[int64]*Student` trong một truy vấn, có khử
+      id trùng (nhiều tác phẩm cùng một học sinh chỉ lấy một lần)
+- [x] `enrichArtworks` dùng nó — số truy vấn không còn tăng theo số tác phẩm
+- [x] Dữ liệu hiển thị không đổi
 
-**Hoàn thành khi.**
-
-- [ ] Tải trang danh sách 24 tác phẩm tốn số truy vấn **không đổi** theo số tác phẩm
-- [ ] Dữ liệu hiển thị y hệt trước khi sửa
+Cùng đợt này cũng đóng luôn nợ **"Bảng vàng gọi lặp"**: thêm `HasAward` vào
+`ArtworkFilter` để lấy toàn bộ tác phẩm có giải trong một lượt rồi tự nhóm theo giải, thay
+vì gọi `ListArtworks` (kèm enrich) riêng cho từng giải.
 
 ### P1.3 — Lọc khu vực bằng SQL
 
@@ -198,6 +199,7 @@ Không cần cho lần chạy này, ghi lại để không quên.
 
 ```text
 ✅ Đã xong    P0.2 commit việc tồn đọng
+              P1.2 gom truy vấn học sinh (+ bảng vinh danh, index migration 014)
               P1.5 biến thể ảnh WebP
               P2.3 nén gzip phản hồi
 
@@ -205,7 +207,6 @@ Tuần này      P0.1 miễn API key public   ← chặn đường lên producti
               P0.3 xoay vòng log
 
 Tuần sau      P1.1 dọn artwork_views
-              P1.2 gom truy vấn học sinh
               P1.4 magic byte upload đơn
 
 Trước sự kiện P1.3 lọc khu vực bằng SQL

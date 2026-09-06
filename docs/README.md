@@ -77,6 +77,6 @@ Bản khảo sát ngày 2026-09-06 phát hiện các sai lệch sau trong tài l
 |---|---|
 | `ARCHITECTURE.md` ghi CSDL là PostgreSQL | MySQL 8 — driver `go-sql-driver/mysql`, DSN `user:pass@tcp(...)`, schema dùng `ENGINE=InnoDB` |
 | `DEPLOYMENT.md` hướng dẫn deploy bằng Dockerfile | `Dockerfile` đã bị xoá khỏi repo; phương án thật là binary + systemd |
-| `MODULES.md` ghi "hiện có 1 file migration" | Có 13 file migration (`001`→`013`) |
+| `MODULES.md` ghi "hiện có 1 file migration" | Có 14 file migration (`001`→`014`) |
 | Tài liệu cũ không nhắc trang public | Trang public là phần lớn nhất của UI hiện tại (4 trang, 22 component) |
 

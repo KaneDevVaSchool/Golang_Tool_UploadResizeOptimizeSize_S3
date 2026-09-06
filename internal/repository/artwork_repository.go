@@ -204,6 +204,13 @@ func (r *artworkRepository) List(ctx context.Context, filter models.ArtworkFilte
 		where = append(where, "artworks.id IN (SELECT artwork_id FROM artwork_awards WHERE award_id = ?)")
 		args = append(args, *filter.AwardID)
 	}
+	if filter.HasAward != nil {
+		if *filter.HasAward {
+			where = append(where, "EXISTS (SELECT 1 FROM artwork_awards aa WHERE aa.artwork_id = artworks.id)")
+		} else {
+			where = append(where, "NOT EXISTS (SELECT 1 FROM artwork_awards aa WHERE aa.artwork_id = artworks.id)")
+		}
+	}
 	if filter.IsFeatured != nil {
 		where = append(where, "artworks.is_featured = ?")
 		args = append(args, *filter.IsFeatured)

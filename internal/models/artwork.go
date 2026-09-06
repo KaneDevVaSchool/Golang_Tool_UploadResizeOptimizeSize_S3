@@ -46,8 +46,12 @@ type ArtworkFilter struct {
 	GradeLevelID   *int64
 	EducationLevel string // "primary" | "secondary" | "" (không lọc)
 	AwardID        *int64
-	IsFeatured     *bool
-	IsPublished    *bool
+	// HasAward lọc "mọi tác phẩm có ít nhất một giải" (không quan tâm giải
+	// nào). Khác AwardID ở chỗ chỉ cần một truy vấn để dựng bảng vinh danh,
+	// thay vì lặp từng giải rồi truy vấn lại cho mỗi giải.
+	HasAward    *bool
+	IsFeatured  *bool
+	IsPublished *bool
 	Page           int
 	PageSize       int
 }

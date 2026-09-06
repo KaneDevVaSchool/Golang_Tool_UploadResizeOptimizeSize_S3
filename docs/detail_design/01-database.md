@@ -2,7 +2,7 @@
 
 **Hệ quản trị**: MySQL 8+ · InnoDB · `utf8mb4` / `utf8mb4_unicode_ci`
 **Driver**: `github.com/go-sql-driver/mysql`
-**Migration**: `internal/database/migrations/001..013_*.sql`, chạy tự động lúc khởi động
+**Migration**: `internal/database/migrations/001..014_*.sql`, chạy tự động lúc khởi động
 
 > `utf8mb4` là bắt buộc, không phải tuỳ chọn: dữ liệu chứa tiếng Việt có dấu và emoji
 > (bình luận, tên tác phẩm). `utf8` của MySQL chỉ 3 byte và sẽ làm hỏng emoji.
@@ -178,6 +178,12 @@ Dạng dữ liệu: `{"thumb_webp":"https://…","thumb_jpg":"https://…", …}
 có đường lui về ảnh gốc. `thumbnail_url` vẫn được ghi song song để code cũ và trang admin
 không gãy.
 
+**Index `(is_published, created_at DESC)`** (migration `014`). Mọi truy vấn công khai đều
+lọc `is_published = 1` rồi `ORDER BY created_at DESC`, nhưng `created_at` trước đó không có
+index nào. MySQL vì thế chọn `idx_artworks_is_published` — gần như toàn bảng đều bằng 1 nên
+độ chọn lọc gần bằng không — rồi filesort lại toàn bộ kết quả cho **mỗi trang**. Composite
+này vừa lọc vừa cho sẵn thứ tự, nên MySQL đọc đúng số dòng của trang rồi dừng.
+
 #### `artwork_awards` — nối N:N (migration 009)
 
 | Cột | Ghi chú |
@@ -221,7 +227,10 @@ nhưng mỗi loại chỉ một lần. Repository dùng upsert nên bấm lại 
 | `content` | VARCHAR(1000) | Giới hạn khớp hằng số ở handler |
 | `is_hidden` | TINYINT(1) | Ẩn spam mà không xoá hẳn |
 
-**Index**: `artwork_id`, `created_at DESC`.
+**Index**: `artwork_id`, `created_at DESC`, và `(artwork_id, is_hidden, created_at DESC)`
+(migration `014`). Truy vấn thật là `WHERE artwork_id = ? AND is_hidden = 0 ORDER BY
+created_at DESC`; với hai index rời rạc, MySQL chỉ dùng được một rồi filesort phần còn lại.
+Composite phủ trọn cả ba mệnh đề.
 
 Giới hạn độ dài được **đồng bộ hai nơi**: cột VARCHAR ở đây và hằng số
 `maxCommentContentLength = 1000` / `maxDisplayNameLength = 100` ở

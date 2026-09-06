@@ -502,21 +502,48 @@ func (h *PublicHandler) HandleBillboard(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Lấy MỘT lần mọi tác phẩm có giải, thay vì lặp từng giải rồi gọi
+	// ListArtworks cho mỗi giải: mỗi lượt gọi đó vốn đã kéo theo cả loạt truy
+	// vấn ghép metadata, nên với 4 giải là gấp bốn toàn bộ chi phí đó.
+	// ListArtworks đã trả kèm Awards của từng tác phẩm nên đủ dữ liệu để tự
+	// nhóm lại bên dưới.
 	published := true
-	var entries []billboardEntry
-	for _, award := range awards {
-		filter := models.ArtworkFilter{IsPublished: &published, AwardID: &award.ID, Page: 1, PageSize: 100}
-		result, err := h.artworkService.ListArtworks(r.Context(), filter)
-		if err != nil {
-			continue
+	hasAward := true
+	result, err := h.artworkService.ListArtworks(r.Context(), models.ArtworkFilter{
+		IsPublished: &published,
+		HasAward:    &hasAward,
+		Page:        1,
+		PageSize:    maxBillboardArtworks,
+	})
+	if err != nil {
+		h.SendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Không tải được bảng vinh danh")
+		return
+	}
+
+	byAward := make(map[int64][]*models.ArtworkWithMeta, len(awards))
+	for _, item := range result.Items {
+		for _, aw := range item.Awards {
+			byAward[aw.ID] = append(byAward[aw.ID], item)
 		}
-		for _, item := range result.Items {
+	}
+
+	// Duyệt theo danh sách giải (awardRepo.List đã sắp theo rank_order) để giữ
+	// nguyên thứ tự cũ: Nhất trước, Khuyến khích sau. Một tác phẩm mang nhiều
+	// giải vẫn xuất hiện một lần cho mỗi giải, đúng như trước.
+	entries := make([]billboardEntry, 0, len(result.Items))
+	for _, award := range awards {
+		for _, item := range byAward[award.ID] {
 			entries = append(entries, billboardEntry{ArtworkWithMeta: item, Award: *award})
 		}
 	}
 
 	h.SendSuccess(w, entries)
 }
+
+// maxBillboardArtworks giới hạn số tác phẩm dựng bảng vinh danh trong một
+// lượt. Trần cũ là 100 cho mỗi giải; giữ ở mức tương đương cho tổng số vì
+// bảng vinh danh vốn chỉ gồm các tác phẩm đoạt giải.
+const maxBillboardArtworks = 100
 
 // maxPublicSearchLength khớp maxlength của ô tìm trên /phong-trien-lam.
 const maxPublicSearchLength = 80

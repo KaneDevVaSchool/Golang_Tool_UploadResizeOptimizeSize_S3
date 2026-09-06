@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -211,5 +210,4 @@ func TestBuildVariantsRewindsReader(t *testing.T) {
 	if len(variants) == 0 {
 		t.Fatal("muốn sinh được biến thể sau khi tua lại, nhận rỗng")
 	}
-	fmt.Sprint(variants)
 }

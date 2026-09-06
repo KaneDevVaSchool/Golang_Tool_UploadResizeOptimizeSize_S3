@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"s3-upload-tool/internal/database"
 	"s3-upload-tool/internal/models"
@@ -112,7 +113,21 @@ type artworkService struct {
 	reactionRepo    repository.ReactionRepository
 	commentRepo     repository.CommentRepository
 	bulkConcurrency int
+
+	// Cache trường + khối lớp. Đây là hai bảng tham chiếu tĩnh (5 và 12 dòng,
+	// seed sẵn trong migration, chỉ đổi khi mở cơ sở mới) nhưng enrichArtworks
+	// lại nạp TOÀN BỘ cả hai ở mọi lần gọi - kể cả khi chỉ lấy chi tiết một
+	// tác phẩm. Giữ trong tiến trình với TTL ngắn: đủ để thay đổi hiếm hoi tự
+	// hiện ra sau vài phút mà không cần khởi động lại.
+	refMu         sync.RWMutex
+	refExpiresAt  time.Time
+	cachedSchools map[int64]*models.School
+	cachedGrades  map[int64]*models.GradeLevel
 }
+
+// refCacheTTL - đủ ngắn để thêm trường/khối mới tự xuất hiện, đủ dài để loại
+// hẳn hai truy vấn này khỏi đường đi của mọi request đọc.
+const refCacheTTL = 5 * time.Minute
 
 func NewArtworkService(
 	db *database.DB,
@@ -439,14 +454,73 @@ func (s *artworkService) SetFeatured(ctx context.Context, id int64, featured boo
 // enrichArtworks gộp thông tin học sinh/trường/khối lớp/giải/reaction/comment
 // cho 1 danh sách artworks bằng batch query (tránh N+1) - dùng chung cho cả
 // GetArtwork (1 item) và ListArtworks (nhiều item).
+//
+// Mọi tra cứu ở đây đều là truy vấn gộp: học sinh/giải/reaction/comment lấy
+// theo lô id, trường và khối lớp đọc từ cache (17 dòng tĩnh). Tổng cộng cố
+// định vài truy vấn cho mỗi trang, không phụ thuộc số tác phẩm trong trang.
+//
+// Học sinh thiếu (bản ghi bị xoá thủ công, dữ liệu cũ không nhất quán) chỉ
+// làm trống tên tác giả chứ không làm hỏng cả trang - trước đây một id hỏng
+// khiến toàn bộ danh sách trả lỗi 500.
+// referenceData trả trường + khối lớp dạng map tra theo id, đọc từ cache khi
+// còn hạn.
+//
+// Nếu hai request cùng gặp lúc cache hết hạn thì cả hai sẽ cùng nạp lại - chấp
+// nhận được, vì đây chỉ là hai truy vấn nhỏ và mỗi 5 phút mới xảy ra một lần;
+// đổi lại tránh được singleflight hay khoá ghi giữ suốt thời gian truy vấn.
+func (s *artworkService) referenceData(ctx context.Context) (map[int64]*models.School, map[int64]*models.GradeLevel, error) {
+	s.refMu.RLock()
+	if time.Now().Before(s.refExpiresAt) && s.cachedSchools != nil {
+		schools, grades := s.cachedSchools, s.cachedGrades
+		s.refMu.RUnlock()
+		return schools, grades, nil
+	}
+	s.refMu.RUnlock()
+
+	schools, err := s.schoolRepo.List(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load schools: %w", err)
+	}
+	schoolByID := make(map[int64]*models.School, len(schools))
+	for _, sc := range schools {
+		schoolByID[sc.ID] = sc
+	}
+
+	grades, err := s.gradeRepo.List(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load grade levels: %w", err)
+	}
+	gradeByID := make(map[int64]*models.GradeLevel, len(grades))
+	for _, g := range grades {
+		gradeByID[g.ID] = g
+	}
+
+	s.refMu.Lock()
+	s.cachedSchools = schoolByID
+	s.cachedGrades = gradeByID
+	s.refExpiresAt = time.Now().Add(refCacheTTL)
+	s.refMu.Unlock()
+
+	// Trả map vừa dựng chứ không đọc lại từ struct: giữa Unlock và lần đọc
+	// tiếp theo có thể có goroutine khác đã ghi đè.
+	return schoolByID, gradeByID, nil
+}
+
 func (s *artworkService) enrichArtworks(ctx context.Context, artworks []*models.Artwork) ([]*models.ArtworkWithMeta, error) {
 	if len(artworks) == 0 {
 		return nil, nil
 	}
 
 	ids := make([]int64, len(artworks))
+	studentIDs := make([]int64, len(artworks))
 	for i, a := range artworks {
 		ids[i] = a.ID
+		studentIDs[i] = a.StudentID
+	}
+
+	studentByID, err := s.studentRepo.ListByIDs(ctx, studentIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load students: %w", err)
 	}
 
 	awardsByArtwork, err := s.awardRepo.ListByArtworkIDs(ctx, ids)
@@ -462,30 +536,14 @@ func (s *artworkService) enrichArtworks(ctx context.Context, artworks []*models.
 		return nil, fmt.Errorf("failed to load comment counts: %w", err)
 	}
 
-	schools, err := s.schoolRepo.List(ctx)
+	schoolByID, gradeByID, err := s.referenceData(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load schools: %w", err)
-	}
-	schoolByID := make(map[int64]*models.School, len(schools))
-	for _, sc := range schools {
-		schoolByID[sc.ID] = sc
-	}
-
-	grades, err := s.gradeRepo.List(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load grade levels: %w", err)
-	}
-	gradeByID := make(map[int64]*models.GradeLevel, len(grades))
-	for _, g := range grades {
-		gradeByID[g.ID] = g
+		return nil, err
 	}
 
 	result := make([]*models.ArtworkWithMeta, 0, len(artworks))
 	for _, a := range artworks {
-		student, err := s.studentRepo.GetByID(ctx, a.StudentID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load student for artwork %d: %w", a.ID, err)
-		}
+		student := studentByID[a.StudentID]
 
 		meta := &models.ArtworkWithMeta{
 			Artwork:        *a,
