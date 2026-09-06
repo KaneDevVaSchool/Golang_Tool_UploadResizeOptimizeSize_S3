@@ -126,12 +126,13 @@ Không seed — admin tự tạo qua `/admin/awards`. `rank_order` quyết đị
 toàn trường. RESTRICT mặc định khi xoá `grade_levels` — chặn xoá nhầm một khối đang có giải
 gắn riêng.
 
-#### `topic_categories` — nhóm chủ đề sáng tạo (migration 016)
+#### `topic_categories` — nhóm chủ đề sáng tạo (migration 016, `color_hex` thêm ở migration 017)
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
 | `name` | VARCHAR(255) | Vd "Trí tưởng tượng & thế giới thần tiên" |
 | `slug` | VARCHAR(100) UNIQUE | Định danh ổn định |
+| `color_hex` | VARCHAR(7) NOT NULL DEFAULT `#725139` | Màu tô icon nhóm trong dropdown `ArtworkMetaForm` và trang quản lý — cùng cơ chế `awards.color_hex` |
 | `education_level` | ENUM(`primary`,`secondary`) NULL | `NULL` = dùng chung mọi cấp; có giá trị = chỉ áp dụng cho đúng cấp đó |
 | `display_order` | INT | Thứ tự hiển thị |
 | `is_active` | TINYINT(1) | Ẩn nhóm không dùng |

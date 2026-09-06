@@ -25,6 +25,7 @@ func NewTopicCategoryHandler(svc service.TopicCategoryService) *TopicCategoryHan
 type topicCategoryRequestBody struct {
 	Name           string  `json:"name"`
 	Slug           string  `json:"slug"`
+	ColorHex       string  `json:"color_hex"`
 	EducationLevel *string `json:"education_level"`
 	DisplayOrder   int     `json:"display_order"`
 	IsActive       *bool   `json:"is_active"`
@@ -68,6 +69,7 @@ func (h *TopicCategoryHandler) HandleCreateTopicCategory(w http.ResponseWriter, 
 	category := &models.TopicCategory{
 		Name:           strings.TrimSpace(body.Name),
 		Slug:           strings.TrimSpace(body.Slug),
+		ColorHex:       strings.TrimSpace(body.ColorHex),
 		EducationLevel: body.EducationLevel,
 		DisplayOrder:   body.DisplayOrder,
 		IsActive:       isActive,
@@ -104,6 +106,7 @@ func (h *TopicCategoryHandler) HandleUpdateTopicCategory(w http.ResponseWriter, 
 		ID:             id,
 		Name:           strings.TrimSpace(body.Name),
 		Slug:           strings.TrimSpace(body.Slug),
+		ColorHex:       strings.TrimSpace(body.ColorHex),
 		EducationLevel: body.EducationLevel,
 		DisplayOrder:   body.DisplayOrder,
 		IsActive:       isActive,

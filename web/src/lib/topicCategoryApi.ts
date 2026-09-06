@@ -4,6 +4,7 @@ export type TopicCategory = {
   id: number;
   name: string;
   slug: string;
+  color_hex: string;
   /** Nhóm chủ đề áp dụng cho cấp học nào - null/undefined = dùng chung mọi cấp. */
   education_level?: "primary" | "secondary" | null;
   display_order: number;
@@ -18,6 +19,7 @@ export function fetchTopicCategories(includeInactive: boolean, signal?: AbortSig
 export type TopicCategoryPayload = {
   name: string;
   slug?: string;
+  color_hex: string;
   education_level?: "primary" | "secondary" | null;
   display_order: number;
   is_active: boolean;

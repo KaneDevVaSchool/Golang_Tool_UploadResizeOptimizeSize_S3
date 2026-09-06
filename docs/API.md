@@ -568,13 +568,15 @@ ngoại `artwork_awards`).
 
 ```json
 { "name": "Mái trường Việt Mỹ - Nơi những điều đẹp đẽ được lắng nghe",
-  "slug": "mai-truong-viet-my", "education_level": "secondary",
+  "slug": "mai-truong-viet-my", "color_hex": "#9a0036", "education_level": "secondary",
   "display_order": 3, "is_active": true }
 ```
 
-`slug` là **duy nhất**. `education_level` tuỳ chọn: `null`/vắng mặt = nhóm dùng chung mọi
-cấp học; `primary`/`secondary` = nhóm chỉ áp dụng cho đúng cấp đó (thể lệ Tiểu học và
-THCS-THPT dùng bộ nhóm chủ đề khác nhau).
+`slug` là **duy nhất**. `color_hex` tuỳ chọn (mặc định `#725139` nếu bỏ trống) — tô icon
+nhóm trong dropdown `ArtworkMetaForm` và trang quản lý, cùng cơ chế `awards.color_hex`.
+`education_level` tuỳ chọn: `null`/vắng mặt = nhóm dùng chung mọi cấp học; `primary`/
+`secondary` = nhóm chỉ áp dụng cho đúng cấp đó (thể lệ Tiểu học và THCS-THPT dùng bộ nhóm
+chủ đề khác nhau).
 
 DELETE trả **409 `TOPIC_CATEGORY_IN_USE`** nếu nhóm đang gắn cho tác phẩm nào đó.
 

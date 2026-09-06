@@ -40,6 +40,9 @@ func (s *topicCategoryService) CreateTopicCategory(ctx context.Context, category
 	if category.Slug == "" {
 		category.Slug = slugify(category.Name)
 	}
+	if category.ColorHex == "" {
+		category.ColorHex = "#725139" // mặc định cùng màu icon cũ trước khi có color picker
+	}
 	return s.repo.Create(ctx, category)
 }
 
@@ -52,6 +55,9 @@ func (s *topicCategoryService) UpdateTopicCategory(ctx context.Context, category
 	}
 	if category.Slug == "" {
 		category.Slug = slugify(category.Name)
+	}
+	if category.ColorHex == "" {
+		category.ColorHex = "#725139"
 	}
 	return s.repo.Update(ctx, category)
 }

@@ -28,12 +28,12 @@ func NewTopicCategoryRepository(db *database.DB) TopicCategoryRepository {
 	return &topicCategoryRepository{db: db}
 }
 
-const topicCategorySelectColumns = `id, name, slug, education_level, display_order, is_active, created_at, updated_at`
+const topicCategorySelectColumns = `id, name, slug, color_hex, education_level, display_order, is_active, created_at, updated_at`
 
 func scanTopicCategory(scanner interface{ Scan(dest ...any) error }) (*models.TopicCategory, error) {
 	c := &models.TopicCategory{}
 	var educationLevel sql.NullString
-	err := scanner.Scan(&c.ID, &c.Name, &c.Slug, &educationLevel, &c.DisplayOrder, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
+	err := scanner.Scan(&c.ID, &c.Name, &c.Slug, &c.ColorHex, &educationLevel, &c.DisplayOrder, &c.IsActive, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -82,10 +82,10 @@ func (r *topicCategoryRepository) GetByID(ctx context.Context, id int64) (*model
 func (r *topicCategoryRepository) Create(ctx context.Context, category *models.TopicCategory) (*models.TopicCategory, error) {
 	now := time.Now()
 	query := `
-		INSERT INTO topic_categories (name, slug, education_level, display_order, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO topic_categories (name, slug, color_hex, education_level, display_order, is_active, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	result, err := r.db.ExecContext(ctx, query, category.Name, category.Slug, category.EducationLevel, category.DisplayOrder, category.IsActive, now, now)
+	result, err := r.db.ExecContext(ctx, query, category.Name, category.Slug, category.ColorHex, category.EducationLevel, category.DisplayOrder, category.IsActive, now, now)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create topic category: %w", err)
 	}
@@ -102,11 +102,11 @@ func (r *topicCategoryRepository) Create(ctx context.Context, category *models.T
 func (r *topicCategoryRepository) Update(ctx context.Context, category *models.TopicCategory) error {
 	query := `
 		UPDATE topic_categories
-		SET name = ?, slug = ?, education_level = ?, display_order = ?, is_active = ?, updated_at = ?
+		SET name = ?, slug = ?, color_hex = ?, education_level = ?, display_order = ?, is_active = ?, updated_at = ?
 		WHERE id = ?
 	`
 	now := time.Now()
-	result, err := r.db.ExecContext(ctx, query, category.Name, category.Slug, category.EducationLevel, category.DisplayOrder, category.IsActive, now, category.ID)
+	result, err := r.db.ExecContext(ctx, query, category.Name, category.Slug, category.ColorHex, category.EducationLevel, category.DisplayOrder, category.IsActive, now, category.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update topic category: %w", err)
 	}

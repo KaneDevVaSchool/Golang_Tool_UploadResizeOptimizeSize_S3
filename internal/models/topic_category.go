@@ -10,6 +10,7 @@ type TopicCategory struct {
 	ID             int64     `db:"id" json:"id"`
 	Name           string    `db:"name" json:"name"`
 	Slug           string    `db:"slug" json:"slug"`
+	ColorHex       string    `db:"color_hex" json:"color_hex"`
 	EducationLevel *string   `db:"education_level" json:"education_level,omitempty"`
 	DisplayOrder   int       `db:"display_order" json:"display_order"`
 	IsActive       bool      `db:"is_active" json:"is_active"`

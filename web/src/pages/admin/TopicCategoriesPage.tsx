@@ -1,9 +1,10 @@
 import { AnimatePresence, Reorder, motion, useDragControls } from "framer-motion";
-import { GripVertical, Layers, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, GripVertical, Layers, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { RequiredMark } from "../../components/admin/ArtworkMetaForm";
+import { TOPIC_CATEGORY_COLOR_PRESETS, TOPIC_CATEGORY_DEFAULT_COLOR } from "../../components/admin/topicCategoryColors";
 import {
   createTopicCategory,
   deleteTopicCategory,
@@ -34,6 +35,7 @@ const LEVEL_GROUPS: { key: LevelGroup; label: string }[] = [
 type FormState = {
   id: number | null;
   name: string;
+  colorHex: string;
   educationLevel: LevelGroup;
   isActive: boolean;
 };
@@ -41,6 +43,7 @@ type FormState = {
 const EMPTY_FORM: FormState = {
   id: null,
   name: "",
+  colorHex: TOPIC_CATEGORY_DEFAULT_COLOR,
   educationLevel: "",
   isActive: true,
 };
@@ -111,6 +114,7 @@ export default function TopicCategoriesPage() {
     setForm({
       id: category.id,
       name: category.name,
+      colorHex: category.color_hex || TOPIC_CATEGORY_DEFAULT_COLOR,
       educationLevel: (category.education_level ?? "") as LevelGroup,
       isActive: category.is_active,
     });
@@ -154,6 +158,7 @@ export default function TopicCategoriesPage() {
         await updateTopicCategory(form.id, {
           name: form.name.trim(),
           slug: slugify(form.name),
+          color_hex: form.colorHex,
           education_level: group === "" ? null : group,
           display_order: displayOrder,
           is_active: form.isActive,
@@ -165,6 +170,7 @@ export default function TopicCategoriesPage() {
         await createTopicCategory({
           name: form.name.trim(),
           slug: slugify(form.name),
+          color_hex: form.colorHex,
           education_level: group === "" ? null : group,
           display_order: groupOrders[group].length,
           is_active: form.isActive,
@@ -218,6 +224,7 @@ export default function TopicCategoriesPage() {
           updateTopicCategory(category.id, {
             name: category.name,
             slug: category.slug,
+            color_hex: category.color_hex,
             education_level: category.education_level ?? null,
             display_order: index,
             is_active: category.is_active,
@@ -374,7 +381,7 @@ function TopicCategoryRow({
         <GripVertical size={16} />
       </button>
 
-      <span className="award-card-icon" style={{ background: "#725139" }}>
+      <span className="award-card-icon" style={{ background: category.color_hex || TOPIC_CATEGORY_DEFAULT_COLOR }}>
         <Layers size={20} color="#fff" />
       </span>
 
@@ -452,7 +459,7 @@ function TopicCategoryFormPanel({
       </div>
 
       <div className="award-form-preview">
-        <span className="award-card-icon award-card-icon--lg" style={{ background: "#725139" }}>
+        <span className="award-card-icon award-card-icon--lg" style={{ background: form.colorHex }}>
           <Layers size={24} color="#fff" />
         </span>
         <div>
@@ -484,6 +491,33 @@ function TopicCategoryFormPanel({
               {nameError}
             </p>
           )}
+        </div>
+
+        <div className="form-field form-field--full">
+          <label htmlFor="topic-category-color">Màu sắc</label>
+          <div className="award-color-row">
+            {TOPIC_CATEGORY_COLOR_PRESETS.map((hex) => (
+              <button
+                key={hex}
+                type="button"
+                className={`award-color-swatch${form.colorHex.toLowerCase() === hex ? " award-color-swatch--active" : ""}`}
+                style={{ background: hex }}
+                title={hex}
+                aria-label={`Chọn màu ${hex}`}
+                onClick={() => setForm((f) => ({ ...f, colorHex: hex }))}
+              >
+                {form.colorHex.toLowerCase() === hex && <Check size={14} color="#fff" />}
+              </button>
+            ))}
+            <input
+              id="topic-category-color"
+              type="color"
+              className="award-color-input"
+              value={form.colorHex}
+              onChange={(e) => setForm((f) => ({ ...f, colorHex: e.target.value }))}
+              title="Chọn màu tuỳ ý"
+            />
+          </div>
         </div>
 
         <div className="form-field form-field--full">

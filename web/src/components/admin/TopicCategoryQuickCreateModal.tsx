@@ -1,10 +1,11 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Layers, X } from "lucide-react";
+import { Check, Layers, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { createTopicCategory, type TopicCategory } from "../../lib/topicCategoryApi";
 import { toast } from "../../lib/toastBus";
 import { RequiredMark } from "./ArtworkMetaForm";
+import { TOPIC_CATEGORY_COLOR_PRESETS, TOPIC_CATEGORY_DEFAULT_COLOR } from "./topicCategoryColors";
 
 function slugify(name: string): string {
   return name
@@ -38,6 +39,7 @@ export function TopicCategoryQuickCreateModal({
   onClose: () => void;
 }) {
   const [name, setName] = useState("");
+  const [colorHex, setColorHex] = useState(TOPIC_CATEGORY_DEFAULT_COLOR);
   const [educationLevel, setEducationLevel] = useState<"" | "primary" | "secondary">("");
   const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -47,6 +49,7 @@ export function TopicCategoryQuickCreateModal({
   useEffect(() => {
     if (open) {
       setName("");
+      setColorHex(TOPIC_CATEGORY_DEFAULT_COLOR);
       setEducationLevel(defaultEducationLevel);
       setTouched(false);
     }
@@ -75,6 +78,7 @@ export function TopicCategoryQuickCreateModal({
       const created = await createTopicCategory({
         name: name.trim(),
         slug: slugify(name),
+        color_hex: colorHex,
         education_level: educationLevel === "" ? null : educationLevel,
         // Xếp cuối là lựa chọn an toàn nhất ở đây - modal này không biết số
         // lượng nhóm đã có trong cùng cấp học (không tải sẵn danh sách đầy
@@ -128,7 +132,7 @@ export function TopicCategoryQuickCreateModal({
             </div>
 
             <div className="award-form-preview">
-              <span className="award-card-icon award-card-icon--lg" style={{ background: "#725139" }}>
+              <span className="award-card-icon award-card-icon--lg" style={{ background: colorHex }}>
                 <Layers size={24} color="#fff" />
               </span>
               <div>
@@ -156,6 +160,35 @@ export function TopicCategoryQuickCreateModal({
                   disabled={saving}
                 />
                 {touched && nameError && <p className="form-field-error-text">{nameError}</p>}
+              </div>
+
+              <div className="form-field form-field--full">
+                <label htmlFor="topic-quick-create-color">Màu sắc</label>
+                <div className="award-color-row">
+                  {TOPIC_CATEGORY_COLOR_PRESETS.map((hex) => (
+                    <button
+                      key={hex}
+                      type="button"
+                      className={`award-color-swatch${colorHex.toLowerCase() === hex ? " award-color-swatch--active" : ""}`}
+                      style={{ background: hex }}
+                      title={hex}
+                      aria-label={`Chọn màu ${hex}`}
+                      disabled={saving}
+                      onClick={() => setColorHex(hex)}
+                    >
+                      {colorHex.toLowerCase() === hex && <Check size={14} color="#fff" />}
+                    </button>
+                  ))}
+                  <input
+                    id="topic-quick-create-color"
+                    type="color"
+                    className="award-color-input"
+                    value={colorHex}
+                    disabled={saving}
+                    onChange={(e) => setColorHex(e.target.value)}
+                    title="Chọn màu tuỳ ý"
+                  />
+                </div>
               </div>
 
               <div className="form-field form-field--full">
