@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { JsonLd } from "../../components/JsonLd";
 import { FeaturedGardenScene } from "../../components/public/FeaturedGardenScene";
 import { FeaturedHero } from "../../components/public/FeaturedHero";
 import { GalleryLevelSection } from "../../components/public/GalleryLevelSection";
 import { GalleryTopicSection } from "../../components/public/GalleryTopicSection";
 import { GallerySearch } from "../../components/public/GallerySearch";
 import { PublicLightbox } from "../../components/public/PublicLightbox";
+import { usePageMeta } from "../../hooks/usePageMeta";
 import type { ArtworkWithMeta, GradeLevel } from "../../lib/artworkApi";
 import { fetchGradeLevels } from "../../lib/artworkApi";
 import { fetchTopicCategories, type TopicCategory } from "../../lib/topicCategoryApi";
+
+const PAGE_TITLE = "Phòng triển lãm — Khu vườn nghệ thuật VA Schools";
+const PAGE_DESCRIPTION =
+  "Toàn bộ tác phẩm dự thi vẽ tranh của học sinh VA Schools, tìm theo tên, khối lớp, chủ đề sáng tạo.";
 
 type EduLevel = "primary" | "secondary";
 
@@ -40,6 +46,10 @@ export default function GalleryPage() {
   const [topics, setTopics] = useState<TopicCategory[]>([]);
   const [lightbox, setLightbox] = useState<{ items: ArtworkWithMeta[]; index: number } | null>(null);
   const didInitFromUrl = useRef(false);
+
+  // canonicalPath cố định về path gốc, không kèm ?tim=/?tranh=/?khoi= - đều
+  // là biến thể lọc/mở modal của cùng một nội dung.
+  usePageMeta({ title: PAGE_TITLE, description: PAGE_DESCRIPTION, canonicalPath: "/phong-trien-lam" });
 
   useEffect(() => {
     fetchGradeLevels().then(setGrades).catch(() => setGrades([]));
@@ -116,6 +126,30 @@ export default function GalleryPage() {
 
   return (
     <div className="featured-page">
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: PAGE_TITLE,
+          description: PAGE_DESCRIPTION,
+          url: window.location.origin + "/phong-trien-lam",
+        }}
+      />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            { "@type": "ListItem", position: 1, name: "Trang chủ", item: window.location.origin + "/" },
+            {
+              "@type": "ListItem",
+              position: 2,
+              name: "Phòng triển lãm",
+              item: window.location.origin + "/phong-trien-lam",
+            },
+          ],
+        }}
+      />
       <FeaturedHero
         kicker="Phòng triển lãm"
         title="Ở đây có tranh của con"

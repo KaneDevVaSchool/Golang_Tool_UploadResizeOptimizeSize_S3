@@ -1,19 +1,28 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { JsonLd } from "../../components/JsonLd";
 import { EducationLevelGate } from "../../components/public/EducationLevelGate";
 import { HeroSection } from "../../components/public/HeroSection";
 import type { Region } from "../../components/public/RegionTabs";
+import { usePageMeta } from "../../hooks/usePageMeta";
 import { fetchPublicArtworks } from "../../lib/publicApi";
+
+const PAGE_TITLE = "Khu vườn nghệ thuật VA Schools — 20 năm Trường Việt Mỹ";
+const PAGE_DESCRIPTION =
+  "Hội thi vẽ tranh kỷ niệm 20 năm Trường Việt Mỹ — nơi hội tụ những nét vẽ hồn nhiên của học sinh ba khu vực Sài Gòn, Cần Thơ, Vũng Tàu.";
 
 /**
  * Trang chủ /trien-lam - Hero + cổng chọn khối. Không còn cuộn tới các
  * section khác trong cùng trang (kiểu landing page); chọn khu vực ở Hero
  * hoặc chọn khối ở Gate đều điều hướng (navigate) sang trang riêng tương
- * ứng, dùng chung với navbar ở PublicLayout.
+ * ứng, dùng chung với navbar ở PublicLayout. Thư ngỏ là trang riêng
+ * (/thu-ngo, xem OpenLetterPage) - không còn nhúng ở đây.
  */
 export default function HomePage() {
   const navigate = useNavigate();
   const [gradeCounts, setGradeCounts] = useState({ primary: 0, secondary: 0 });
+
+  usePageMeta({ title: PAGE_TITLE, description: PAGE_DESCRIPTION });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -41,6 +50,15 @@ export default function HomePage() {
 
   return (
     <div className="public-home-page">
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "Khu vườn nghệ thuật VA Schools",
+          url: window.location.origin + "/",
+          description: PAGE_DESCRIPTION,
+        }}
+      />
       <HeroSection onSelectRegion={handleSelectRegion} />
       <EducationLevelGate
         primaryCount={gradeCounts.primary}

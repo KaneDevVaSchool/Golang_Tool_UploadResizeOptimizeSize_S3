@@ -2,7 +2,12 @@ import { motion } from "framer-motion";
 import { Home, Images, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { FeaturedGardenScene } from "../../components/public/FeaturedGardenScene";
+import { usePageMeta } from "../../hooks/usePageMeta";
 import { fadeUp } from "../../lib/motionPresets";
+
+const PAGE_TITLE = "Không tìm thấy trang — VA Schools";
+const PAGE_DESCRIPTION =
+  "Trang bạn tìm không tồn tại. Quay lại Khu vườn nghệ thuật VA Schools để khám phá các tác phẩm dự thi.";
 
 const SHORTCUTS = [
   { to: "/", label: "Trang chủ", icon: Home },
@@ -20,6 +25,8 @@ const SHORTCUTS = [
  * "trang này không có ở đây" thay vì lỗi khô khan.
  */
 export default function NotFoundPage() {
+  usePageMeta({ title: PAGE_TITLE, description: PAGE_DESCRIPTION });
+
   return (
     <div className="not-found-page">
       <FeaturedGardenScene critters={false} />
