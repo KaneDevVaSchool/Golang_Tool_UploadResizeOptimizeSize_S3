@@ -11,6 +11,8 @@ export function fetchAwards(includeInactive: boolean, signal?: AbortSignal): Pro
 export type AwardPayload = {
   name: string;
   slug?: string;
+  /** Giải gắn riêng cho 1 khối lớp - null/không gửi = giải dùng chung toàn hệ thống. */
+  grade_level_id?: number | null;
   rank_order: number;
   color_hex: string;
   icon_key?: string | null;

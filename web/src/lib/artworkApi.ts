@@ -38,6 +38,7 @@ export type CreateArtworkPayload = {
   student_name: string;
   school_id: number;
   grade_level_id: number;
+  topic_category_id?: number | null;
   class_name?: string;
   s3_key: string;
   s3_url: string;
@@ -46,13 +47,17 @@ export type CreateArtworkPayload = {
   height?: number;
   /** Gửi lại nguyên vẹn từ kết quả bulk-upload để backend lưu vào DB. */
   variants?: Partial<Record<ArtworkVariantKey, string>>;
-  award_id?: number | null;
+  /** Một tác phẩm có thể nhận nhiều giải cùng lúc (giải chính + Đặc biệt phụ). */
+  award_ids?: number[];
 };
 
 export type Award = {
   id: number;
   name: string;
   slug: string;
+  /** Giải gắn riêng cho 1 khối lớp (vd Tiểu học chia giải theo từng khối 1-5).
+   * null/undefined = giải dùng chung toàn hệ thống, không tách khối. */
+  grade_level_id?: number | null;
   rank_order: number;
   color_hex: string;
   icon_key?: string;
@@ -96,6 +101,8 @@ export type ArtworkWithMeta = {
   region: "saigon" | "cantho" | "vungtau";
   grade_label: string;
   education_level: "primary" | "secondary";
+  topic_category_id?: number;
+  topic_category_name?: string;
   class_name?: string;
   comment_count: number;
   reaction_counts: Record<string, number> | null;
@@ -111,9 +118,15 @@ export type UpdateArtworkPayload = {
   student_id: number;
   school_id: number;
   grade_level_id: number;
+  topic_category_id?: number | null;
   is_featured: boolean;
   is_published: boolean;
-  award_id?: number | null;
+  /**
+   * undefined = giữ nguyên giải hiện tại (không gửi trường trong body);
+   * [] = gỡ hết giải; danh sách = thay toàn bộ giải hiện tại bằng danh sách
+   * này. Không còn giới hạn 1 giải/tác phẩm.
+   */
+  award_ids?: number[];
 };
 
 export function updateArtwork(id: number, payload: UpdateArtworkPayload): Promise<ArtworkWithMeta> {
@@ -131,11 +144,27 @@ export function toggleFeatured(id: number, featured: boolean): Promise<{ is_feat
   });
 }
 
+/**
+ * setFeaturedBatch: bật/tắt tiêu biểu cho nhiều tác phẩm cùng lúc (thao tác
+ * bulk trên trang danh sách) - 1 request PATCH thay vì gọi lặp toggleFeatured
+ * cho từng id, tránh trạng thái nửa vời nếu một request giữa chừng lỗi.
+ */
+export function setFeaturedBatch(
+  ids: number[],
+  featured: boolean,
+): Promise<{ updated: number; is_featured: boolean }> {
+  return adminRequest<{ updated: number; is_featured: boolean }>("/api/v1/admin/artworks/bulk-featured", {
+    method: "PATCH",
+    body: { ids, featured },
+  });
+}
+
 export type ArtworkFilter = {
   search?: string;
   school_id?: number;
   grade_level_id?: number;
   education_level?: "primary" | "secondary";
+  topic_category_id?: number;
   award_id?: number;
   featured?: boolean;
   page?: number;
@@ -155,6 +184,7 @@ export function fetchArtworks(filter: ArtworkFilter, signal?: AbortSignal): Prom
   if (filter.school_id) params.set("school_id", String(filter.school_id));
   if (filter.grade_level_id) params.set("grade_level_id", String(filter.grade_level_id));
   if (filter.education_level) params.set("education_level", filter.education_level);
+  if (filter.topic_category_id) params.set("topic_category_id", String(filter.topic_category_id));
   if (filter.award_id) params.set("award_id", String(filter.award_id));
   if (filter.featured !== undefined) params.set("featured", String(filter.featured));
   params.set("page", String(filter.page ?? 1));

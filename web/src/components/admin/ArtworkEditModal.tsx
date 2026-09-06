@@ -1,7 +1,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { ArtworkMetaForm, type ArtworkMetaFormValues, isMetaFormValid } from "./ArtworkMetaForm";
+import { createPortal } from "react-dom";
+import { ArtworkMetaForm, EMPTY_META_FORM_VALUES, type ArtworkMetaFormValues, isMetaFormValid } from "./ArtworkMetaForm";
 import type { ArtworkWithMeta, Award, GradeLevel, School } from "../../lib/artworkApi";
+import type { TopicCategory } from "../../lib/topicCategoryApi";
 import { artworkImageURL } from "../../lib/artworkImage";
 
 type ArtworkEditModalProps = {
@@ -9,6 +11,8 @@ type ArtworkEditModalProps = {
   artwork: ArtworkWithMeta | null;
   schools: School[];
   gradeLevels: GradeLevel[];
+  topicCategories: TopicCategory[];
+  onTopicCategoryCreated?: (category: TopicCategory) => void;
   awards: Award[];
   busy?: boolean;
   onSave: (values: ArtworkMetaFormValues) => void;
@@ -23,8 +27,9 @@ function toFormValues(artwork: ArtworkWithMeta, gradeLevels: GradeLevel[]): Artw
     schoolId: artwork.school_id,
     educationLevel: grade?.education_level ?? "",
     gradeLevelId: artwork.grade_level_id,
+    topicCategoryId: artwork.topic_category_id ?? "",
     className: artwork.class_name ?? "",
-    awardId: artwork.awards?.[0]?.id ?? "",
+    awardIds: artwork.awards?.map((a) => a.id) ?? [],
   };
 }
 
@@ -38,19 +43,29 @@ export function ArtworkEditModal({
   artwork,
   schools,
   gradeLevels,
+  topicCategories,
+  onTopicCategoryCreated,
   awards,
   busy,
   onSave,
   onClose,
 }: ArtworkEditModalProps) {
-  const [values, setValues] = useState<ArtworkMetaFormValues>(() =>
-    artwork ? toFormValues(artwork, gradeLevels) : { ...({} as ArtworkMetaFormValues) },
-  );
+  const [values, setValues] = useState<ArtworkMetaFormValues>(EMPTY_META_FORM_VALUES);
+  // Theo dõi artwork nào đã đồng bộ vào `values`, để phát hiện đổi tác phẩm
+  // (đóng modal rồi bấm Sửa tác phẩm khác - component không unmount vì luôn
+  // render, chỉ ẩn hiện qua `open`).
+  const [syncedId, setSyncedId] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (artwork) setValues(toFormValues(artwork, gradeLevels));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [artwork?.id]);
+  // Đồng bộ `values` NGAY TRONG lúc render (không phải useEffect) khi
+  // artwork đổi: nếu chờ effect chạy sau render, có một nhịp render với
+  // `values` cũ (rỗng hoặc của tác phẩm trước) trong khi `artwork` đã là
+  // tác phẩm mới - isMetaFormValid() bên dưới đọc `values.title.trim()` lúc
+  // đó sẽ vỡ vì field rỗng không phải string. Đây là pattern React chính
+  // thức cho "đổi state theo prop" (adjusting state during render).
+  if (artwork && artwork.id !== syncedId) {
+    setSyncedId(artwork.id);
+    setValues(toFormValues(artwork, gradeLevels));
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -65,7 +80,12 @@ export function ArtworkEditModal({
 
   const valid = isMetaFormValid(values);
 
-  return (
+  // Portal ra document.body: modal render bên trong .admin-content-inner,
+  // vùng này mang class "route-enter" (will-change: transform khi chuyển
+  // trang) - will-change: transform biến ancestor thành containing block
+  // mới cho position:fixed, nên nếu không portal, modal bị "nhốt" trong
+  // khung cuộn nội dung thay vì phủ toàn viewport (tràn đáy, bị cắt).
+  return createPortal(
     <AnimatePresence>
       {open && (
         <div className="artwork-modal-root" role="presentation">
@@ -107,6 +127,8 @@ export function ArtworkEditModal({
                     onChange={setValues}
                     schools={schools}
                     gradeLevels={gradeLevels}
+                    topicCategories={topicCategories}
+                    onTopicCategoryCreated={onTopicCategoryCreated}
                     awards={awards}
                     disabled={busy}
                   />
@@ -130,6 +152,7 @@ export function ArtworkEditModal({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

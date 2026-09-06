@@ -1,4 +1,4 @@
-import { Image, LayoutDashboard, Sparkles, Trophy, Upload, X } from "lucide-react";
+import { Image, LayoutDashboard, Layers, Sparkles, Trophy, Upload, X } from "lucide-react";
 import { useEffect, type ComponentType } from "react";
 import { NavLink } from "react-router-dom";
 
@@ -67,6 +67,13 @@ const MENU_SECTIONS: MenuSection[] = [
         hint: "Tạo và sắp xếp các hạng mục",
         path: "/admin/awards",
         icon: Trophy,
+      },
+      {
+        id: "topic-categories",
+        label: "Nhóm chủ đề",
+        hint: "Quản lý nhóm chủ đề sáng tạo",
+        path: "/admin/topic-categories",
+        icon: Layers,
       },
     ],
   },

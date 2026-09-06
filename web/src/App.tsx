@@ -40,6 +40,7 @@ const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
 const ArtworksListPage = lazy(() => import("./pages/admin/ArtworksListPage"));
 const ArtworksUploadPage = lazy(() => import("./pages/admin/ArtworksUploadPage"));
 const AwardsPage = lazy(() => import("./pages/admin/AwardsPage"));
+const TopicCategoriesPage = lazy(() => import("./pages/admin/TopicCategoriesPage"));
 const AdminNotFoundPage = lazy(() => import("./pages/admin/NotFoundPage"));
 
 const NotFoundPage = lazy(() => import("./pages/public/NotFoundPage"));
@@ -74,6 +75,7 @@ export default function App() {
             <Route path="artworks" element={<ArtworksListPage />} />
             <Route path="artworks/upload" element={<ArtworksUploadPage />} />
             <Route path="awards" element={<AwardsPage />} />
+            <Route path="topic-categories" element={<TopicCategoriesPage />} />
             {/* 404 riêng cho khu quản trị: giữ nguyên sidebar/header thay vì
                 rơi ra ngoài layout public. */}
             <Route path="*" element={<AdminNotFoundPage />} />

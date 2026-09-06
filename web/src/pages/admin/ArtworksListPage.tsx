@@ -1,4 +1,4 @@
-import { Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
+import { LayoutGrid, List, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
 import { ArtworkEditModal } from "../../components/admin/ArtworkEditModal";
@@ -10,6 +10,7 @@ import {
   fetchArtworks,
   fetchGradeLevels,
   fetchSchools,
+  setFeaturedBatch,
   toggleFeatured,
   updateArtwork,
   type ArtworkWithMeta,
@@ -18,10 +19,27 @@ import {
 } from "../../lib/artworkApi";
 import { fetchAwards } from "../../lib/awardApi";
 import type { Award } from "../../lib/artworkApi";
+import { fetchTopicCategories, type TopicCategory } from "../../lib/topicCategoryApi";
 import type { ArtworkMetaFormValues } from "../../components/admin/ArtworkMetaForm";
 import { toast } from "../../lib/toastBus";
 
 const REGION_LABEL: Record<string, string> = { saigon: "Sài Gòn", cantho: "Cần Thơ", vungtau: "Vũng Tàu" };
+
+// Chế độ xem được nhớ qua localStorage: admin quay lại trang vẫn giữ đúng
+// chế độ đã chọn lần trước, không phải bấm lại mỗi lần vào trang.
+type ViewMode = "list" | "grid";
+const VIEW_MODE_KEY = "vas_admin_artworks_view_mode";
+
+function loadViewMode(): ViewMode {
+  try {
+    const saved = localStorage.getItem(VIEW_MODE_KEY);
+    return saved === "grid" ? "grid" : "list";
+  } catch {
+    // Chế độ ẩn danh của một số trình duyệt chặn localStorage - mặc định
+    // list là đủ, không làm hỏng chức năng chính của trang.
+    return "list";
+  }
+}
 
 export default function ArtworksListPage() {
   const [items, setItems] = useState<ArtworkWithMeta[]>([]);
@@ -33,12 +51,18 @@ export default function ArtworksListPage() {
   const [search, setSearch] = useState("");
   const [schoolFilter, setSchoolFilter] = useState<number | "">("");
   const [gradeFilter, setGradeFilter] = useState<number | "">("");
+  const [topicFilter, setTopicFilter] = useState<number | "">("");
   const [awardFilter, setAwardFilter] = useState<number | "">("");
   const [featuredOnly, setFeaturedOnly] = useState(false);
 
   const [schools, setSchools] = useState<School[]>([]);
   const [gradeLevels, setGradeLevels] = useState<GradeLevel[]>([]);
+  const [topicCategories, setTopicCategories] = useState<TopicCategory[]>([]);
   const [awards, setAwards] = useState<Award[]>([]);
+
+  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const [editing, setEditing] = useState<ArtworkWithMeta | null>(null);
   const [saving, setSaving] = useState(false);
@@ -46,10 +70,11 @@ export default function ArtworksListPage() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    Promise.all([fetchSchools(), fetchGradeLevels(), fetchAwards(true)])
-      .then(([s, g, a]) => {
+    Promise.all([fetchSchools(), fetchGradeLevels(), fetchTopicCategories(true), fetchAwards(true)])
+      .then(([s, g, t, a]) => {
         setSchools(s ?? []);
         setGradeLevels(g ?? []);
+        setTopicCategories(t ?? []);
         setAwards(a ?? []);
       })
       .catch((err: unknown) => toast.error(err instanceof Error ? err.message : "Không tải được dữ liệu nền"));
@@ -63,6 +88,7 @@ export default function ArtworksListPage() {
           search: search || undefined,
           school_id: schoolFilter || undefined,
           grade_level_id: gradeFilter || undefined,
+          topic_category_id: topicFilter || undefined,
           award_id: awardFilter || undefined,
           featured: featuredOnly || undefined,
           page,
@@ -73,6 +99,9 @@ export default function ArtworksListPage() {
         .then((res) => {
           setItems(res.items ?? []);
           setTotalCount(res.total_count);
+          // Trang đổi (lọc/phân trang) -> bỏ chọn, tránh áp bulk action nhầm
+          // lên tác phẩm không còn hiển thị trên màn hình.
+          setSelected(new Set());
         })
         .catch((err: unknown) => {
           if (controller?.signal.aborted) return;
@@ -82,7 +111,7 @@ export default function ArtworksListPage() {
           if (!controller?.signal.aborted) setLoading(false);
         });
     },
-    [search, schoolFilter, gradeFilter, awardFilter, featuredOnly, page],
+    [search, schoolFilter, gradeFilter, topicFilter, awardFilter, featuredOnly, page],
   );
 
   useEffect(() => {
@@ -90,6 +119,28 @@ export default function ArtworksListPage() {
     load(controller);
     return () => controller.abort();
   }, [load]);
+
+  function changeViewMode(mode: ViewMode) {
+    setViewMode(mode);
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, mode);
+    } catch {
+      // Không lưu được thì lần sau mặc định list - không ảnh hưởng phiên hiện tại.
+    }
+  }
+
+  function toggleSelect(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelected((prev) => (prev.size === items.length ? new Set() : new Set(items.map((i) => i.id))));
+  }
 
   async function handleSave(values: ArtworkMetaFormValues) {
     if (!editing) return;
@@ -100,9 +151,10 @@ export default function ArtworksListPage() {
         student_id: editing.student_id,
         school_id: Number(values.schoolId),
         grade_level_id: Number(values.gradeLevelId),
+        topic_category_id: values.topicCategoryId ? Number(values.topicCategoryId) : null,
         is_featured: editing.is_featured,
         is_published: editing.is_published,
-        award_id: values.awardId ? Number(values.awardId) : 0,
+        award_ids: values.awardIds,
       });
       toast.success("Đã cập nhật tác phẩm.");
       setEditing(null);
@@ -139,6 +191,26 @@ export default function ArtworksListPage() {
     }
   }
 
+  async function handleBulkSetFeatured(featured: boolean) {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    try {
+      await setFeaturedBatch(ids, featured);
+      setItems((prev) => prev.map((a) => (selected.has(a.id) ? { ...a, is_featured: featured } : a)));
+      toast.success(
+        featured
+          ? `Đã đánh dấu tiêu biểu cho ${ids.length} tác phẩm.`
+          : `Đã bỏ đánh dấu tiêu biểu cho ${ids.length} tác phẩm.`,
+      );
+      setSelected(new Set());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không cập nhật được trạng thái tiêu biểu hàng loạt");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return (
@@ -146,7 +218,7 @@ export default function ArtworksListPage() {
       <AdminPageHeader
         title="Thư viện tác phẩm"
         subtitle={totalCount > 0 ? `${totalCount} tác phẩm đang được lưu giữ` : undefined}
-        primaryAction={{ label: "Đưa tác phẩm lên", icon: Plus, to: "/admin/artworks/upload" }}
+        primaryAction={{ label: "Đưa tác phẩm lên", icon: Plus, to: "/admin/artworks/upload", iconOnly: true }}
       />
 
       <div className="artworks-filter-bar">
@@ -194,6 +266,21 @@ export default function ArtworksListPage() {
         </select>
 
         <select
+          value={topicFilter}
+          onChange={(e) => {
+            setPage(1);
+            setTopicFilter(e.target.value ? Number(e.target.value) : "");
+          }}
+        >
+          <option value="">Tất cả nhóm chủ đề</option>
+          {topicCategories.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+
+        <select
           value={awardFilter}
           onChange={(e) => {
             setPage(1);
@@ -219,15 +306,116 @@ export default function ArtworksListPage() {
           />
           Chỉ tiêu biểu
         </label>
+
+        <div className="artworks-view-switch" role="group" aria-label="Chế độ xem">
+          <button
+            type="button"
+            className={viewMode === "list" ? "is-active" : ""}
+            title="Xem dạng danh sách"
+            aria-pressed={viewMode === "list"}
+            onClick={() => changeViewMode("list")}
+          >
+            <List size={16} />
+          </button>
+          <button
+            type="button"
+            className={viewMode === "grid" ? "is-active" : ""}
+            title="Xem dạng lưới ảnh"
+            aria-pressed={viewMode === "grid"}
+            onClick={() => changeViewMode("grid")}
+          >
+            <LayoutGrid size={16} />
+          </button>
+        </div>
       </div>
+
+      {selected.size > 0 && (
+        <div className="artworks-bulk-bar">
+          <span>{selected.size} tác phẩm đã chọn</span>
+          <div className="artworks-bulk-actions">
+            <button type="button" disabled={bulkBusy} onClick={() => handleBulkSetFeatured(true)}>
+              <Star size={14} /> Đánh dấu tiêu biểu
+            </button>
+            <button type="button" disabled={bulkBusy} onClick={() => handleBulkSetFeatured(false)}>
+              <Star size={14} /> Bỏ tiêu biểu
+            </button>
+            <button type="button" className="artworks-bulk-clear" disabled={bulkBusy} onClick={() => setSelected(new Set())}>
+              Bỏ chọn
+            </button>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="admin-page-placeholder">Đang tải danh sách…</div>
       ) : items.length === 0 ? (
         <div className="admin-page-placeholder">Không tìm thấy tác phẩm nào phù hợp.</div>
+      ) : viewMode === "grid" ? (
+        <div className="artworks-grid">
+          {items.map((item) => (
+            <div className={`artworks-grid-card${selected.has(item.id) ? " is-selected" : ""}`} key={item.id}>
+              <label className="artworks-grid-select">
+                <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelect(item.id)} />
+              </label>
+              <div className="artworks-grid-thumb">
+                <img src={artworkImageURL(item, "medium")} alt={item.title} loading="lazy" />
+                {item.is_featured && (
+                  <span className="artworks-grid-featured-badge" title="Đang là tác phẩm tiêu biểu">
+                    <Star size={12} fill="currentColor" />
+                  </span>
+                )}
+              </div>
+              <div className="artworks-grid-body">
+                <strong title={item.title}>{item.title}</strong>
+                <span title={item.student_name}>{item.student_name}</span>
+                <span className="artworks-grid-meta">
+                  {item.school_name} · {item.grade_label}
+                </span>
+                {item.awards && item.awards.length > 0 && (
+                  <span className="artworks-cell-award">
+                    {item.awards.map((a) => (
+                      <span key={a.id} className="award-badge" style={{ background: a.color_hex }}>
+                        {a.name}
+                      </span>
+                    ))}
+                  </span>
+                )}
+              </div>
+              <div className="artworks-grid-actions">
+                <button
+                  type="button"
+                  className={`artworks-icon-btn${item.is_featured ? " artworks-icon-btn--active" : ""}`}
+                  title={item.is_featured ? "Bỏ đánh dấu tiêu biểu" : "Đánh dấu tiêu biểu"}
+                  onClick={() => handleToggleFeatured(item)}
+                >
+                  <Star size={16} fill={item.is_featured ? "currentColor" : "none"} />
+                </button>
+                <button type="button" className="artworks-icon-btn" title="Chỉnh sửa" onClick={() => setEditing(item)}>
+                  <Pencil size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="artworks-icon-btn artworks-icon-btn--danger"
+                  title="Xoá"
+                  onClick={() => setDeleteTarget(item)}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="artworks-table" role="table">
           <div className="artworks-table-head" role="row">
+            <span className="artworks-cell-select">
+              <input
+                type="checkbox"
+                checked={items.length > 0 && selected.size === items.length}
+                onChange={toggleSelectAll}
+                aria-label="Chọn tất cả"
+              />
+            </span>
             <span>Ảnh</span>
             <span>Tác phẩm / Học sinh</span>
             <span>Cơ sở / Khối</span>
@@ -238,7 +426,15 @@ export default function ArtworksListPage() {
             <span>Thao tác</span>
           </div>
           {items.map((item) => (
-            <div className="artworks-table-row" role="row" key={item.id}>
+            <div className={`artworks-table-row${selected.has(item.id) ? " is-selected" : ""}`} role="row" key={item.id}>
+              <span className="artworks-cell-select" role="cell">
+                <input
+                  type="checkbox"
+                  checked={selected.has(item.id)}
+                  onChange={() => toggleSelect(item.id)}
+                  aria-label={`Chọn ${item.title}`}
+                />
+              </span>
               <span className="artworks-cell-thumb" role="cell">
                 <img src={artworkImageURL(item, "thumb")} alt={item.title} loading="lazy" />
               </span>
@@ -321,6 +517,8 @@ export default function ArtworksListPage() {
         artwork={editing}
         schools={schools}
         gradeLevels={gradeLevels}
+        topicCategories={topicCategories}
+        onTopicCategoryCreated={(category) => setTopicCategories((prev) => [...prev, category])}
         awards={awards}
         busy={saving}
         onSave={handleSave}

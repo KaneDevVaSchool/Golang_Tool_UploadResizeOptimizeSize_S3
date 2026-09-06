@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 type ConfirmDialogProps = {
   open: boolean;
@@ -34,7 +35,12 @@ export function ConfirmDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, busy, onCancel]);
 
-  return (
+  // Portal ra document.body - xem ghi chú trong ArtworkEditModal.tsx: modal
+  // render bên trong .admin-content-inner (class "route-enter" khi chuyển
+  // trang dùng will-change: transform, tạo containing block mới cho
+  // position:fixed) sẽ bị nhốt trong khung cuộn nội dung thay vì phủ toàn
+  // viewport nếu không portal.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <div className="confirm-root" role="presentation">
@@ -79,6 +85,7 @@ export function ConfirmDialog({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
