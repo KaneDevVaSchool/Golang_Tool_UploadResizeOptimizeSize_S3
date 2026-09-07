@@ -297,6 +297,13 @@ Bắt người vận hành khai lại domain trong một biến CSP riêng là m
 hai chỗ — mà hậu quả là CSP chặn đúng ảnh tác phẩm, lỗi chỉ lộ trên trình duyệt người dùng
 cuối chứ không xuất hiện trong log server.
 
+`img-src` cũng khai sẵn **`https://lh3.googleusercontent.com`**: avatar admin lấy từ trường
+`picture` của Google OAuth (`admin_users.avatar_url`) và luôn nằm trên domain đó. Đây là hệ
+quả cố định của việc đăng nhập bằng Google chứ không phải lựa chọn triển khai, nên để trong
+code thay vì bắt mỗi môi trường tự nhớ thêm vào `SECURITY_CSP_IMAGE_SOURCES` —
+`TestSecurityHeaders_CSPChoPhepAvatarGoogle` khoá lại điều này. Thẻ `<img>` avatar đặt
+`referrerPolicy="no-referrer"` nên Google không nhận được URL trang admin.
+
 ⚠️ HSTS chỉ đặt khi request thật sự đến qua HTTPS. `X-Forwarded-Proto` chỉ được tin khi
 request đến từ proxy tin cậy — cùng nguyên tắc ở mục 6.
 

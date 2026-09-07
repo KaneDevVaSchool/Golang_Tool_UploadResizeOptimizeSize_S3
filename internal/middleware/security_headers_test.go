@@ -45,12 +45,59 @@ func TestSecurityHeaders_CSPChoPhepAnhS3(t *testing.T) {
 	}
 }
 
+func TestSecurityHeaders_CSPChoPhepAvatarGoogle(t *testing.T) {
+	// Avatar admin do Google OAuth trả về nằm trên lh3.googleusercontent.com.
+	// Đây là hệ quả cố định của đăng nhập Google, không phải cấu hình tuỳ chọn,
+	// nên phải chạy được cả khi không khai SECURITY_CSP_IMAGE_SOURCES.
+	h := SecurityHeadersMiddleware(SecurityHeadersConfig{})(okHandler())
+	w := doRequest(h, "/admin", "Chrome", "203.0.113.27:1")
+
+	csp := w.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "https://lh3.googleusercontent.com") {
+		t.Fatalf("img-src phải cho phép avatar Google, nhận được %q", csp)
+	}
+}
+
 func TestSecurityHeaders_KhongDatCSPTrenAPI(t *testing.T) {
 	h := SecurityHeadersMiddleware(SecurityHeadersConfig{})(okHandler())
 	w := doRequest(h, "/api/v1/public/artworks", "Chrome", "203.0.113.22:1")
 
 	if csp := w.Header().Get("Content-Security-Policy"); csp != "" {
 		t.Fatalf("response JSON không cần CSP, nhận được %q", csp)
+	}
+}
+
+func TestSecurityHeaders_KhongDatCSPTrenTaiNguyenTinh(t *testing.T) {
+	// Font và splash.js là file tĩnh, không phải tài liệu HTML - đặt CSP lên
+	// chúng chỉ tốn băng thông ở mọi request.
+	h := SecurityHeadersMiddleware(SecurityHeadersConfig{})(okHandler())
+
+	for _, path := range []string{
+		"/fonts/be-vietnam-pro-normal-400-vietnamese.woff2",
+		"/splash.js",
+		"/assets/index-B1MgHjEB.js",
+	} {
+		w := doRequest(h, path, "Chrome", "203.0.113.25:1")
+		if csp := w.Header().Get("Content-Security-Policy"); csp != "" {
+			t.Errorf("%s là tài nguyên tĩnh, không cần CSP, nhận được %q", path, csp)
+		}
+	}
+}
+
+func TestSecurityHeaders_FontTuPhucVuDuocPhep(t *testing.T) {
+	// Font self-host nằm cùng origin. Nếu ai đó siết font-src bỏ 'self' thì
+	// toàn bộ chữ trên trang tụt về font hệ thống - lỗi chỉ lộ trên trình
+	// duyệt người dùng cuối, không xuất hiện trong log server.
+	h := SecurityHeadersMiddleware(SecurityHeadersConfig{})(okHandler())
+	w := doRequest(h, "/", "Chrome", "203.0.113.26:1")
+
+	csp := w.Header().Get("Content-Security-Policy")
+	if !strings.Contains(csp, "font-src 'self'") {
+		t.Fatalf("font-src phải cho phép 'self' để font tự phục vụ chạy được, nhận được %q", csp)
+	}
+	// Đã bỏ Google Fonts để không nới CSP ra origin ngoài - xem web/src/styles/fonts.css.
+	if strings.Contains(csp, "fonts.googleapis.com") || strings.Contains(csp, "fonts.gstatic.com") {
+		t.Fatalf("font đã self-host, CSP không cần tin origin của Google, nhận được %q", csp)
 	}
 }
 

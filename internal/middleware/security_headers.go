@@ -71,7 +71,11 @@ func SecurityHeadersMiddleware(cfg SecurityHeadersConfig) func(http.Handler) htt
 // tuyến. Với script thì KHÔNG nới - Vite sinh file .js riêng, không cần inline,
 // nên giữ được 'self' nghiêm ngặt, và đó mới là hướng tấn công XSS đáng lo.
 func buildCSP(cfg SecurityHeadersConfig) string {
-	imgSrc := []string{"'self'", "data:", "blob:"}
+	// Avatar admin lấy từ trường picture của Google OAuth, luôn nằm trên
+	// lh3.googleusercontent.com. Đây là hệ quả cố định của việc đăng nhập bằng
+	// Google chứ không phải lựa chọn triển khai, nên khai sẵn thay vì bắt người
+	// vận hành nhớ thêm vào SECURITY_CSP_IMAGE_SOURCES.
+	imgSrc := []string{"'self'", "data:", "blob:", "https://lh3.googleusercontent.com"}
 	imgSrc = append(imgSrc, sanitizeSources(cfg.ExtraImageSources)...)
 
 	connectSrc := []string{"'self'"}
@@ -136,7 +140,7 @@ func isHTMLRoute(path string) bool {
 		return false
 	}
 	switch path {
-	case "/robots.txt", "/sitemap.xml", "/favicon.ico":
+	case "/robots.txt", "/sitemap.xml", "/favicon.ico", "/splash.js":
 		return false
 	}
 	return true
