@@ -5,11 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VA Schools — Kho ảnh</title>
     <link rel="icon" type="image/png" href="/images/favicon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      Font self-host trong web/src/styles/fonts.css, không nạp từ Google (CSP
+      đặt style-src/font-src 'self'; lý do đầy đủ ghi trong file đó).
+
+      Preload hai file chữ thường dùng nhất: chúng nằm sau một lớp @import
+      trong CSS nên trình duyệt chỉ phát hiện ra khá muộn, mà splash lại cần
+      đúng Be Vietnam Pro ngay từ khung hình đầu. Chỉ preload subset
+      vietnamese + latin của weight 400 - preload nhiều hơn thì tự cạnh tranh
+      băng thông với chính bundle JS.
+    -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,800&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/be-vietnam-pro-normal-400-vietnamese.woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/be-vietnam-pro-normal-400-latin.woff2"
+      crossorigin
     />
     <!--
       Splash lúc khởi động, viết thẳng vào HTML.
@@ -132,43 +150,11 @@
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      /*
-        Gỡ splash khi React đã vẽ xong nội dung đầu tiên.
-
-        Dùng MutationObserver chứ không phải sự kiện load: load bắn khi tài
-        nguyên tải xong, còn cái ta cần là lúc MÀN HÌNH có nội dung - hai mốc
-        này lệch nhau đúng bằng thời gian React mount.
-
-        Có chốt chặn 8 giây: nếu bundle lỗi và React không bao giờ mount thì
-        splash phải tự nhường chỗ, để người dùng còn thấy được trang trắng
-        (và trình duyệt báo lỗi) thay vì kẹt vĩnh viễn ở màn hình chờ.
-      */
-      (function () {
-        var splash = document.getElementById("app-splash");
-        var root = document.getElementById("root");
-        if (!splash || !root) return;
-
-        var removed = false;
-        function dismiss() {
-          if (removed) return;
-          removed = true;
-          observer.disconnect();
-          clearTimeout(bailout);
-          splash.classList.add("is-hidden");
-          setTimeout(function () {
-            splash.remove();
-          }, 400);
-        }
-
-        var observer = new MutationObserver(function () {
-          if (root.childElementCount > 0) dismiss();
-        });
-        observer.observe(root, { childList: true });
-
-        var bailout = setTimeout(dismiss, 8000);
-        if (root.childElementCount > 0) dismiss();
-      })();
-    </script>
+    <!--
+      Script gỡ splash để ở file riêng (public/splash.js) chứ không nội tuyến:
+      CSP đặt script-src 'self' và cố ý không nới 'unsafe-inline'. Lý do đầy
+      đủ ghi trong chính file đó.
+    -->
+    <script src="/splash.js" defer></script>
   </body>
 </html>

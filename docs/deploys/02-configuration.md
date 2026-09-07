@@ -223,10 +223,11 @@ coccocbot, Zalo…) được **miễn hoàn toàn** — chi tiết cơ chế ở
 mọi kết nối HTTP tới tên miền trong suốt `max-age` (một năm) — bật nhầm khi còn phục vụ
 HTTP sẽ khoá người dùng khỏi site và không thể gỡ từ phía máy chủ.
 
-Domain S3 được suy tự động từ `S3_BUCKET_NAME`/`AWS_REGION`/`S3_ENDPOINT`, nên bình thường
-không cần khai `SECURITY_CSP_IMAGE_SOURCES`. Chỉ thêm khi phục vụ ảnh qua CDN riêng — thiếu
-thì CSP chặn đúng ảnh tác phẩm, và lỗi chỉ lộ ra trên trình duyệt người dùng cuối chứ không
-xuất hiện trong log server.
+Domain S3 được suy tự động từ `S3_BUCKET_NAME`/`AWS_REGION`/`S3_ENDPOINT`, còn
+`lh3.googleusercontent.com` (avatar admin từ Google OAuth) đã khai sẵn trong code, nên bình
+thường không cần khai `SECURITY_CSP_IMAGE_SOURCES`. Chỉ thêm khi phục vụ ảnh qua CDN riêng —
+thiếu thì CSP chặn đúng ảnh tác phẩm, và lỗi chỉ lộ ra trên trình duyệt người dùng cuối chứ
+không xuất hiện trong log server.
 
 `MAX_JSON_BODY_KB` tồn tại vì Nginx đặt `client_max_body_size 200m` ở mức server để đường
 upload đi lọt — nếu không có trần riêng ở tầng ứng dụng thì endpoint bình luận cũng nhận
