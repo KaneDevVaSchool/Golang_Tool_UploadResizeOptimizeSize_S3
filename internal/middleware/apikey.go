@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/subtle"
 	"net/http"
+	"strings"
 )
 
 // APIKeyAuth middleware validate API key từ header
@@ -17,6 +18,13 @@ func APIKeyAuth(apiKey string) func(http.Handler) http.Handler {
 
 			// Health probes must work without credentials (load balancer / k8s).
 			if r.URL.Path == "/api/v1/health" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// Trang public (khách ẩn danh xem triển lãm) không được có API key —
+			// yêu cầu key ở đây coi như khoá cả trang public ra khỏi Internet.
+			if strings.HasPrefix(r.URL.Path, "/api/v1/public/") {
 				next.ServeHTTP(w, r)
 				return
 			}
