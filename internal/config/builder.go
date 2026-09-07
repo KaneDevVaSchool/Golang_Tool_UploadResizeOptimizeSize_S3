@@ -101,11 +101,6 @@ func (b *ConfigBuilder) WithUpload(maxSize, absoluteMaxSize int64, uploadTimeout
 	if absoluteMaxSize < maxSize {
 		absoluteMaxSize = maxSize
 	}
-	// Keep chunk count bounded (aligned with maxChunksPerUpload in chunk service)
-	const maxChunks = 64
-	if absoluteMaxSize/maxSize > maxChunks {
-		absoluteMaxSize = maxSize * maxChunks
-	}
 	if uploadTimeout == 0 {
 		uploadTimeout = 5 * time.Minute
 	}
