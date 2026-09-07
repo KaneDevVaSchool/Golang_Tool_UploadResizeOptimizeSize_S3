@@ -8,21 +8,17 @@ kết quả. Rủi ro nào có thể phát tác đúng thời điểm đó đư�
 
 ---
 
-## R1 — Trang public 401 vì API key ở production 🔴
+## ~~R1 — Trang public 401 vì API key ở production~~ ✅ Đã xử lý 2026-09-07
 
-**Khả năng**: Cao — xảy ra ngay khi làm đúng theo hướng dẫn production.
-**Ảnh hưởng**: Nghiêm trọng — toàn bộ trang public ngừng hoạt động với khách.
+**Khả năng đã từng**: Cao — xảy ra ngay khi làm đúng theo hướng dẫn production.
+**Ảnh hưởng đã từng**: Nghiêm trọng — toàn bộ trang public ngừng hoạt động với khách.
 
-Production **bắt buộc** `API_REQUIRE_KEY=true`, mà middleware chỉ miễn `/api/v1/health`.
-Khách ẩn danh nhận 401 trên mọi lệnh gọi `/api/v1/public/*`.
-
-**Dấu hiệu**: mở trang public bằng tab ẩn danh thấy trang trắng hoặc lỗi tải dữ liệu.
-
-**Xử lý**: P0.1 trong [02-roadmap.md](./02-roadmap.md) — miễn trừ tiền tố
-`/api/v1/public/`.
-
-**Tạm thời**: kiểm tra trang public bằng trình duyệt ẩn danh **trước** khi công bố tên
-miền. Đừng chỉ kiểm tra bằng máy đã đăng nhập admin.
+Rủi ro này đã **phát tác thật** lúc nghiệm thu deploy production đầu tiên (site
+`trienlamtranh.vaschools.edu.vn`): `curl` có `User-Agent` trình duyệt tới
+`/api/v1/public/artworks` trả `401` đúng như dự đoán. Đã sửa theo P0.1 trong
+[02-roadmap.md](./02-roadmap.md) — miễn trừ tiền tố `/api/v1/public/` trong
+`middleware/apikey.go`, khoá lại bằng test `apikey_test.go`. Xác nhận trên VPS thật sau khi
+sửa: endpoint public trả `200` không cần key, endpoint admin vẫn đòi key đúng như thiết kế.
 
 ---
 
@@ -267,13 +263,61 @@ phải ảnh (tuy chỉ ghi log chứ không chặn).
 **Xử lý**: đưa `ValidateFileContent` vào đường upload đơn — xem P1.4 trong
 [02-roadmap.md](./02-roadmap.md). Việc nhỏ, hàm đã có sẵn, chỉ cần gọi đúng chỗ.
 
+## R14 — VPS dùng chung nhiều site: cổng nội bộ dễ trùng 🟡
+
+**Khả năng**: Cao trên VPS chia sẻ (CloudPanel với nhiều site khác nhau).
+**Ảnh hưởng**: Trung bình — service không khởi động được ở cổng dự kiến, hoặc tệ hơn, chiếm
+nhầm cổng đang phục vụ site khác.
+
+Phát hiện lúc deploy thật lên `trienlamtranh.vaschools.edu.vn` (VPS `vas-linuxsrv2`, dùng
+chung với ~19 site VAS khác qua CloudPanel): `PORT=8080` mặc định trong `.env.example` xung
+đột — một site PHP khác (`hub.vaschools.edu.vn`) cũng cấu hình `proxy_pass` Reverse Proxy về
+`127.0.0.1:8080`. Request thẳng vào `8080` bị route lẫn sang site kia, trả về trang 404 của
+ứng dụng khác thay vì health check của app này.
+
+**Dấu hiệu**: `curl http://127.0.0.1:<PORT>/api/v1/health` trả về HTML/nội dung không phải
+JSON của app này.
+
+**Xử lý**: trên VPS dùng chung, luôn kiểm tra cổng trống trước khi đặt `PORT` trong `.env`:
+
+```bash
+sudo ss -tlnp | grep LISTEN
+```
+
+Chọn một cổng cao (`>8080`) không xuất hiện trong danh sách, và sửa **cả hai chỗ**: `.env`
+(`PORT=...`) và `proxy_pass http://127.0.0.1:...` trong vhost Nginx do CloudPanel sinh ra
+(`/etc/nginx/sites-enabled/<domain>.conf`) — hai nơi phải khớp nhau, không có gì tự đồng bộ.
+
+## R15 — Domain trỏ nhiều bản ghi A làm Let's Encrypt validate thất bại 🟡
+
+**Khả năng**: Trung bình — tuỳ cách hạ tầng mạng của trường cấu hình NAT/DNS.
+**Ảnh hưởng**: Trung bình — không lấy được chứng chỉ SSL thật, site kẹt ở self-signed
+(trình duyệt báo `ERR_SSL_UNRECOGNIZED_NAME_ALERT`).
+
+Phát hiện lúc deploy `trienlamtranh.vaschools.edu.vn`: domain có **hai** bản ghi A
+(`113.176.63.40` và `115.73.210.29`), cả hai đều thuộc cùng VPS multi-homed (nhiều IP public
+NAT vào một máy). Let's Encrypt HTTP-01 challenge tự chọn một IP trong DNS để xác thực; nếu
+chọn nhằm IP mà NAT/firewall bên ngoài không chuyển tiếp cổng 80 đúng vào Nginx, validate báo
+`Error getting validation data` dù bên trong VPS route hoàn toàn đúng
+(`curl -H "Host: <domain>" 127.0.0.1` trả đúng response).
+
+**Dấu hiệu**: CloudPanel báo `Domain could not be validated ... Error getting validation
+data`; `curl -v https://<domain>/` từ máy ngoài báo lỗi TLS alert 112
+(`unrecognized name`) dù kết nối TCP tới cổng 443 thành công.
+
+**Xử lý**: xác nhận với người quản lý DNS/hạ tầng mạng **IP nào thật sự có port-forward
+80/443 vào đúng VPS** trước khi thử Let's Encrypt — đối chiếu với `IP Address` mà CloudPanel
+hiển thị cho site đó. Chỉ giữ đúng một bản ghi A trỏ IP đó, hoặc xác nhận NAT đã mở cổng
+80/443 cho tất cả các IP trong DNS trước khi cấp chứng chỉ. Đừng thử tạo lại Let's Encrypt
+nhiều lần — Let's Encrypt giới hạn 5 lần thất bại/giờ cho cùng domain.
+
 ---
 
 ## Bảng tổng hợp
 
 | Mã | Rủi ro | Mức | Xử lý |
 |---|---|---|---|
-| R1 | API key chặn trang public | 🔴 | P0.1 |
+| R1 | API key chặn trang public | ✅ | Đã sửa 2026-09-07 |
 | R2 | Đĩa đầy vì log | 🔴 | P0.3 |
 | R3 | Chưa sao lưu tự động | 🔴 | Cron sao lưu |
 | R4 | Ảnh mồ côi trên S3 | 🟡 | P2.2 |
@@ -286,12 +330,14 @@ phải ảnh (tuy chỉ ghi log chứ không chặn).
 | R11 | `ADD COLUMN IF NOT EXISTS` lỗi cú pháp MySQL 8.1 | 🟡 | Đã sửa 015/016, tránh cú pháp này về sau |
 | R12 | `TRUSTED_PROXIES` khai sai | 🟡 | Mặc định đúng cho kiến trúc hiện tại; kiểm lại nếu thêm proxy |
 | R13 | Không còn kiểm tra magic byte | 🟡 | P1.4 — gọi `ValidateFileContent` ở upload đơn |
+| R14 | Cổng nội bộ trùng site khác trên VPS dùng chung | 🟡 | Kiểm tra `ss -tlnp` trước khi đặt `PORT` |
+| R15 | Nhiều bản ghi A khiến Let's Encrypt validate lỗi | 🟡 | Xác nhận đúng IP có port-forward trước khi cấp SSL |
 
 ## Ba việc cần làm trước khi công bố
 
 Nếu chỉ làm được ba việc, hãy làm ba việc này:
 
-1. **Sửa R1** — không thì trang public không chạy được với cấu hình production.
+1. ~~**Sửa R1**~~ — đã xong 2026-09-07, trang public không còn bị chặn bởi API key.
 2. **Bật sao lưu tự động (R3)** — không thì một sự cố là mất sạch dữ liệu hội thi.
 3. **Xem lại rate limit và `X-Forwarded-For` (R6)** — không thì trang có thể tự khoá đúng
    lúc đông người nhất.

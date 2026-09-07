@@ -11,29 +11,26 @@ Nguyên tắc xuyên suốt: **sửa cái đã biết hỏng trước khi thêm 
 
 Những mục này phải xong trước khi công bố tên miền rộng rãi.
 
-### P0.1 — Miễn API key cho `/api/v1/public/*`
+### ~~P0.1 — Miễn API key cho `/api/v1/public/*`~~ ✅ Xong 2026-09-07
 
 **Vấn đề.** Production **bắt buộc** `API_REQUIRE_KEY=true`, mà middleware API key áp lên
-toàn bộ `/api/*` và chỉ miễn `/api/v1/health`. Khách ẩn danh sẽ nhận 401 trên toàn bộ trang
-public.
+toàn bộ `/api/*` và chỉ miễn `/api/v1/health`. Khách ẩn danh nhận 401 trên toàn bộ trang
+public — phát hiện lúc nghiệm thu deploy thật trên VPS (site
+`trienlamtranh.vaschools.edu.vn`).
 
-**Cách làm.** Trong `middleware/apikey.go`, thêm miễn trừ cho tiền tố `/api/v1/public/`
-đúng theo cách đã làm với `/api/v1/health`:
+**Đã làm.** Thêm miễn trừ cho tiền tố `/api/v1/public/` trong
+[internal/middleware/apikey.go](../../internal/middleware/apikey.go), đúng theo cách đã làm
+với `/api/v1/health`. Trang public vẫn được bảo vệ bằng rate limit riêng (20 req/phút cho
+ghi), CSRF, và BotGuard (chặn `curl`/script không có `User-Agent` trình duyệt — xác nhận lúc
+nghiệm thu là hành vi đúng, không phải lỗi).
 
-```go
-if strings.HasPrefix(r.URL.Path, "/api/v1/public/") {
-    next.ServeHTTP(w, r)
-    return
-}
-```
-
-Trang public vẫn được bảo vệ bằng rate limit riêng (20 req/phút cho ghi) và CSRF.
-
-**Hoàn thành khi.** Với `APP_ENV=production` và `API_REQUIRE_KEY=true`:
-
-- [ ] `curl https://<domain>/api/v1/public/artworks` trả `200` không cần header nào
-- [ ] `curl https://<domain>/api/v1/upload` **không** có key vẫn trả `401`
-- [ ] Mở trang public bằng trình duyệt ẩn danh, xem/thả cảm xúc/bình luận đều chạy
+- [x] Test `internal/middleware/apikey_test.go` khoá lại: `/api/v1/public/*` luôn qua dù
+      thiếu key, endpoint khác vẫn đòi key, tiền tố gần giống (`/api/v1/publicity`) không bị
+      miễn nhầm
+- [x] `go build ./...` và `go test ./...` sạch
+- [x] Xác nhận trên VPS thật: `curl` có `User-Agent` trình duyệt tới
+      `/api/v1/public/artworks` trả `200` không cần header, `/api/v1/upload` không key trả
+      `401`
 
 ### ~~P0.2 — Commit khối lượng thay đổi đang treo~~ ✅ Xong 2026-09-06
 
@@ -609,8 +606,7 @@ Không cần cho lần chạy này, ghi lại để không quên.
               P1.5 biến thể ảnh WebP
               P2.3 nén gzip phản hồi
 
-Tuần này      P0.1 miễn API key public   ← chặn đường lên production
-              P0.3 xoay vòng log
+Tuần này      P0.3 xoay vòng log
 
 Tuần sau      P1.1 dọn artwork_views
               P1.4 magic byte upload đơn
@@ -621,5 +617,5 @@ Trước sự kiện P1.3 lọc khu vực bằng SQL
 Sau sự kiện   P2.2 dọn S3, P2.4, P2.5, và nhóm Ưu tiên 3
 ```
 
-P0.1 nên làm đầu tiên: nó là lỗi **chặn đường**, sửa nhỏ, và nếu bỏ sót thì trang public sẽ
-hỏng đúng vào lúc công bố.
+P0.1 đã xong (2026-09-07) — phát hiện và sửa ngay lúc nghiệm thu deploy thật, đúng dự đoán
+là lỗi **chặn đường** sẽ lộ ra khi công bố nếu bỏ sót.

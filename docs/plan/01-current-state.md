@@ -245,16 +245,6 @@ Không còn hạng mục nào dở dang ở nhánh này. Việc tiếp theo xem
 
 Xếp theo mức độ ảnh hưởng thực tế:
 
-### API key chặn cả trang public
-
-Bật `API_REQUIRE_KEY=true` (production **bắt buộc**) sẽ áp middleware lên toàn bộ `/api/*`,
-gồm cả `/api/v1/public/*`. Chỉ `/api/v1/health` được miễn (`middleware/apikey.go:19-22`).
-
-**Hệ quả**: khách ẩn danh không xem được trang public khi cấu hình đúng chuẩn production.
-
-**Cách sửa**: miễn trừ tiền tố `/api/v1/public/` trong middleware, giống cách đã làm cho
-`/api/v1/health`.
-
 ### `PublicHandler` gọi thẳng repository
 
 Bỏ qua tầng service cho cảm xúc/bình luận/lượt xem. Chấp nhận được khi chỉ là CRUD một

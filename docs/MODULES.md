@@ -185,7 +185,7 @@ Mỗi file một mối quan tâm, ghép lại trong `container.go`.
 |---|---|---|---|
 | `request_id.go` | 36 | Sinh/nhận `X-Request-ID` | ✅ |
 | `logging.go` | 36 | Log request kèm ID | ✅ |
-| `apikey.go` | 44 | Xác thực `X-API-Key`, so sánh hằng thời gian | ✅ |
+| `apikey.go` | 52 | Xác thực `X-API-Key`, so sánh hằng thời gian | ✅ |
 | `admin_auth.go` | 55 | Xác thực session, gắn user vào context | ✅ |
 | `bodylimit.go` | 61 | Trần kích thước body theo đường dẫn | ✅ |
 | `concurrency.go` | 68 | Semaphore toàn server | ✅ |
@@ -205,8 +205,11 @@ Ba điểm về `apikey.go` khi sửa:
 
 - Chỉ chấp nhận key qua **header**, không bao giờ qua query string (query bị ghi vào log).
 - Dùng `subtle.ConstantTimeCompare` chống tấn công đo thời gian.
-- ⚠️ Chỉ miễn trừ `/api/v1/health`. Nghĩa là bật API key sẽ chặn **cả** `/api/v1/public/*` —
-  rủi ro R1 trong [plan/03-risks.md](./plan/03-risks.md).
+- Miễn trừ `/api/v1/health` và toàn bộ tiền tố `/api/v1/public/` — bật API key **không**
+  chặn trang public. Endpoint public vẫn được bảo vệ bằng rate limit riêng, CSRF và
+  BotGuard. Thêm miễn trừ mới ở đây thì luôn dùng `strings.HasPrefix` khớp cả đường dẫn,
+  không so khớp con chuỗi — tránh miễn nhầm một path chỉ *chứa* tên tiền tố
+  (ví dụ `/api/v1/publicity`).
 
 `clientip.go` là **nền móng của mọi giới hạn theo IP** trong hệ thống. `GetClientIP()` chỉ
 đọc `X-Forwarded-For`/`X-Real-IP` khi chặng kết nối trực tiếp nằm trong `TRUSTED_PROXIES`;
