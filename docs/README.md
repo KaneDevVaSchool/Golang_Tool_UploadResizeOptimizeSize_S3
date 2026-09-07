@@ -3,9 +3,14 @@
 Bộ tài liệu cho hệ thống hội thi vẽ tranh "20 năm Trường Việt Mỹ": upload ảnh lên S3,
 quản trị tác phẩm/giải thưởng, và trang public trưng bày.
 
-Toàn bộ tài liệu trong thư mục này được viết lại ngày **2026-09-06**, đối chiếu trực tiếp
-với source code tại commit `d0ec7c2` (nhánh `feature/artwork-contest-system`). Mọi con số,
-tên biến, tên bảng, tên endpoint đều lấy từ code — không phải từ tài liệu cũ.
+Toàn bộ tài liệu trong thư mục này được viết lại ngày **2026-09-06** và rà lại ngày
+**2026-09-07**, đối chiếu trực tiếp với source code trên nhánh
+`feature/artwork-contest-system`. Mọi con số, tên biến, tên bảng, tên endpoint đều lấy từ
+code — không phải từ tài liệu cũ.
+
+Đợt rà 2026-09-07 tập trung vào phần **đã bị gỡ khỏi code** (chunk upload, nhánh WordPress,
+công cụ `/upload`, các script trong `deploy/`) — tài liệu mô tả thứ không còn tồn tại thì
+nguy hiểm hơn tài liệu thiếu, vì người đọc vẫn tin vào nó.
 
 ## Bắt đầu từ đâu
 
@@ -36,10 +41,10 @@ ràng buộc, và lý do đằng sau mỗi quyết định.
 | File | Phạm vi |
 |---|---|
 | [00-overview.md](./detail_design/README.md) | Mục lục, quy ước ký hiệu, ranh giới miền |
-| [01-database.md](./detail_design/01-database.md) | 13 bảng MySQL: cột, index, khoá ngoại, lý do denormalize |
-| [02-upload-pipeline.md](./detail_design/02-upload-pipeline.md) | Upload đơn, chunked, transaction; validate; S3 key |
+| [01-database.md](./detail_design/01-database.md) | 14 bảng MySQL: cột, index, khoá ngoại, lý do denormalize |
+| [02-upload-pipeline.md](./detail_design/02-upload-pipeline.md) | Upload đơn, bulk upload, sinh biến thể, tải ảnh có watermark; validate; S3 key |
 | [03-artwork-domain.md](./detail_design/03-artwork-domain.md) | Vòng đời tác phẩm, bulk upload 2 bước, enrich, gán giải |
-| [04-public-engagement.md](./detail_design/04-public-engagement.md) | Reaction/comment/view ẩn danh, visitor_token, chống trùng |
+| [04-public-engagement.md](./detail_design/04-public-engagement.md) | Reaction/comment/view ẩn danh, visitor_token |
 | [05-auth-security.md](./detail_design/05-auth-security.md) | Google OAuth, session, CSRF, rate limit, phân tầng bảo vệ |
 | [06-frontend.md](./detail_design/06-frontend.md) | Router, 3 khu vực UI, state, API client, hiệu ứng |
 
@@ -48,8 +53,7 @@ ràng buộc, và lý do đằng sau mỗi quyết định.
 | File | Phạm vi |
 |---|---|
 | [README.md](./deploys/README.md) | Chọn phương án, checklist tổng |
-| [00-tu-dau-den-cuoi.md](./deploys/00-tu-dau-den-cuoi.md) | **Deploy lần đầu**: hướng dẫn cực chi tiết từ lúc chưa mua VPS đến khi nghiệm thu xong |
-| [01-vps-systemd.md](./deploys/01-vps-systemd.md) | Quy trình rút gọn: binary + systemd + Nginx + Certbot |
+| [00-tu-dau-den-cuoi.md](./deploys/00-tu-dau-den-cuoi.md) | **Tài liệu deploy duy nhất**: làm tay từng bước, từ VPS trắng đến HTTPS, kèm cập nhật phiên bản và quay lui |
 | [02-configuration.md](./deploys/02-configuration.md) | Toàn bộ biến môi trường: ý nghĩa, mặc định, ràng buộc |
 | [03-operations.md](./deploys/03-operations.md) | Vận hành: log, backup, sự cố thường gặp, rollback |
 | [S3-PUBLIC-READ.md](./S3-PUBLIC-READ.md) | Cấu hình bucket policy cho ảnh public |
@@ -76,7 +80,18 @@ Bản khảo sát ngày 2026-09-06 phát hiện các sai lệch sau trong tài l
 | Sai lệch | Thực tế trong code |
 |---|---|
 | `ARCHITECTURE.md` ghi CSDL là PostgreSQL | MySQL 8 — driver `go-sql-driver/mysql`, DSN `user:pass@tcp(...)`, schema dùng `ENGINE=InnoDB` |
-| `DEPLOYMENT.md` hướng dẫn deploy bằng Dockerfile | `Dockerfile` đã bị xoá khỏi repo; phương án thật là binary + systemd |
+| `DEPLOYMENT.md` hướng dẫn deploy bằng Dockerfile | `Dockerfile` đã bị xoá khỏi repo; phương án thật là binary + systemd. File `DEPLOYMENT.md` cũng đã xoá ngày 2026-09-07 |
 | `MODULES.md` ghi "hiện có 1 file migration" | Nhiều file migration tăng dần, đánh số từ `001` (xem `internal/database/migrations/` để biết số lượng hiện tại — đừng chép cứng con số vào tài liệu) |
-| Tài liệu cũ không nhắc trang public | Trang public là phần lớn nhất của UI hiện tại (4 trang, 22 component) |
+| Tài liệu cũ không nhắc trang public | Trang public là phần lớn nhất của UI hiện tại (7 trang, 25 component) |
+
+Đợt rà ngày **2026-09-07** sửa tiếp nhóm sai lệch ngược lại — tài liệu mô tả thứ **đã bị gỡ**
+khỏi code:
+
+| Sai lệch | Thực tế trong code |
+|---|---|
+| `02-upload-pipeline.md` mô tả ba đường upload, ~40% nội dung nói về chunk upload và resize WordPress | Chỉ còn một đường `POST /api/v1/upload` cộng bulk upload của admin |
+| `API.md` còn liệt kê `/upload/{init,chunk,complete,abort}`, `/upload-transaction`, `/wp-upload` | Đã gỡ khỏi code; gọi vào sẽ nhận 404 |
+| `02-configuration.md` mô tả nhóm `WORDPRESS_*`, `IMAGE_*` và thiếu 11 biến bảo mật mới | Nhóm cũ đã gỡ khỏi `builder.go`; 11 biến mới (`TRUSTED_PROXIES`, `BOT_GUARD_*`, `SECURITY_*`, `MAX_JSON_BODY_KB`, `RATE_LIMIT_DOWNLOAD_*`) nay đã có đủ |
+| `03-operations.md` ghi "xoá tác phẩm cố ý giữ lại file S3" | Đã đảo ngược: `DeleteArtwork` xoá cả object S3 |
+| Tài liệu deploy dồn mọi bước vào `sudo bash deploy/deploy.sh` | Bốn script `.sh` đã xoá; quy trình làm tay nằm ở [deploys/00-tu-dau-den-cuoi.md](./deploys/00-tu-dau-den-cuoi.md) giai đoạn H |
 

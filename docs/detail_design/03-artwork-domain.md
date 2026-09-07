@@ -97,7 +97,7 @@ giới hạn một giải/tác phẩm như bản UI ban đầu. Giới hạn cũ
 schema: `artwork_awards` (migration 009) vốn đã là bảng nối N:N; giới hạn chỉ do UI cũ chọn
 1 giải áp lên request. Phân biệt "không gửi trường" với "gửi mảng rỗng" dựa vào hành vi có
 sẵn của `encoding/json` trên slice thường (`AwardIDs []int64` trong `updateArtworkBody`,
-`artwork_handler.go:210`): key vắng mặt trong JSON giữ `AwardIDs` là `nil`, còn `"award_ids":
+`artwork_handler.go:221`): key vắng mặt trong JSON giữ `AwardIDs` là `nil`, còn `"award_ids":
 []` giải mã ra slice rỗng khác `nil` — không cần kiểu con trỏ.
 
 ⚠️ `UpdateArtwork` sửa `school_id`/`grade_level_id` trên bảng `artworks` nhưng **không đồng
@@ -108,16 +108,36 @@ bộ ngược** về `students`. Hai bảng có thể lệch nhau. Chi tiết tr
 
 ```go
 func (s *artworkService) DeleteArtwork(ctx, id) error {
-    return s.artworkRepo.Delete(ctx, id)   // chỉ xoá DB
+    artwork, _ := s.artworkRepo.GetByID(ctx, id)
+    for _, key := range collectArtworkS3Keys(artwork, s.uploadService.ObjectKeyFromURL) {
+        s.uploadService.DeleteObject(ctx, key)   // ảnh gốc + mọi biến thể/thumbnail
+    }
+    return s.artworkRepo.Delete(ctx, id)
 }
 ```
 
 Xoá bản ghi `artworks` sẽ **CASCADE** xoá reaction/comment/view/artwork_awards liên quan.
-File trên S3 **cố ý giữ lại**.
+File trên S3 **cũng bị xoá** — đảo ngược quyết định ban đầu (từng cố ý giữ lại S3 để tránh
+mất file gốc do bấm nhầm nút xoá). `collectArtworkS3Keys` (`artwork_service.go`) gom key ảnh
+gốc (`S3Key`) và mọi URL trong `Variants`/`ThumbnailURL`, dịch ngược URL → key bằng
+`utils.ParseS3ObjectKey` (đối chiếu bucket đã cấu hình, hỗ trợ cả dạng virtual-host,
+path-style và endpoint tuỳ chỉnh) trước khi gọi `s3Repo.Delete` cho từng key — thứ tự xoá S3
+**trước** DB row để nếu xoá dở giữa chừng, còn s3_key trong DB mà tra lại được, không mồ côi
+ngược. Có test khoá hành vi thu thập key ở `artwork_delete_test.go`
+(`TestCollectArtworkS3Keys`).
 
-Lý do (ghi trong `artwork_service.go:89-92`): bấm nhầm nút xoá là chuyện thường; mất bản ghi
-DB có thể nhập lại, mất file gốc của học sinh thì không. Đánh đổi: S3 tích rác theo thời
-gian, cần quy trình dọn định kỳ có đối chiếu.
+### Xoá hàng loạt
+
+`DeleteArtworkBatch` (`artwork_service.go`) phục vụ thao tác chọn nhiều ở trang danh sách
+quản trị — gọi `DeleteArtwork` **tuần tự cho từng id**, không phải 1 câu SQL `IN (...)` như
+`SetFeaturedBatch`, vì mỗi tác phẩm còn cần xoá kèm object S3 riêng (không gộp được thành 1
+lệnh). Tác phẩm nào xoá S3 lỗi (mất mạng, key đã mất...) thì **giữ nguyên bản ghi DB của
+riêng nó** và tiếp tục sang tác phẩm kế tiếp, thay vì để 1 lỗi chặn cả lô — admin chọn 50
+ảnh xoá, 1 ảnh lỗi mạng không nên khiến 49 ảnh còn lại cũng không xoá được. Response trả số
+lượng đã xoá thành công (`deleted`) so với số lượng yêu cầu (`requested`); `deleted <
+requested` nghĩa là còn tác phẩm chưa xoá được, cần chọn lại đúng chúng để thử lại. Có test
+khoá hành vi này ở `artwork_bulk_delete_test.go`
+(`TestDeleteArtworkBatchMotItemLoiKhongChanCaLo`).
 
 ## 5. Lọc và tìm kiếm
 
@@ -128,6 +148,7 @@ duy nhất là public luôn ép `IsPublished=true`.
 |---|---|
 | `Search` | `(artworks.title LIKE ? OR students.full_name LIKE ?)` — thêm JOIN `students` |
 | `SchoolID` | `artworks.school_id = ?` |
+| `Region` | `artworks.school_id IN (SELECT id FROM schools WHERE region = ?)`; `models.IsKnownRegion` chặn giá trị lạ trước khi vào SQL |
 | `GradeLevelID` | `artworks.grade_level_id = ?` |
 | `EducationLevel` | `grade_level_id IN (SELECT id FROM grade_levels WHERE education_level = ?)` |
 | `TopicCategoryID` | `artworks.topic_category_id = ?` |
@@ -177,7 +198,7 @@ truy vấn theo lô. Cache dùng chung một TTL (`refCacheTTL`, 5 phút) cho c�
 
 ## 7. Bảng vàng
 
-`HandleBillboard` (`public_handler.go:493`) dựng danh sách theo thứ hạng giải:
+`HandleBillboard` (`public_handler.go:615`) dựng danh sách theo thứ hạng giải:
 
 ```text
 lấy danh sách awards (đã sắp theo rank_order)
@@ -193,6 +214,28 @@ lặp chạy theo thứ tự danh sách giải.
 vấn tăng tuyến tính theo số giải; (b) trần 100 tác phẩm mỗi giải, vượt quá sẽ bị cắt âm
 thầm. Với quy mô hội thi hiện tại thì chấp nhận được, nhưng cần biết giới hạn.
 
+### `rank_order` là 0-based, do trang admin/awards quyết định
+
+Backend chỉ lưu và sắp theo `rank_order` thô — không có ràng buộc DB nào ép nó bắt đầu từ 0
+hay 1. Giá trị thực tế do trang `/admin/awards` ghi xuống: kéo-thả đổi thứ tự hiển thị, vị
+trí trong danh sách MỚI là dữ liệu, `rank_order` chỉ là hệ quả tính ra khi lưu — **0-based**
+(giải đứng đầu danh sách có `rank_order = 0`, xem `AwardsPage.tsx:249-278`).
+
+Hai trang public suy luận "đây là hạng Nhất/Nhì/Ba hay giải chuyên đề" từ `rank_order` để
+tô màu bục/podium: `HallOfFamePage.tsx` (`tierOf()`) và `FeaturedArtworksPage.tsx`
+(`podiumRank()`). Cả hai đều phải cộng 1 để quy đổi `rank_order` 0-based sang bậc 1-based
+(`position = rank_order + 1`) trước khi so `position <= 3`. Thiếu bước +1 này từng khiến
+giải Nhì (`rank_order=1`) hiện thành hạng Nhất, giải Ba (`rank_order=2`) hiện thành hạng
+Nhì — lỗi đã sửa (2026-09-06). `cmd/seed/data.go` cũng từng seed `rank_order` bắt đầu từ 1
+kèm "Giải Đặc biệt" chen trước "Giải Nhất", không khớp quy ước trên; đã sửa lại 0-based với
+"Giải Nhất" đứng đầu.
+
+Cả hai hàm còn có nhánh dự phòng: nếu `position` nằm ngoài 1..3, đoán bậc theo `slug`/`name`
+chứa "nhat"/"nhi"/"giai ba" — dữ liệu cũ có award chưa gán `rank_order` chuẩn nhưng tên vẫn
+đúng "Giải Nhất/Nhì/Ba". Đổi thứ tự giải ở `/admin/awards` sau này vẫn an toàn miễn `rank_order`
+tiếp tục là 0-based liên tục; nếu sau này đổi quy ước (vd cho phép số âm, hoặc không liên
+tục), phải sửa đồng thời cả hai hàm suy luận bậc này.
+
 ## 8. Bề mặt API của miền này
 
 ### Admin (yêu cầu session)
@@ -205,10 +248,12 @@ thầm. Với quy mô hội thi hiện tại thì chấp nhận được, nhưng
 | GET | `/api/v1/admin/artworks/{id}` | Chi tiết |
 | PUT | `/api/v1/admin/artworks/{id}` | Cập nhật metadata |
 | DELETE | `/api/v1/admin/artworks/{id}` | Xoá bản ghi |
+| DELETE | `/api/v1/admin/artworks/bulk-delete` | Xoá hàng loạt — `{ids}`, xoá tuần tự từng tác phẩm (kèm S3), 1 lỗi không chặn cả lô |
+| GET | `/api/v1/admin/artworks/{id}/download` | Tải ảnh gốc, không watermark, không ép `is_published`, ghi nhật ký vào `artwork_downloads` |
 | PATCH | `/api/v1/admin/artworks/{id}/featured` | Bật/tắt tiêu biểu (1 tác phẩm) |
 | PATCH | `/api/v1/admin/artworks/bulk-featured` | Bật/tắt tiêu biểu hàng loạt — `{ids, featured}`, 1 câu `UPDATE ... WHERE id IN (...)` |
 
-`ParseMultipartForm(maxUploadSize × 20)` ở bulk-upload (`artwork_handler.go:44`) cho phép
+`ParseMultipartForm(maxUploadSize × 20)` ở bulk-upload (`artwork_handler.go:55`) cho phép
 lô lớn nằm trong bộ nhớ trước khi ghi đĩa — với mặc định 20MB là 400MB bộ nhớ đệm.
 ⚠️ Cần cân nhắc lại nếu RAM của VPS eo hẹp.
 
@@ -222,6 +267,11 @@ lô lớn nằm trong bộ nhớ trước khi ghi đĩa — với mặc định 
 | GET | `/api/v1/public/billboard` | Bảng vàng |
 | GET | `/api/v1/awards` | Danh mục giải thưởng đang hoạt động |
 | GET | `/api/v1/topic-categories` | Danh mục nhóm chủ đề sáng tạo đang hoạt động |
+
+`ArtworkService.ListPublishedForSitemap` không phải REST endpoint riêng — dùng nội bộ bởi
+`PublicHandler.HandleSitemap` (`GET /sitemap.xml`, xem [API.md](../API.md)) để liệt kê ID +
+thời điểm cập nhật của mọi tác phẩm đã publish, không enrich (không cần tên học sinh/trường/
+giải), tự lặp trang để vượt trần `page_size=100` của `ArtworkRepository.List`.
 
 ### Giải thưởng và nhóm chủ đề (admin, yêu cầu session)
 
@@ -239,8 +289,9 @@ CRUD giống nhau về hình dạng, tách 2 handler/service/repository riêng v
 | PUT | `/api/v1/admin/topic-categories/{id}` | Cập nhật |
 | DELETE | `/api/v1/admin/topic-categories/{id}` | Xoá — 409 nếu đang gắn cho tác phẩm |
 
-⚠️ **Lọc theo `region` làm ở tầng ứng dụng, không phải SQL.** `HandleListFeatured` lấy về
-tối đa 100 tác phẩm featured rồi lọc trong bộ nhớ theo `region`
-(`public_handler.go:158-168`), vì `ArtworkFilter` chỉ có `SchoolID` chứ không có `Region`.
-Đúng với quy mô hiện tại (số tác phẩm tiêu biểu ít), nhưng nếu vượt 100 thì kết quả sẽ
-thiếu **trước khi** lọc region. Ghi chú này có trong code tại `public_handler.go:112-116`.
+Lọc theo `region` làm ở **tầng SQL** từ P1.3 (xem [02-roadmap.md](../plan/02-roadmap.md)):
+`HandleListFeatured` (`public_handler.go:149-172`) gán `filter.Region` thẳng vào
+`ArtworkFilter`, dịch thành `school_id IN (SELECT id FROM schools WHERE region = ?)` trong
+`artworkRepository.List` — không còn cắt 100 bản ghi rồi lọc trong bộ nhớ như thiết kế ban
+đầu. `models.IsKnownRegion` chặn giá trị lạ trước khi vào SQL
+(`public_handler.go:163`).

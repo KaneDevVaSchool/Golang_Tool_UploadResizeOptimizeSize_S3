@@ -1,16 +1,21 @@
 # 02 — Pipeline upload
 
-Ba đường upload cùng tồn tại, phục vụ ba tình huống khác nhau:
+Chỉ còn **một** đường upload dùng chung cho mọi tình huống:
 
 | Đường | Endpoint | Dùng khi | Giới hạn |
 |---|---|---|---|
-| Đơn | `POST /api/v1/upload` | File thường, phổ biến nhất | `UPLOAD_MAX_SIZE_MB` (20MB) |
-| Có transaction | `POST /api/v1/upload-transaction` | Cần audit trail trong DB | 20MB, yêu cầu DB bật |
-| Chunked | `POST /api/v1/upload/{init,chunk,complete,abort}` | File lớn | `UPLOAD_ABSOLUTE_MAX_MB` (200MB) |
+| Đơn | `POST /api/v1/upload` | Mọi file | `UPLOAD_MAX_SIZE_MB` (20MB) |
+| Bulk (admin) | `ArtworkService.BulkUploadToS3` | Admin đẩy nhiều tranh cùng lúc | `UPLOAD_ABSOLUTE_MAX_MB` (200MB) mỗi file |
+
+> **Đã gỡ (2026-09-07)**: đường upload có transaction (`POST /api/v1/upload-transaction`) và
+> đường chunked (`POST /api/v1/upload/{init,chunk,complete,abort}`). Chunk session giữ trong
+> bộ nhớ tiến trình nên không sống sót qua restart, và giao diện duy nhất dùng nó — công cụ
+> `/upload` nội bộ — cũng bị gỡ trong cùng đợt. Bảng `uploads` (migration 001) còn trong CSDL
+> nhưng không code nào đọc/ghi nữa; xem [01-database.md](./01-database.md).
 
 ## 1. Nhiều lớp kiểm tra
 
-Một file phải qua bốn lớp trước khi lên S3. Mỗi lớp chặn một kiểu tấn công/lỗi khác nhau —
+Một file phải qua ba lớp trước khi lên S3. Mỗi lớp chặn một kiểu tấn công/lỗi khác nhau —
 không lớp nào thừa:
 
 ```text
@@ -23,16 +28,16 @@ Lớp 2 — Đuôi file         IsAllowedFileType()
                           ↓
 Lớp 3 — Dung lượng        ValidateFileSizeFromHeader() rồi LimitReader(maxSize+1)
                           kiểm tra 2 lần: theo header khai báo, và theo byte thực đọc
-                          ↓
-Lớp 4 — Nội dung thật     ValidateFileContent()  ⭐ chỉ áp dụng cho chunked
-                          đọc 512 byte đầu, http.DetectContentType, đối chiếu đuôi file
 ```
 
-⚠️ **Bất đối xứng đáng chú ý**: lớp 4 (magic byte) hiện **chỉ chạy ở đường chunked**
-(`chunk_upload.go`, bước Complete). Đường upload đơn không kiểm tra nội dung thật — file
-`.jpg` chứa nội dung khác vẫn lên được S3. Rủi ro thực tế thấp vì bucket chỉ phục vụ ảnh
-tĩnh và không thực thi nội dung, nhưng đây là điểm không nhất quán nên biết.
-Xem [plan/02-roadmap.md](../plan/02-roadmap.md).
+⚠️ **Không còn lớp kiểm tra magic byte.** `ValidateFileContent()` (đọc 512 byte đầu,
+`http.DetectContentType`, đối chiếu đuôi file) trước đây **chỉ chạy ở đường chunked**, và
+đường đó đã bị gỡ. Nghĩa là hiện **không đường upload nào** kiểm tra nội dung thật: file
+`.jpg` chứa nội dung khác vẫn lên được S3.
+
+Rủi ro thực tế vẫn thấp vì bucket chỉ phục vụ ảnh tĩnh và không thực thi nội dung, nhưng
+đây không còn là "điểm không nhất quán" như trước — nó là một lớp phòng thủ đã **mất hẳn**.
+Xem mục P1.4 trong [plan/02-roadmap.md](../plan/02-roadmap.md).
 
 ### Vì sao kiểm tra dung lượng hai lần
 
@@ -119,91 +124,10 @@ public sẽ trả 403 sau đó. Với kho ảnh công khai lâu dài, **phải �
 đọc bằng bucket policy (xem [S3-PUBLIC-READ.md](../S3-PUBLIC-READ.md)). Cảnh báo này cũng
 được ghi trong `.env.example`.
 
-## 5. Upload có transaction
+## 5. Bulk upload (dùng cho admin)
 
-Khác biệt duy nhất so với upload đơn: bọc trong transaction MySQL và ghi bản ghi audit.
-
-```text
-BEGIN
-  ├─ INSERT uploads(status='pending')            ← trước khi đụng S3
-  ├─ ghi temp file → upload S3
-  │    lỗi ở bất kỳ bước nào → UPDATE status='failed', error=... → ROLLBACK
-  └─ UPDATE uploads(status='completed', s3_key, s3_url)
-COMMIT
-```
-
-Thứ tự này cho phép phát hiện bất thường: bản ghi kẹt ở `pending` nghĩa là tiến trình chết
-giữa chừng, có thể có file mồ côi trên S3.
-
-Xử lý panic đúng cách (`upload_service.go:229-244`): `defer` bắt `recover()`, rollback,
-rồi **panic lại** — không nuốt panic, nhưng cũng không để transaction treo.
-
-⚠️ Transaction chỉ bảo vệ **phía DB**. Nếu S3 upload thành công nhưng commit thất bại, file
-đã nằm trên S3 mà không có bản ghi — rác S3. Đây là giới hạn cố hữu khi phối hợp hai hệ
-thống không chung transaction; chấp nhận và bù bằng việc dọn rác định kỳ.
-
-## 6. Upload chunked
-
-### Vòng đời phiên
-
-```text
-init ──▶ [nhận chunk 0..N-1 theo thứ tự bất kỳ] ──▶ complete ──▶ (phiên bị xoá)
-  │                                                     │
-  └──────────────── abort ◀─────────────────────────────┘
-                     hoặc hết TTL 45 phút
-```
-
-### Tham số cố định (`chunk_upload.go:22-27`)
-
-| Hằng số | Giá trị | Ý nghĩa |
-|---|---|---|
-| `chunkSessionTTL` | 45 phút | Phiên quá hạn bị dọn |
-| `chunkCleanupEvery` | 5 phút | Chu kỳ quét |
-| `maxChunkSessions` | 64 | Trần phiên đồng thời toàn server |
-| `maxChunksPerUpload` | 64 | Trần số phần mỗi file |
-
-`maxChunksPerUpload` liên đới với config: `ConfigBuilder.WithUpload()` tự **hạ**
-`AbsoluteMaxSize` xuống `maxSize × 64` nếu người dùng đặt tỷ lệ vượt quá
-(`builder.go:98-103`). Nghĩa là đặt `UPLOAD_MAX_SIZE_MB=20` thì trần tuyệt đối không bao giờ
-vượt 1280MB dù `.env` ghi lớn hơn.
-
-### Kiểm tra từng phần
-
-Mỗi chunk phải đúng kích thước kỳ vọng: `chunkSize` cho mọi phần, riêng phần cuối là
-`totalSize - index × chunkSize`. Có ba tình huống được xử lý riêng:
-
-- **Client không khai báo size** (`FileHeader.Size == 0` ở một số client): bỏ qua kiểm tra
-  khai báo, vẫn kiểm tra byte thực ghi được.
-- **Ghi thiếu byte**: xoá file tạm, báo lỗi — không để chunk hỏng nằm lại.
-- **Ghi nguyên tử**: ghi ra `part_%06d.tmp` rồi `os.Rename` sang `part_%06d`. Rename là
-  nguyên tử trên cùng filesystem, nên không bao giờ tồn tại chunk ghi dở mang tên thật.
-
-### Ghép và hoàn tất
-
-```text
-Complete:
-  ├─ đánh dấu Completing=true (chặn nhận chunk mới, chặn Complete song song)
-  ├─ kiểm tra đủ chunk 0..N-1
-  ├─ ghép tuần tự vào file tạm "assembled-*"
-  ├─ đối chiếu tổng byte == totalSize khai báo
-  ├─ ValidateFileContent  ⭐ magic byte — chỉ đường này có
-  ├─ upload S3
-  └─ xoá phiên + thư mục chunks/<id>
-```
-
-Nếu bất kỳ bước nào lỗi, cờ `Completing` được **đặt lại false** (`chunk_upload.go:290-297`)
-để client thử lại được — không khoá cứng phiên vì một lần mạng chập chờn.
-
-### Vì sao phiên nằm trong bộ nhớ
-
-Chunk session **cố ý không lưu DB**, trái ngược với session admin. Lý do: vòng đời chỉ vài
-phút, mất khi restart là chấp nhận được (client upload lại), và ghi DB cho mỗi chunk là chi
-phí không đáng. Đánh đổi rõ ràng: ⚠️ deploy giữa lúc ai đó đang upload file 200MB sẽ làm
-họ mất công. Với tần suất deploy hiện tại, chấp nhận được.
-
-## 7. Bulk upload (dùng cho admin)
-
-`ArtworkService.BulkUploadToS3` (`artwork_service.go:136`) upload nhiều file song song:
+`ArtworkService.BulkUploadToS3` (`internal/service/artwork_service.go`) upload nhiều file
+song song:
 
 - **Giới hạn đồng thời 5** qua semaphore — tránh áp đảo S3/băng thông khi admin chọn hàng
   chục ảnh.
@@ -213,9 +137,9 @@ họ mất công. Với tần suất deploy hiện tại, chấp nhận được
   cho việc upload — không đọc file hai lần từ đĩa.
 - Chỉ đẩy lên S3, **chưa ghi bảng `artworks`**. Xem
   [03-artwork-domain.md](./03-artwork-domain.md) cho bước 2.
-- **Sinh biến thể ảnh ngay trong bước này** (`artwork_service.go:178`) — xem mục 9.
+- **Sinh biến thể ảnh ngay trong bước này** (hàm `buildVariants`) — xem mục 6.
 
-## 9. Sinh biến thể ảnh
+## 6. Sinh biến thể ảnh
 
 Vấn đề đã giải quyết: lưới gallery trước đây tải **ảnh gốc** cho từng ô, nên một trang 36
 tranh dự thi cỡ vài MB kéo hàng chục MB.
@@ -255,21 +179,23 @@ thứ tự lui rõ ràng: **biến thể đúng cỡ → `thumbnail_url` → `im
 `<source>` trong `<picture>`, `src` luôn là JPEG hoặc ảnh gốc để trình duyệt nào cũng đọc
 được.
 
-## 8. Pipeline resize kiểu WordPress
+## 7. Tải ảnh về (đường ngược lại)
 
-Đường độc lập hoàn toàn với S3 — lưu **đĩa local**, phục vụ qua `/wp-content/uploads/`.
+Ảnh không chỉ đi lên — cả admin lẫn khách đều tải được ảnh gốc, và cả hai đều **đi qua
+backend** thay vì trỏ thẳng vào S3:
 
-```text
-POST /api/v1/wp-upload
-  → ImageResizeService: sinh nhiều kích thước theo WORDPRESS_IMAGE_SIZES
-  → ImageOptimizer (nếu bật): JPEG/PNG quality, WebP tuỳ chọn
-  → lưu wp-uploads/, trả danh sách URL theo từng kích thước
-```
+| Endpoint | Watermark | Đòi `is_published` | Dùng cho |
+|---|---|---|---|
+| `GET /api/v1/public/artworks/{id}/download` | **Có** | **Có** | Khách xem triển lãm |
+| `GET /api/v1/admin/artworks/{id}/download` | Không | Không | Admin cần file gốc sạch |
 
-Chất lượng JPEG **thích ứng theo dung lượng** (`service/constants.go`): file lớn hơn 1MB
-giảm 15 điểm chất lượng, trên 500KB giảm 10, dưới 100KB tăng 5 — luôn kẹp trong khoảng
-70–95. Mục tiêu: file lớn nén mạnh hơn vì ở đó tiết kiệm được nhiều nhất, file nhỏ giữ nét.
+Vì sao proxy qua backend chứ không trả link S3: cùng origin nên không phụ thuộc CORS của
+bucket, và đó cũng là chỗ duy nhất chèn được watermark cùng ghi nhật ký lượt tải (bảng
+`artwork_downloads`).
 
-Tính năng này bật mặc định (`WORDPRESS_ENABLED=true`) nhưng **không phục vụ trang public** —
-trang public chỉ dùng ảnh S3. Nếu không tích hợp WordPress, có thể tắt để giảm bề mặt tấn
-công và không phải bảo vệ thư mục static.
+⚠️ **Bẫy vận hành**: ảnh mốc watermark đọc theo **đường dẫn tương đối**
+(`web/public/images/vas-white-mark.png`, lui về `web/dist/images/...`). Chạy binary từ thư
+mục khác thì watermark bị bỏ qua **im lặng** — chỉ ghi log cảnh báo, ảnh vẫn trả về bình
+thường (fail-open, cố ý: một khâu trang trí hỏng không đáng làm hỏng cả lượt tải). Đây là lý
+do systemd unit bắt buộc đặt `WorkingDirectory`; xem
+[deploys/00-tu-dau-den-cuoi.md](../deploys/00-tu-dau-den-cuoi.md).

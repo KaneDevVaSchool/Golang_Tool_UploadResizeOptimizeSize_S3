@@ -14,10 +14,10 @@ Khác biệt với các tài liệu khác:
 
 | # | Tài liệu | Nội dung chính |
 |---|---|---|
-| 01 | [Cơ sở dữ liệu](./01-database.md) | 13 bảng: cột, kiểu, index, khoá ngoại, dữ liệu seed, lý do denormalize |
-| 02 | [Pipeline upload](./02-upload-pipeline.md) | Upload đơn / chunked / transaction, validate nhiều lớp, sinh S3 key |
+| 01 | [Cơ sở dữ liệu](./01-database.md) | 14 bảng: cột, kiểu, index, khoá ngoại, dữ liệu seed, lý do denormalize |
+| 02 | [Pipeline upload](./02-upload-pipeline.md) | Upload đơn, bulk upload, validate nhiều lớp, sinh S3 key, sinh biến thể, tải ảnh có watermark |
 | 03 | [Miền tác phẩm](./03-artwork-domain.md) | Vòng đời tác phẩm, bulk upload 2 bước, enrich, gán giải, lọc |
-| 04 | [Tương tác public](./04-public-engagement.md) | Reaction/comment/view ẩn danh, visitor_token, chống trùng, chia sẻ OG |
+| 04 | [Tương tác public](./04-public-engagement.md) | Reaction/comment/view ẩn danh, visitor_token, chia sẻ OG |
 | 05 | [Xác thực & bảo mật](./05-auth-security.md) | Google OAuth, session DB, CSRF, rate limit, phân tầng phòng vệ |
 | 06 | [Frontend](./06-frontend.md) | Router, 3 khu vực UI, quản lý state, API client, hiệu ứng |
 

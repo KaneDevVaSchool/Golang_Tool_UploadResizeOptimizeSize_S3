@@ -3,7 +3,7 @@
 Base URL: `https://pictures.vaschools.edu.vn` (dev: `http://localhost:8080`).
 
 Đối chiếu code tại commit `d0ec7c2`. Nguồn sự thật cho danh sách route:
-`internal/container/container.go:416-604`.
+`GetServerHandler()` trong `internal/container/container.go`.
 
 ## Định dạng phản hồi chung
 
@@ -73,7 +73,6 @@ Không cần xác thực. Dùng cho giám sát và load balancer.
   "max_size_formatted": "20.0 MB",
   "absolute_max_size": 209715200,
   "absolute_max_size_formatted": "200.0 MB",
-  "chunk_upload": true,
   "request_id": "…",
   "checks": { "disk": { }, "database": { } }
 }
@@ -121,66 +120,10 @@ docx, xls, xlsx, ppt, pptx, txt, rtf, odt, ods, odp), video (mp4, avi, mov, wmv,
 mkv, m4v, 3gp), âm thanh (mp3, wav, ogg, flac, aac, m4a, wma, opus), nén (zip, rar, 7z,
 tar, gz, bz2, xz).
 
-## `POST /api/v1/upload-transaction`
-
-Giống `/upload` nhưng ghi thêm bản ghi audit vào bảng `uploads`. Yêu cầu
-`DATABASE_ENABLED=true`. Phản hồi có thêm `record` (trạng thái bản ghi đã lưu).
-
-## Upload chia phần
-
-Dùng cho file đến `UPLOAD_ABSOLUTE_MAX_MB` (mặc định 200MB).
-
-### `POST /api/v1/upload/init`
-
-```json
-// request
-{ "filename": "video.mp4", "total_size": 104857600 }
-
-// response
-{
-  "success": true,
-  "data": {
-    "upload_id": "uuid",
-    "chunk_size": 20971520,
-    "total_chunks": 5,
-    "total_size": 104857600,
-    "filename": "video.mp4"
-  }
-}
-```
-
-### `POST /api/v1/upload/chunk`
-
-`multipart/form-data` gồm: `upload_id`, `index` (bắt đầu từ 0), `chunk` (dữ liệu nhị phân).
-
-Mỗi phần phải đúng `chunk_size`, riêng phần cuối là phần dư. Gửi các phần theo thứ tự bất
-kỳ.
-
-### `POST /api/v1/upload/complete`
-
-```json
-// request
-{ "upload_id": "uuid" }
-```
-
-Kiểm tra đủ phần → ghép → **kiểm tra magic byte** → đẩy S3 → dọn phiên. Phản hồi giống
-`/upload`.
-
-### `POST /api/v1/upload/abort`
-
-```json
-{ "upload_id": "uuid" }
-```
-
-Huỷ phiên, xoá các phần đã nhận.
-
-**Lỗi riêng của nhóm chunked**: phiên không tồn tại hoặc hết hạn (TTL 45 phút), phiên đang
-hoàn tất, quá 64 phiên đồng thời, thiếu phần, kích thước phần không khớp.
-
-## `POST /api/v1/wp-upload`
-
-Chỉ có khi `WORDPRESS_ENABLED=true`. Resize ra nhiều kích thước, lưu **đĩa local**, phục vụ
-qua `/wp-content/uploads/`. Không liên quan đến S3 và không phục vụ trang public.
+> **Đã gỡ (2026-09-07)**: `POST /api/v1/upload-transaction`, nhóm chunked
+> `POST /api/v1/upload/{init,chunk,complete,abort}`, `POST /api/v1/wp-upload` và static
+> `/wp-content/uploads/`. Xem [detail_design/02-upload-pipeline.md](./detail_design/02-upload-pipeline.md)
+> để biết lý do. Client cũ gọi các đường này sẽ nhận 404.
 
 ---
 
@@ -190,7 +133,7 @@ Không cần đăng nhập — dùng cho cả form admin lẫn bộ lọc trang 
 
 ## `GET /api/v1/schools`
 
-Danh sách 5 cơ sở.
+Danh sách cơ sở đang hoạt động (hiện là 16 cơ sở: 8 Sài Gòn, 5 Vũng Tàu, 3 Cần Thơ).
 
 ```json
 {
@@ -242,6 +185,7 @@ qua API này.
 |---|---|---|---|
 | `search` | string | — | Khớp tên tác phẩm hoặc tên học sinh; **cắt còn 80 ký tự** |
 | `school_id` | int | — | |
+| `region` | string | — | `saigon` / `cantho` / `vungtau`; giá trị lạ bị bỏ qua (không lọc) |
 | `grade_level_id` | int | — | |
 | `education_level` | string | — | `primary` / `secondary` |
 | `topic_category_id` | int | — | |
@@ -308,14 +252,13 @@ khỏi JSON.
 
 ## `GET /api/v1/public/artworks/featured`
 
-Tác phẩm tiêu biểu. Tham số tuỳ chọn `region=saigon|cantho|vungtau`.
+Tác phẩm tiêu biểu. Tham số tuỳ chọn `region=saigon|cantho|vungtau`, lọc bằng SQL (JOIN
+`schools`) giống `GET /api/v1/public/artworks` — không còn giới hạn 100 bản ghi rồi lọc
+trong bộ nhớ.
 
 ```json
 { "success": true, "data": { "items": [ ], "total_count": 12 } }
 ```
-
-⚠️ Lấy tối đa 100 bản ghi rồi mới lọc `region` **trong bộ nhớ**. Nếu tổng số tác phẩm tiêu
-biểu vượt 100, một số khu vực có thể thiếu tranh.
 
 ## `GET /api/v1/public/artworks/{id}`
 
@@ -323,9 +266,27 @@ Chi tiết một tác phẩm, **kèm ghi nhận lượt xem**.
 
 | Tham số | Ghi chú |
 |---|---|
-| `visitor_token` | Tuỳ chọn; có thì mới tính lượt xem (chống trùng trong 24 giờ) |
+| `visitor_token` | Tuỳ chọn; có thì mới tính lượt xem |
+
+⚠️ **Mỗi lần gọi kèm `visitor_token` đều +1 `view_count`** — không chống trùng theo thời
+gian. Gọi lại nhiều lần (tải lại trang, mở lại lightbox) sẽ tăng số nhiều lần.
 
 Trả **404** nếu không tồn tại **hoặc** chưa xuất bản — không phân biệt hai trường hợp.
+
+## `GET /api/v1/public/artworks/{id}/download`
+
+Tải ảnh **gốc** (không phải thumbnail/variant), chèn watermark logo VAS góc dưới-phải trước
+khi trả về — stream qua API thay vì trỏ thẳng URL S3 (same-origin, không mở tab rời).
+`Content-Disposition: attachment` kèm tên file lấy từ tiêu đề tác phẩm.
+
+Trả **404** nếu tác phẩm không tồn tại, chưa xuất bản, hoặc không có `s3_key`. Nếu chèn
+watermark lỗi (không đọc được ảnh, thiếu file logo …), trả **ảnh gốc không watermark** kèm
+ghi log — lỗi khâu phụ trợ không chặn việc tải ảnh.
+
+Mỗi lượt tải thành công được ghi vào bảng `artwork_downloads` (`source='public'`,
+`admin_user_id` luôn `NULL` vì người xem ẩn danh không có tài khoản) — phục vụ truy vết nếu
+ảnh bị phát tán sai mục đích. Đây cũng là log phụ trợ: ghi lỗi chỉ log cảnh báo, không chặn
+việc trả ảnh. Xem [01-database.md](./detail_design/01-database.md).
 
 ## `GET /api/v1/public/billboard`
 
@@ -510,7 +471,40 @@ giải chính Nhất/Nhì/Ba + giải Đặc biệt phụ).
 ### `DELETE /api/v1/admin/artworks/{id}`
 
 Xoá bản ghi và các dữ liệu liên quan (cảm xúc/bình luận/lượt xem/giải) theo CASCADE.
-⚠️ **File trên S3 được giữ lại có chủ đích.**
+⚠️ **File trên S3 cũng bị xoá** — ảnh gốc và mọi biến thể/thumbnail trong `variants`, xoá
+trên S3 trước khi xoá bản ghi DB. Xem [03-artwork-domain.md §4](./detail_design/03-artwork-domain.md).
+
+### `GET /api/v1/admin/artworks/{id}/download`
+
+Tải ảnh **gốc, không watermark, không ép `is_published`** — công cụ nội bộ để admin lưu
+trữ/in ấn, khác `GET /api/v1/public/artworks/{id}/download` ở hai điểm này. Cùng cơ chế
+proxy qua backend (same-origin, không cần CORS trên bucket).
+
+Mỗi lượt tải thành công được ghi vào bảng `artwork_downloads` (`source='admin'`, kèm
+`admin_user_id` của admin đang đăng nhập) — vì không watermark, đây là nơi duy nhất định
+danh được người tải khi cần truy vết. Log phụ trợ, không chặn việc tải nếu ghi lỗi. Xem
+[01-database.md](./detail_design/01-database.md).
+
+### `DELETE /api/v1/admin/artworks/bulk-delete`
+
+Xoá nhiều tác phẩm cùng lúc — thao tác chọn nhiều trên trang danh sách quản trị. Dùng
+method `DELETE` với thân JSON `{ids}` thay vì query string vì số lượng id có thể lớn.
+
+```json
+{ "ids": [12, 15, 22] }
+```
+
+Khác `PATCH /bulk-featured` (1 câu `UPDATE ... WHERE id IN (...)`), endpoint này xoá **từng
+tác phẩm một** ở tầng service vì mỗi tác phẩm còn cần xoá kèm object S3 riêng, không gộp
+được thành 1 lệnh SQL. Tác phẩm nào xoá S3 lỗi (mất mạng, key đã mất...) thì **giữ nguyên**
+bản ghi DB của riêng nó và tiếp tục sang tác phẩm tiếp theo — không để 1 lỗi chặn cả lô.
+
+```json
+{ "success": true, "data": { "deleted": 21, "requested": 22 } }
+```
+
+`deleted < requested` nghĩa là có tác phẩm xoá S3 lỗi và chưa bị xoá — chọn lại đúng những
+tác phẩm đó để thử lại. Xem [03-artwork-domain.md §4](./detail_design/03-artwork-domain.md).
 
 ### `PATCH /api/v1/admin/artworks/{id}/featured`
 
@@ -582,7 +576,12 @@ DELETE trả **409 `TOPIC_CATEGORY_IN_USE`** nếu nhóm đang gắn cho tác ph
 
 ## Bảng điều khiển
 
-### `GET /api/v1/admin/dashboard/stats`
+### `GET /api/v1/admin/dashboard/stats?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+`from`/`to` tuỳ chọn, chỉ ảnh hưởng khối `activity` — thiếu một trong hai (hoặc cả hai, hoặc
+giá trị không parse được) thì tự áp mặc định **14 ngày gần nhất**, giữ đúng hành vi trước khi
+có bộ lọc này. Khoảng dài hơn 366 ngày bị cắt về đúng 366 ngày, tính lùi từ `to`, để chặn
+truy vấn quét quá nhiều dữ liệu.
 
 ```json
 {
@@ -617,7 +616,7 @@ Ba khối bổ sung phục vụ việc **ra quyết định**, không chỉ mô 
 
 | Khối | Ý nghĩa |
 |---|---|
-| `activity` | Nhịp từng ngày trong 14 ngày gần nhất. Luôn trả **đủ** ngày liên tục, ngày không có hoạt động vẫn có mặt với số 0 — thiếu ngày sẽ làm biểu đồ đường vẽ sai độ dốc. `views` đếm từ `artwork_views` chứ không lấy `artworks.view_count` (cột đó là tổng tích luỹ, không tách được theo ngày). |
+| `activity` | Nhịp từng ngày trong khoảng `[from, to]` (mặc định 14 ngày gần nhất — xem tham số ở trên). Trả đủ ngày liên tục **trong đoạn có dữ liệu**: ngày 0 hoạt động xen giữa hai ngày có hoạt động vẫn có mặt (tín hiệu thật — thiếu ngày sẽ làm biểu đồ đường vẽ sai độ dốc), nhưng phần đầu/cuối chuỗi toàn số 0 (vd tháng chưa hết) bị cắt bỏ ở tầng service trước khi trả ra. `views` đếm từ `artwork_views` chứ không lấy `artworks.view_count` (cột đó là tổng tích luỹ, không tách được theo ngày). |
 | `school_coverage` | Mỗi cơ sở đã có bài ở bao nhiêu khối trên tổng số khối. Trường **chưa có tác phẩm nào vẫn xuất hiện** với số 0 — đó chính là nơi ban tổ chức cần nhắc. |
 | `operations` | Các con số cần hành động: bài chờ xuất bản, bình luận đã ẩn, tiến độ trao giải, tác phẩm chưa có tương tác nào. |
 
@@ -634,10 +633,14 @@ Ba khối bổ sung phục vụ việc **ra quyết định**, không chỉ mô 
 }
 ```
 
-Phiên bản nhẹ của `/dashboard/stats`, chỉ trả đúng hai con số mỗi khu vực — dùng cho dải card
-thống kê nhỏ ở đầu trang Tác phẩm/Giải thưởng/Nhóm chủ đề quản trị, không kéo theo
-`activity`/`top_schools`/`top_artworks`/`school_coverage`/`operations` mà ba trang đó không
-dùng tới. Luôn trả đủ 3 khu vực theo thứ tự cố định `saigon`, `cantho`, `vungtau`.
+Phiên bản nhẹ của `/dashboard/stats`, chỉ trả đúng hai con số mỗi khu vực, không kéo theo
+`activity`/`top_schools`/`top_artworks`/`school_coverage`/`operations`. Luôn trả đủ 3 khu vực
+theo thứ tự cố định `saigon`, `cantho`, `vungtau`.
+
+⚠️ **Hiện không có client nào gọi.** Endpoint sinh ra cho dải card thống kê ở đầu trang Tác
+phẩm/Giải thưởng/Nhóm chủ đề quản trị; dải đó đã gỡ ngày 2026-09-07 vì lặp lại số liệu có
+sẵn trên Dashboard. Endpoint vẫn để nguyên (rẻ, không phụ thuộc gì) nhưng nếu không dùng lại
+trong đợt tới thì nên gỡ cả handler, service và repository cùng lúc.
 
 `artworks` đếm như `total_by_region` ở trên (JOIN `artworks`-`schools`, `WHERE is_published =
 1`). `students` đếm **mọi** bản ghi bảng `students` JOIN `schools` theo `region`, **không
@@ -652,7 +655,9 @@ không gộp trùng.
 
 | Đường dẫn | Trả về |
 |---|---|
-| `GET /chia-se/tac-pham/{id}` | HTML có thẻ Open Graph, tự chuyển hướng về SPA |
+| `GET /chia-se/tac-pham/{id}` | HTML có thẻ Open Graph + JSON-LD `BreadcrumbList`, tự chuyển hướng về SPA |
+| `GET /sitemap.xml` | XML: 4 trang public cố định (`/`, `/tac-pham-tieu-bieu`, `/phong-trien-lam`, `/bang-vang`) + mọi tác phẩm đã publish (trỏ `/chia-se/tac-pham/{id}`). `Cache-Control: public, max-age=900` |
+| `GET /robots.txt` | `Allow: /`, `Disallow: /admin/ /api/ /auth/`, trỏ `Sitemap:` tới `/sitemap.xml` bằng URL tuyệt đối. `Cache-Control: public, max-age=3600` |
 | `GET /wp-content/uploads/*` | File tĩnh (đã chặn liệt kê thư mục) |
 | `GET /*` | SPA React; fallback `index.html`. Chưa build `dist` thì trả JSON thông tin API |
 

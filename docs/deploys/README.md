@@ -18,8 +18,7 @@ lo khởi động lại khi lỗi, Nginx lo TLS và giới hạn kích thước 
 
 | Tài liệu | Nội dung |
 |---|---|
-| [00-tu-dau-den-cuoi.md](./00-tu-dau-den-cuoi.md) | **Deploy lần đầu — đọc file này.** Cực chi tiết, từ lúc chưa mua VPS: làm cứng server, cài Go/Node/MySQL, tạo IAM user AWS, OAuth, nghiệm thu, backup |
-| [01-vps-systemd.md](./01-vps-systemd.md) | Quy trình rút gọn cho người đã quen, khi VPS đã có sẵn Go/Node/MySQL/Nginx |
+| [00-tu-dau-den-cuoi.md](./00-tu-dau-den-cuoi.md) | **Đọc file này.** Toàn bộ quy trình làm tay, từ VPS trắng đến HTTPS: làm cứng server, cài Go/Node/MySQL, tạo IAM user AWS, OAuth, build, migration, systemd, Nginx, nghiệm thu, backup, cập nhật phiên bản |
 | [02-configuration.md](./02-configuration.md) | Toàn bộ biến môi trường: ý nghĩa, mặc định, ràng buộc |
 | [03-operations.md](./03-operations.md) | Vận hành hằng ngày: log, backup, sự cố, rollback |
 | [../S3-PUBLIC-READ.md](../S3-PUBLIC-READ.md) | Bucket policy cho ảnh đọc công khai |
@@ -62,25 +61,37 @@ lo khởi động lại khi lỗi, Nginx lo TLS và giới hạn kích thước 
 ├── storage/
 │   ├── logs/           app-YYYY-MM-DD.log (xoay theo ngày)
 │   └── backups/        dump SQL trước các thao tác rủi ro
-├── uploads/            file tạm + chunk đang dở (tự dọn)
-├── wp-uploads/         ảnh resize kiểu WordPress (nếu bật)
-└── deploy/             script và file cấu hình mẫu
+├── uploads/            file tạm trong lúc upload (tự dọn)
+├── server.prev         binary của lần deploy trước, giữ để quay lui nhanh
+└── deploy/             file cấu hình mẫu (systemd unit, vhost Nginx)
 ```
 
-## Triển khai nhanh (khi đã cài đặt lần đầu xong)
+## Cập nhật phiên bản (khi đã cài đặt lần đầu xong)
 
 ```bash
 cd /opt/s3-upload-tool
-sudo bash deploy/deploy.sh
+sudo -u appuser git pull --ff-only
+sudo -u appuser bash -c 'cd web && npm ci && npm run build'
+sudo -u appuser go build -trimpath -ldflags="-s -w" -o server.new ./cmd/server
+sudo -u appuser go build -o migrate ./cmd/migrate && sudo -u appuser ./migrate -up
+sudo systemctl stop s3-upload-tool
+sudo -u appuser mv server server.prev && sudo -u appuser mv server.new server
+sudo systemctl start s3-upload-tool
+curl -sf http://127.0.0.1:8080/api/v1/health && echo OK
 ```
 
-Script chạy lại nhiều lần được: `git pull` → build web → build binary → cài/khởi động lại
-service → cài lại vhost Nginx → kiểm tra sức khoẻ. Chi tiết từng bước trong
-[01-vps-systemd.md](./01-vps-systemd.md).
+Giải thích từng bước và cách quay lui: giai đoạn K trong
+[00-tu-dau-den-cuoi.md](./00-tu-dau-den-cuoi.md).
+
+> Trước đây thư mục `deploy/` có các script `deploy.sh`, `preflight.sh`, `setup-https.sh`,
+> `status.sh`. Chúng đã bị xoá ngày 2026-09-07: quy trình giờ nằm trọn trong tài liệu để
+> người vận hành thấy được từng bước đang làm gì, thay vì tin vào một script không đọc.
 
 ## Danh sách kiểm tra trước khi lên production
 
-Toàn bộ mục dưới đây phải xong. Bốn mục đầu server sẽ **tự chặn khởi động** nếu sai.
+Toàn bộ mục dưới đây phải xong. Hai mục đầu server sẽ **tự chặn khởi động** nếu sai
+(`API_REQUIRE_KEY`+`API_KEY`, và `CORS_ORIGINS` khác `*`); các mục còn lại sai thì server vẫn
+lên nhưng hỏng lúc chạy.
 
 - [ ] `APP_ENV=production`
 - [ ] `API_REQUIRE_KEY=true` và `API_KEY` là chuỗi ngẫu nhiên thật — ⚠️ đọc cảnh báo về
@@ -91,7 +102,14 @@ Toàn bộ mục dưới đây phải xong. Bốn mục đầu server sẽ **t�
 - [ ] `GOOGLE_REDIRECT_URL` khớp **chính xác** URI đã khai trong Google Cloud Console
 - [ ] `ADMIN_ALLOWED_EMAILS` đúng danh sách ban tổ chức
 - [ ] `S3_USE_PRESIGNED_URL=false` (ảnh public phải sống lâu dài)
+- [ ] `TRUSTED_PROXIES` khớp địa chỉ Nginx (`127.0.0.1/32,::1/128` khi cùng máy) — ⚠️ sai
+      dòng này thì rate limit và BotGuard đếm mọi khách thành một IP
+- [ ] `SECURITY_HSTS_ENABLED=true` (sau khi đã có HTTPS ổn định)
+- [ ] `BOT_GUARD_ENABLED=true`
 - [ ] Bucket policy cho phép đọc công khai — xem [S3-PUBLIC-READ.md](../S3-PUBLIC-READ.md)
 - [ ] `curl https://pictures.vaschools.edu.vn/api/v1/health` trả `200`
 - [ ] Không còn vhost Nginx nào khác trả lời cho tên miền này
 - [ ] Thử upload một ảnh thật qua giao diện trên tên miền
+- [ ] Tải một ảnh từ trang public và **mở ra xem có watermark** — đây là kiểm tra duy nhất
+      bắt được lỗi thiếu `web/dist`, vì lỗi đó không báo gì
+- [ ] `curl https://pictures.vaschools.edu.vn/sitemap.xml` trả danh sách tác phẩm

@@ -2,7 +2,7 @@
 
 **Hệ quản trị**: MySQL 8+ · InnoDB · `utf8mb4` / `utf8mb4_unicode_ci`
 **Driver**: `github.com/go-sql-driver/mysql`
-**Migration**: `internal/database/migrations/001..016_*.sql`, chạy tự động lúc khởi động
+**Migration**: `internal/database/migrations/001..018_*.sql`, chạy tự động lúc khởi động
 
 > `utf8mb4` là bắt buộc, không phải tuỳ chọn: dữ liệu chứa tiếng Việt có dấu và emoji
 > (bình luận, tên tác phẩm). `utf8` của MySQL chỉ 3 byte và sẽ làm hỏng emoji.
@@ -48,9 +48,17 @@ Chính sách xoá được chọn có chủ đích:
 
 ### Nhóm hạ tầng upload
 
-#### `uploads` — lịch sử upload (migration 001)
+#### `uploads` — lịch sử upload (migration 001) ⚠️ **bảng chết**
 
-Ghi nhận mọi lần upload qua `/api/v1/upload-transaction`, dùng cho audit và đối soát.
+> **Không code nào đọc hay ghi bảng này nữa.** Nó phục vụ `/api/v1/upload-transaction`, và
+> endpoint đó cùng `upload_repository.go`, `upload_record.go` đã bị gỡ ngày 2026-09-07.
+> Migration 001 vẫn giữ nguyên theo quy tắc không sửa file đã commit, nên bảng vẫn được tạo
+> trên CSDL mới — chỉ là luôn rỗng. Dọn được bằng một migration `DROP TABLE` khi tiện.
+>
+> Cột `artworks.upload_id` cũng không còn được ghi; nó luôn `NULL` với tác phẩm tạo từ
+> 2026-09-07 trở đi.
+
+Mô tả dưới đây giữ lại để đọc được dữ liệu cũ nếu có.
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
@@ -70,7 +78,7 @@ cập nhật `completed`/`failed` sau. Nếu tiến trình chết giữa chừng
 
 ### Nhóm danh mục (seed sẵn)
 
-#### `schools` — 5 cơ sở, 3 khu vực (migration 004)
+#### `schools` — 16 cơ sở, 3 khu vực (migration 004, dữ liệu thay bằng `cmd/seed`)
 
 | Cột | Kiểu | Ghi chú |
 |---|---|---|
@@ -79,17 +87,13 @@ cập nhật `completed`/`failed` sau. Nếu tiến trình chết giữa chừng
 | `display_order` | INT | Thứ tự hiển thị |
 | `is_active` | TINYINT(1) | Ẩn cơ sở không tham gia |
 
-Dữ liệu seed sẵn trong migration:
+Migration 004 seed sẵn 5 cơ sở khi tạo bảng, nhưng danh sách đó đã lỗi thời so với quy mô
+thật của Hệ thống Trường Việt Mỹ. `cmd/seed` (xem [../MODULES.md](../MODULES.md)) ghi đè
+bảng này bằng 16 cơ sở thật — 8 tại Sài Gòn, 5 tại Vũng Tàu, 3 tại Cần Thơ (tên đầy đủ xem
+`cmd/seed/data.go`, biến `schoolSeeds`). Không lưu địa chỉ/hotline — bảng chỉ có
+name/region/display_order, thêm cột đó là việc khác ngoài phạm vi seed dữ liệu demo.
 
-| Cơ sở | Khu vực |
-|---|---|
-| Bình Thới - Tân Bình | `saigon` |
-| Thống Tây Hội | `saigon` |
-| Phú Định | `saigon` |
-| Vũng Tàu | `vungtau` |
-| Cần Thơ | `cantho` |
-
-⚠️ **5 cơ sở vật lý ≠ 3 khu vực trưng bày.** Ba cơ sở tại TP.HCM gộp thành một khu vực
+⚠️ **Cơ sở vật lý ≠ khu vực trưng bày.** Nhiều cơ sở tại TP.HCM gộp thành một khu vực
 `saigon` theo yêu cầu ban tổ chức. Khi đọc code thấy `region`, đó là *khu vực trưng bày*,
 không phải địa điểm. Trang public dùng `region` để chia tab; admin dùng `school_id` để
 nhập liệu chính xác cơ sở.
@@ -175,8 +179,8 @@ em cùng tên còn tệ hơn để trùng lặp.
 | `file_size`, `width`, `height` | | `width`/`height` đọc từ ảnh lúc upload |
 | `is_featured` | TINYINT(1) | Hiện ở trang "Tác phẩm tiêu biểu" |
 | `is_published` | TINYINT(1) | `0` = ẩn khỏi mọi API public |
-| `view_count` | BIGINT UNSIGNED | Đếm dồn, chống trùng qua `artwork_views` |
-| `upload_id`, `created_by` | FK NULL | Truy vết nguồn gốc |
+| `view_count` | BIGINT UNSIGNED | Đếm dồn — mỗi lần mở là 1 lượt, không chống trùng |
+| `upload_id`, `created_by` | FK NULL | Truy vết nguồn gốc — ⚠️ `upload_id` không còn được ghi (xem bảng `uploads`) |
 
 **Index**: `school_id`, `grade_level_id`, `topic_category_id`, `is_featured`, `is_published`,
 và `FULLTEXT(title)`.
@@ -264,7 +268,7 @@ Composite phủ trọn cả ba mệnh đề.
 
 Giới hạn độ dài được **đồng bộ hai nơi**: cột VARCHAR ở đây và hằng số
 `maxCommentContentLength = 1000` / `maxDisplayNameLength = 100` ở
-`public_handler.go:21-25`. Sửa một nơi phải sửa nơi kia, nếu không handler sẽ nhận dữ liệu
+`public_handler.go:24-26`. Sửa một nơi phải sửa nơi kia, nếu không handler sẽ nhận dữ liệu
 mà MySQL từ chối.
 
 ⚠️ `is_hidden` đã có trong schema và repository lọc theo nó, nhưng **chưa có API admin để
@@ -276,12 +280,48 @@ bật/tắt**. Kiểm duyệt hiện phải làm bằng SQL thủ công. Xem [pl
 |---|---|
 | `artwork_id`, `visitor_token`, `viewed_at` | |
 
-**Index**: `(artwork_id, visitor_token, viewed_at)` — composite, đúng thứ tự cho truy vấn
-"trình duyệt này đã xem tranh này trong 24h qua chưa".
+**Index**: `(artwork_id, visitor_token, viewed_at)` — composite, dựng cho truy vấn chống
+trùng 24 giờ vốn đã bỏ. Giữ lại vì vẫn phục vụ được thống kê "một khách xem những tranh
+nào", nhưng nếu không dùng tới thì đây là index trả phí ghi mà không ai đọc.
 
-Bảng này tồn tại chỉ để chống thổi phồng lượt xem. Trước khi tăng `artworks.view_count`,
-service kiểm tra bảng này trước. Bảng sẽ phình theo thời gian — ⚠️ cần job dọn bản ghi cũ
-hơn 24h, hiện **chưa có** (xem [plan/03-risks.md](../plan/03-risks.md)).
+⚠️ **Đổi hành vi 2026-09-07**: bảng này từng tồn tại để chống thổi phồng lượt xem — trước khi
+tăng `artworks.view_count`, service kiểm tra "trình duyệt này đã xem tranh này trong 24h qua
+chưa". Cơ chế đó đã bỏ: nay **mỗi lần mở là một dòng mới** và `view_count` tăng theo. Lý do
+là con số hiển thị công khai cần phản ánh lượt xem thật, còn việc một người mở lại nhiều lần
+không phải gian lận đáng chặn ở quy mô này.
+
+Hệ quả: bảng phình **nhanh hơn trước** — ⚠️ cần job dọn bản ghi cũ, hiện **chưa có** (xem R5
+trong [plan/03-risks.md](../plan/03-risks.md)).
+
+#### `artwork_downloads` (migration 018)
+
+| Cột | Kiểu | Ghi chú |
+|---|---|---|
+| `artwork_id` | BIGINT UNSIGNED | FK, `CASCADE` |
+| `admin_user_id` | BIGINT UNSIGNED NULL | FK, `SET NULL` — chỉ có giá trị khi tải từ khu quản trị |
+| `source` | VARCHAR(16) | `admin` hoặc `public` |
+| `ip_address` | VARCHAR(64) | Không trả ra JSON (`json:"-"`, cùng quy ước với `artwork_reactions.ip_address`) |
+| `user_agent` | VARCHAR(255) | Không trả ra JSON |
+| `downloaded_at` | DATETIME | |
+
+**Index**: `(artwork_id, downloaded_at)` và `(admin_user_id, downloaded_at)`.
+
+Ghi nhật ký ai tải ảnh **gốc** (không phải thumbnail), lúc nào, từ đâu — cả hai đường tải
+đều ghi vào cùng một bảng này qua `ArtworkService.LogDownload`:
+
+- `GET /api/v1/admin/artworks/{id}/download` ghi `source='admin'` kèm `admin_user_id` lấy
+  từ session đang đăng nhập.
+- `GET /api/v1/public/artworks/{id}/download` ghi `source='public'`, `admin_user_id` luôn
+  `NULL` vì người xem ẩn danh không có tài khoản để định danh — tra cứu khi cần phải dựa
+  vào `ip_address`.
+
+Đây là log **phụ trợ**: ghi lỗi (mất kết nối DB tạm thời...) chỉ log cảnh báo ở tầng
+handler (`logArtworkDownload` trong `internal/handlers/public_handler.go`), không chặn
+việc trả ảnh về — đúng nguyên tắc lỗi khâu phụ trợ không được làm hỏng thao tác chính (xem
+mục 3 `CLAUDE.md`). Chưa có giao diện admin để xem lại nhật ký này; tra cứu hiện phải bằng
+SQL trực tiếp. Đây mới là bước lấp một phần mục "Nhật ký thao tác admin" ở
+[05-auth-security.md §10](./05-auth-security.md) — chỉ phần tải ảnh, chưa bao gồm
+xoá/sửa tác phẩm.
 
 ### Nhóm xác thực
 
@@ -317,7 +357,7 @@ Hai đường chạy migration, dùng chung định dạng bảng `schema_migrat
 
 | Đường | Khi nào dùng |
 |---|---|
-| Tự động lúc khởi động | Mặc định (`DATABASE_AUTO_MIGRATE=true`), chạy trong `container.go:163-170`, timeout 2 phút |
+| Tự động lúc khởi động | Mặc định (`DATABASE_AUTO_MIGRATE=true`), chạy trong `NewContainer` (nhánh `cfg.Database.AutoMigrate`), timeout 2 phút |
 | `cmd/migrate` CLI | Khi muốn kiểm soát riêng, chạy tay, kiểm tra trạng thái |
 
 Migration là **idempotent**: mọi file dùng `CREATE TABLE IF NOT EXISTS`, và

@@ -1,7 +1,7 @@
 # 05 — Xác thực và bảo mật
 
 **Code chính**: `internal/auth/`, `internal/handlers/admin_auth_handler.go`,
-`internal/middleware/{admin_auth,csrf,apikey,ratelimit,cors,concurrency}.go`
+`internal/middleware/{admin_auth,csrf,apikey,ratelimit,clientip,botguard,security_headers,bodylimit,cors,concurrency}.go`
 
 ## 1. Ba mô hình xác thực song song
 
@@ -89,8 +89,8 @@ coi đó là điều hướng từ site khác. `Strict` sẽ **không gửi cook
 người dùng vừa đăng nhập xong lại thấy mình chưa đăng nhập. `Lax` gửi cookie cho điều hướng
 GET cấp cao nhất — vừa đủ cho luồng này, vẫn chặn CSRF qua form POST.
 
-**Dọn session hết hạn**: goroutine chạy mỗi giờ (`container.go:393-414`), dừng sạch qua
-channel khi tắt máy. Việc kiểm tra hết hạn vẫn diễn ra ở mỗi lần xác thực, nên goroutine
+**Dọn session hết hạn**: goroutine chạy mỗi giờ (`Container.startSessionCleanup`), dừng
+sạch qua channel khi tắt máy. Việc kiểm tra hết hạn vẫn diễn ra ở mỗi lần xác thực, nên goroutine
 này chỉ để bảng không phình — không phải cơ chế bảo mật.
 
 **Đăng xuất luôn thành công**: endpoint logout đặt ngoài `AdminAuthMiddleware`. Session đã
@@ -117,6 +117,15 @@ Việc `HttpOnly=false` **không phải lỗ hổng**: bản chất double-submi
 được token để gửi lại. Bảo vệ đến từ chỗ site khác không đọc được cookie của domain này
 (same-origin policy), chứ không phải từ việc giấu token khỏi JavaScript.
 
+Hai chi tiết trong cách so khớp token:
+
+- **So sánh constant-time** (`crypto/subtle`). So sánh chuỗi thường thoát ra ở ký tự lệch
+  đầu tiên, để lộ độ dài tiền tố đúng qua thời gian phản hồi và cho phép dò dần từng ký tự.
+- **Không đọc form với body multipart.** `r.FormValue` parse toàn bộ body, nghĩa là một
+  file 200MB được đọc và ghi ra đĩa tạm **trước** khi biết token có hợp lệ không — biến
+  chính lớp chống CSRF thành đường làm cạn tài nguyên. Đường upload gửi token qua header
+  nên nhánh form chỉ cần cho `application/x-www-form-urlencoded`.
+
 ⚠️ **Client không phải trình duyệt** (curl, script tích hợp) sẽ bị 403 khi gọi `POST`. Hoặc
 lấy token qua một `GET` trước rồi gửi kèm, hoặc đặt `CSRF_ENABLED=false` nếu triển khai
 thuần API. Xem [API.md](../API.md).
@@ -137,26 +146,174 @@ Hai điểm về thiết kế:
 public sẽ ngừng hoạt động với người xem ẩn danh. Nếu vừa muốn public mở vừa muốn bảo vệ
 upload, hãy giữ `API_REQUIRE_KEY=false` và dựa vào session cho admin + rate limit cho public.
 
-## 6. Rate limit
+## 6. Xác định IP client — nền móng của mọi giới hạn
 
-Ba bộ đếm độc lập, mỗi bộ có `map[IP]counter` riêng:
+**Đọc mục này trước mục rate limit.** Mọi bộ đếm bên dưới đều tính theo IP, nên chúng chỉ
+có giá trị đúng bằng độ tin cậy của việc xác định IP.
+
+Bản đầu tiên đọc thẳng `X-Forwarded-For` do client gửi. Header đó là **do người gọi tự
+đặt** — bất kỳ ai cũng chỉ cần thêm một giá trị ngẫu nhiên vào mỗi request là có một "IP"
+mới, và toàn bộ rate limit theo IP trở thành trang trí. Với một trang cho phép bình luận
+ẩn danh mà người dùng là học sinh, đó là lỗ hổng nghiêm trọng nhất trong hệ thống.
+
+`middleware/clientip.go` áp nguyên tắc chuẩn của reverse proxy:
+
+```text
+RemoteAddr (chặng kết nối trực tiếp) có nằm trong TRUSTED_PROXIES không?
+   ├─ Không → dùng thẳng RemoteAddr, BỎ QUA mọi header chuyển tiếp
+   └─ Có    → đọc X-Forwarded-For, duyệt từ PHẢI sang TRÁI,
+              lấy IP đầu tiên không thuộc dải tin cậy
+```
+
+**Vì sao duyệt từ phải sang trái.** Mỗi proxy *nối thêm* vào cuối chuỗi. Phần bên trái là
+thứ client tự gửi lên — bịa được tuỳ ý; phần bên phải do các proxy tin cậy ghi — mới đáng
+tin. Lấy phần tử đầu tiên (như bản cũ) là lấy đúng phần kẻ tấn công kiểm soát.
+
+**Gom IPv6 về khối `/64`** (`ClientIPKey`). Một thuê bao IPv6 được cấp cả khối `/64` trở
+lên, nên đếm theo địa chỉ đầy đủ là vô nghĩa — đổi sang địa chỉ khác trong cùng khối là có
+bộ đếm mới. IPv4 giữ nguyên địa chỉ đầy đủ.
+
+⚠️ `TRUSTED_PROXIES` cấu hình sai theo **cả hai hướng** đều nguy hiểm: khai quá rộng thì
+mở lại lỗ hổng giả mạo; khai thiếu khi thật sự đứng sau proxy thì mọi khách bị gom vào một
+bộ đếm và cả trang tự khoá lúc đông người nhất (R6). Xem
+[deploys/02-configuration.md](../deploys/02-configuration.md).
+
+## 7. Rate limit
+
+Bốn bộ đếm độc lập, mỗi bộ có `map[khoá IP]counter` riêng:
 
 | Phạm vi | Giới hạn | Áp cho |
 |---|---|---|
 | Toàn cục | `RATE_LIMIT_REQUESTS`/`WINDOW` (mặc định 100/phút) | Mọi request |
 | `/api/v1/metrics` | 10/phút, **cố định trong code** | Chống dò thông tin vận hành |
 | Ghi dữ liệu public | 20/phút | **Chỉ** `POST`/`DELETE` dưới `/api/v1/public/*` |
+| Tải ảnh gốc public | `RATE_LIMIT_DOWNLOAD_REQUESTS` (mặc định 30/phút) | **Chỉ** `GET .../download` |
 
-Bộ thứ ba lồng trong bộ thứ nhất: một request POST bình luận tính vào **cả hai** bộ đếm.
+Các bộ sau lồng trong bộ thứ nhất: một request POST bình luận tính vào **cả hai** bộ đếm.
 
-Mỗi `RateLimiter` chạy goroutine dọn bộ nhớ theo `RATE_LIMIT_CLEANUP_MINUTES`. Container giữ
-danh sách mọi limiter đã tạo và `Stop()` tất cả khi tắt máy (`container.go:609-613`) —
-không rò rỉ goroutine.
+Bộ đếm tải ảnh tách riêng vì đó là thao tác đắt nhất trên trang public — đọc trọn object từ
+S3 rồi ghi một dòng `artwork_downloads` — và là đích ngắm chính khi ai đó muốn gom toàn bộ
+tranh. Người xem thật hiếm khi tải quá vài tấm một phút.
+
+Mọi phản hồi 429 đều kèm `Retry-After` và thân JSON cùng khuôn
+`{success,error:{code,message}}` như phần còn lại của API.
+
+## 8. Chống tải trọn site (`botguard.go`)
+
+Rate limit theo số request **không** chặn được trình tải site: WinHTTrack, `wget -r` và
+tương tự đều cho hẹn nhịp chậm hơn ngưỡng, rồi kiên nhẫn kéo hết ảnh trong nhiều giờ.
+
+Ba lớp, xếp theo mức độ chắc chắn giảm dần — chắc thì chặn thẳng, mơ hồ thì chỉ siết nhịp:
+
+| Lớp | Dấu hiệu | Xử lý |
+|---|---|---|
+| 1 | User-Agent tự khai là công cụ tải hàng loạt (`httrack`, `wget`, `curl`, `scrapy`, `python-requests`…) | 403 `AUTOMATED_ACCESS_BLOCKED` |
+| 2 | Không có User-Agent, **trên đường HTML** | 403 |
+| 3 | Vượt `BOT_GUARD_MAX_REQUESTS_PER_MINUTE` **hoặc** `BOT_GUARD_MAX_PATHS_PER_MINUTE` | 429, tự hết sau `BOT_GUARD_BLOCK_MINUTES` |
+
+**Số đường dẫn khác nhau mới là dấu hiệu quyết định.** Người thật xem đi xem lại vài trang,
+tải lại, mở lightbox nhiều lần — số URL *khác nhau* vẫn thấp. Máy quét thì đi qua mỗi URL
+đúng một lần rồi chuyển sang URL mới. Đếm theo đó phân biệt được hai bên mà không phạt
+người xem hăng hái.
+
+### Vì sao KHÔNG chặn theo "có chữ bot trong User-Agent"
+
+Googlebot, bingbot, `facebookexternalhit`, coccocbot đều chứa các chuỗi đó. Chặn theo kiểu
+chung chung sẽ **xoá sổ toàn bộ SEO** vừa dựng ở P2.15 và làm hỏng ảnh preview khi chia sẻ
+link lên Facebook/Zalo. Danh sách `scraperAgentMarkers` cố tình chỉ liệt kê tên công cụ cụ
+thể; `legitBotMarkers` liệt kê bot được miễn hoàn toàn lớp 3.
+
+Bot hợp lệ **không** xác minh ngược DNS: một truy vấn DNS trên đường phục vụ mỗi request là
+chi phí không đáng ở quy mô này, và hệ quả xấu nhất của việc giả mạo chỉ là được miễn giới
+hạn nhịp — kẻ giả mạo vẫn dính lớp 1 nếu dùng công cụ tải hàng loạt, vẫn dính rate limit
+chung theo IP.
+
+### Miễn trừ
+
+`/robots.txt`, `/sitemap.xml` (chính là thứ để phục vụ crawler), `/api/v1/health` (giám sát
+phải luôn thăm dò được), `/api/v1/admin/*` và `/auth/*` (đã có session; admin chạy script
+đối soát dữ liệu là việc bình thường).
+
+### Điều cố ý KHÔNG làm
+
+Không chặn theo "thiếu `Referer`" hay "thiếu `Accept-Language`". Trình duyệt thật vẫn thiếu
+các header đó trong nhiều tình huống hợp lệ — mở thẳng link, thiết lập riêng tư — nên chặn
+theo đó là chặn nhầm người xem thật.
+
+⚠️ Bot guard đặt **ngoài** rate limit chung trong chuỗi middleware, để máy quét bị loại
+trước khi kịp tiêu tốn hạn mức chung của những người khác cùng đi ra từ một IP NAT — trường
+học dùng chung một IP ra ngoài (R6).
+
+Mỗi `RateLimiter` và cả `BotGuard` đều chạy goroutine dọn bộ nhớ riêng. Container giữ danh
+sách mọi limiter đã tạo và `Stop()` tất cả (kèm `BotGuard.Stop()`) khi tắt máy — không rò
+rỉ goroutine.
 
 ⚠️ Bộ đếm nằm **trong bộ nhớ tiến trình**. Restart là mất, và nhiều instance sẽ không dùng
 chung. Chấp nhận được với một instance; nếu scale ngang phải chuyển sang Redis.
 
-## 7. Giới hạn đồng thời
+## 9. Header bảo mật (`security_headers.go`)
+
+Đặt ở **tầng ứng dụng**, không chỉ ở Nginx: vhost mẫu trong repo chỉ là điểm khởi đầu, còn
+file thật trên VPS do Certbot sửa và người vận hành chỉnh tay — repo không kiểm soát được
+nội dung đó. Đặt ở đây thì mọi lần triển khai đều có, kể cả khi dựng vhost mới. Header nào
+Nginx đã đặt thì không ghi đè (`setIfAbsent`), nên không gửi trùng.
+
+| Header | Giá trị | Ghi chú |
+|---|---|---|
+| `Content-Security-Policy` | `script-src 'self'`, `object-src 'none'`, `frame-ancestors 'self'`… | **Chỉ** đặt trên tài liệu HTML |
+| `Permissions-Policy` | camera/mic/geolocation/payment/usb đều `()` | Khoá sẵn API trình duyệt trang này không dùng |
+| `Cross-Origin-Resource-Policy` | `same-origin` | |
+| `Cross-Origin-Opener-Policy` | `same-origin` | |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Chỉ khi `SECURITY_HSTS_ENABLED` **và** request thật sự là HTTPS |
+| `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` | như Nginx | Lưới an toàn khi chạy không qua proxy |
+
+**`style-src` có `'unsafe-inline'`, `script-src` thì không.** React đặt style nội tuyến qua
+thuộc tính `style`, và trang chia sẻ render bằng `html/template` cũng có style nội tuyến —
+không nới thì giao diện vỡ. Với script thì không cần nới: Vite sinh file `.js` riêng, và
+script nội tuyến mới là hướng tấn công XSS đáng lo. Nới cả hai cho "tiện" là vô hiệu hoá
+phần có giá trị nhất của CSP.
+
+Ràng buộc đó **có giá phải trả ở frontend**, và giá đó đã được trả chứ không phải né:
+
+- Script gỡ splash chuyển từ nội tuyến trong `index.html` sang `web/public/splash.js`, nạp
+  bằng `<script src defer>`. Phương án thay thế là băm `sha256` rồi nhúng hash vào CSP, nhưng
+  như thế mỗi lần sửa script là phải tính lại hash trong code Go — quên một lần thì splash
+  kẹt vĩnh viễn trên production mà log server im lặng hoàn toàn.
+- Font chuyển sang **tự phục vụ** trong `web/public/fonts/` thay vì nạp từ
+  `fonts.googleapis.com` — `style-src 'self'` chặn stylesheet của Google, và nới CSP cho
+  Google đổi lấy việc mỗi lượt xem trang gửi IP người xem sang máy chủ bên thứ ba. Chi tiết ở
+  [06-frontend.md](06-frontend.md).
+
+Vì vậy **`font-src 'self' data:` là đủ** và không cần thêm origin ngoài nào. Nếu ai đó siết
+`font-src` bỏ `'self'`, toàn bộ chữ trên trang tụt về font hệ thống —
+`TestSecurityHeaders_FontTuPhucVuDuocPhep` khoá lại điều này.
+
+CSP **không** đặt lên tài nguyên tĩnh (`/assets/`, `/images/`, `/fonts/`, `/splash.js`,
+`robots.txt`, `sitemap.xml`, `favicon.ico`): chúng không phải tài liệu HTML nên header đó chỉ
+tốn băng thông ở mọi request.
+
+**Domain S3 tự suy** từ `S3_BUCKET_NAME`/`AWS_REGION`/`S3_ENDPOINT` (`deriveS3Origins`).
+Bắt người vận hành khai lại domain trong một biến CSP riêng là mời gọi việc quên đồng bộ
+hai chỗ — mà hậu quả là CSP chặn đúng ảnh tác phẩm, lỗi chỉ lộ trên trình duyệt người dùng
+cuối chứ không xuất hiện trong log server.
+
+⚠️ HSTS chỉ đặt khi request thật sự đến qua HTTPS. `X-Forwarded-Proto` chỉ được tin khi
+request đến từ proxy tin cậy — cùng nguyên tắc ở mục 6.
+
+## 10. Giới hạn kích thước body (`bodylimit.go`)
+
+Nginx đặt `client_max_body_size 200m` ở mức **server** để đường upload ảnh đi lọt, nghĩa là
+mọi endpoint đều nhận được body 200MB — kể cả `POST /api/v1/public/artworks/{id}/comments`.
+Vài chục request bình luận với body khổng lồ ép server đọc và cấp phát bộ nhớ, hoàn toàn
+hợp lệ dưới mắt rate limit vì số request vẫn thấp.
+
+`http.MaxBytesReader` cắt việc đọc ngay khi vượt ngưỡng: `MAX_JSON_BODY_KB` (mặc định 1MB)
+cho endpoint thường, `UPLOAD_ABSOLUTE_MAX_MB` cho đường upload ảnh.
+
+Đặt **ngoài** CSRF trong chuỗi middleware để body quá khổ bị cắt trước khi bất kỳ lớp nào
+đọc nó.
+
+## 11. Giới hạn đồng thời
 
 Semaphore toàn server (`golang.org/x/sync/semaphore`) giới hạn số request xử lý cùng lúc.
 Vượt quá thì **chờ** tối đa `CONCURRENCY_ACQUIRE_TIMEOUT_SECONDS` rồi mới trả lỗi — xếp
@@ -166,7 +323,7 @@ tốt hơn báo lỗi.
 Mặc định `MAX_CONCURRENT_UPLOADS=500` là khá rộng; điều chỉnh theo RAM thực tế của VPS, vì
 mỗi upload đang xử lý giữ một file tạm và bộ đệm.
 
-## 8. Kiểm tra bắt buộc ở production
+## 12. Kiểm tra bắt buộc ở production
 
 `config/builder.go:426-432` **chặn server khởi động** nếu `APP_ENV=production` mà:
 
@@ -180,7 +337,7 @@ và để lộ dữ liệu. ⚠️ Lưu ý ràng buộc thứ nhất kéo theo c
 production sẽ ảnh hưởng trang public; xem [deploys/02-configuration.md](../deploys/02-configuration.md)
 để biết cách xử lý.
 
-## 9. Bảo vệ khác rải rác trong code
+## 13. Bảo vệ khác rải rác trong code
 
 | Bảo vệ | Nơi thực hiện |
 |---|---|
@@ -193,7 +350,7 @@ production sẽ ảnh hưởng trang public; xem [deploys/02-configuration.md](.
 | Chống XSS | React escape khi render; `html/template` escape ở trang chia sẻ |
 | Chuẩn hoá thông tin lỗi | `handlers/error_mapper.go` — `sanitizeError` không trả chi tiết nội bộ ra ngoài |
 
-## 10. Những gì hệ thống **không** bảo vệ
+## 14. Những gì hệ thống **không** bảo vệ
 
 Nêu rõ để không ai hiểu nhầm về mức bảo đảm:
 
@@ -201,8 +358,18 @@ Nêu rõ để không ai hiểu nhầm về mức bảo đảm:
   [04-public-engagement.md](./04-public-engagement.md).
 - **Phân quyền theo vai trò.** Cột `role` tồn tại nhưng mọi admin có quyền như nhau —
   không có phân biệt người duyệt/người xem.
-- **Nhật ký thao tác admin.** Không ghi lại ai xoá tác phẩm nào lúc nào. Chỉ có
-  `artworks.created_by` cho việc tạo.
+- **Nhật ký thao tác admin — mới có một phần.** Bảng `artwork_downloads` (migration `018`)
+  ghi lại ai **tải** tác phẩm nào lúc nào (xem [01-database.md](./01-database.md)), nhưng
+  xoá/sửa tác phẩm vẫn **không** được ghi lại — chỉ có `artworks.created_by` cho việc tạo.
 - **Mã hoá dữ liệu khi lưu.** Dựa vào mã hoá ở tầng đĩa/dịch vụ, không mã hoá ở tầng ứng dụng.
-- **Chặn tấn công từ chối dịch vụ phân tán.** Rate limit theo IP trong bộ nhớ không đủ; cần
-  Cloudflare hoặc tương đương.
+- **Chặn tấn công từ chối dịch vụ phân tán (DDoS thật sự).** Bot guard và rate limit chặn
+  được **một nguồn** lạm dụng — kể cả nguồn kiên nhẫn chạy chậm. Chúng **không** chặn được
+  hàng nghìn IP khác nhau cùng lúc: lưu lượng đó đã tiêu thụ băng thông và tài nguyên VPS
+  *trước khi* đến được tầng ứng dụng. Chống DDoS phân tán phải đặt ở tuyến trước (Cloudflare
+  hoặc tương đương) — không có cách nào làm được điều đó bên trong tiến trình Go.
+- **Người quyết tâm sao chép nội dung.** Ai đó chạy trình duyệt thật, tốc độ người thường,
+  vẫn lưu được từng tấm tranh. Mục tiêu của lớp chống scraping là làm việc **tải hàng loạt
+  tự động** trở nên bất tiện, không phải làm nội dung công khai thành không sao chép được —
+  điều đó bất khả thi với bất kỳ website nào.
+- **Bot giả mạo User-Agent của Googlebot.** Không xác minh ngược DNS (xem mục 8) — chúng
+  thoát được lớp giới hạn nhịp, nhưng vẫn chịu rate limit chung theo IP.

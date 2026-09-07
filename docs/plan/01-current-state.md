@@ -1,6 +1,7 @@
 # 01 — Trạng thái hiện tại
 
-Đối chiếu code tại commit `d0ec7c2`, khảo sát ngày **2026-09-06**.
+Đối chiếu code trên nhánh `feature/artwork-contest-system`, khảo sát ngày **2026-09-06**,
+rà lại ngày **2026-09-07**.
 
 ## 1. Kiểm chứng bằng công cụ
 
@@ -41,10 +42,9 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 | Hạng mục | Ghi chú |
 |---|---|
 | Upload đơn lên S3 | Có timeout co giãn theo dung lượng, dọn file tạm bằng `defer` |
-| Upload chia phần đến 200MB | Init/chunk/complete/abort, TTL 45 phút, tự dọn phiên |
-| Upload kèm transaction | Ghi bản ghi audit `uploads`, rollback đúng cả khi panic |
 | Bulk upload | 5 luồng song song, lỗi một file không hỏng cả lô |
-| Nhiều lớp kiểm tra file | Tên file, đuôi, dung lượng (2 lần), magic byte (đường chunked) |
+| Nhiều lớp kiểm tra file | Tên file, đuôi, dung lượng (2 lần) — ⚠️ **không còn** kiểm tra magic byte |
+| Tải ảnh có watermark | Endpoint public đóng mốc VAS, ghi nhật ký vào `artwork_downloads` |
 | Sinh S3 key chống trùng | Timestamp + 12 ký tự ngẫu nhiên từ `crypto/rand` |
 | Tự dò region của bucket | Chống lỗi cấu hình region khó chẩn đoán |
 
@@ -65,10 +65,12 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 
 | Hạng mục | Ghi chú |
 |---|---|
-| 4 trang | Trang chủ, tiêu biểu, phòng triển lãm, bảng vàng |
+| 6 trang | Trang chủ, tiêu biểu, phòng triển lãm, bảng vàng, thư ngỏ, 404 |
 | Cảm xúc ẩn danh | 6 loại, idempotent nhờ `INSERT IGNORE` + ràng buộc UNIQUE |
 | Bình luận ẩn danh | Tự nhập tên, tự xoá bình luận của mình |
-| Đếm lượt xem | Chống trùng trong 24 giờ, cập nhật trong transaction |
+| Đếm lượt xem | Mỗi lần mở là 1 lượt — bỏ chống trùng 24 giờ ngày 2026-09-07 |
+| Tải ảnh có watermark | Qua proxy backend, ghi nhật ký vào `artwork_downloads` |
+| Trợ lý mascot | Tìm kiếm trong dữ liệu sẵn có, không gọi dịch vụ AI nào |
 | Trang chia sẻ Open Graph | Render phía server để Facebook/Zalo lấy được ảnh preview |
 | Tìm kiếm và lọc | Theo tên, trường, khối, cấp học |
 | Section theo nhóm chủ đề | `/phong-trien-lam` có thêm 1 section cho mỗi nhóm chủ đề đang active, đặt sau 2 section cấp học, tự ẩn nếu nhóm chưa có tác phẩm — `GalleryTopicSection` |
@@ -80,17 +82,21 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 | Đăng nhập Google OAuth | Có kiểm tra state chống CSRF, bắt buộc `email_verified` |
 | Session lưu DB | Thu hồi được ngay, tự dọn phiên hết hạn mỗi giờ |
 | Danh sách email cho phép | Hai tầng: email cụ thể ưu tiên hơn domain, mặc định đã an toàn |
-| CSRF toàn cục | Double-submit cookie |
-| Rate limit 3 tầng | Toàn cục, metrics, ghi dữ liệu public |
+| CSRF toàn cục | Double-submit cookie, so token bằng `crypto/subtle`, không parse multipart trước khi kiểm tra |
+| Rate limit 4 tầng | Toàn cục, metrics, ghi dữ liệu public, tải ảnh gốc |
 | Giới hạn đồng thời | Semaphore có thời gian chờ |
 | Kiểm tra bắt buộc ở production | Chặn khởi động khi thiếu API key / CORS quá rộng |
+| IP client đáng tin | `TRUSTED_PROXIES` — chỉ đọc `X-Forwarded-For` từ proxy khai báo; khoá đếm gom IPv6 về `/64` |
+| Chống tải trọn site | `middleware/botguard.go` — nhận diện công cụ tải hàng loạt và nhịp quét, miễn trừ bot tìm kiếm hợp lệ |
+| Header phòng thủ | `middleware/security_headers.go` — CSP, COOP/CORP, Referrer-Policy, HSTS tuỳ chọn |
+| Trần body theo đường dẫn | `MAX_JSON_BODY_KB` cho endpoint thường, trần upload giữ riêng |
 
 ### Vận hành
 
 | Hạng mục | Ghi chú |
 |---|---|
-| Script triển khai | 6 bước, chạy lại nhiều lần được, có kiểm tra sức khoẻ |
-| systemd + Nginx | Có sẵn file cấu hình mẫu trong repo |
+| Quy trình triển khai | Làm tay từng bước, ghi trong [deploys/00-tu-dau-den-cuoi.md](../deploys/00-tu-dau-den-cuoi.md) — bốn script `.sh` đã gỡ ngày 2026-09-07 |
+| systemd + Nginx | Có sẵn file cấu hình mẫu trong `deploy/` |
 | Migration tự động | toàn bộ file trong `internal/database/migrations/`, idempotent qua `schema_migrations` |
 | Log theo ngày | Ghi đồng thời stdout + file |
 | Tắt máy an toàn | Drain request trước, đóng tài nguyên sau |
@@ -101,9 +107,9 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 | Hạng mục | Ghi chú |
 |---|---|
 | Sinh biến thể ảnh | `internal/service/image_variants.go` — thumb/medium/large × WebP/JPEG, sinh song song theo số CPU, bỏ qua cỡ lớn hơn ảnh gốc |
-| Lưu biến thể | Cột `artworks.variants` kiểu JSON (migration `013`); `thumbnail_url` nay **đã được ghi** (`internal/service/artwork_service.go:305`) |
+| Lưu biến thể | Cột `artworks.variants` kiểu JSON (migration `013`); `thumbnail_url` nay **đã được ghi** (`artworkService.buildVariants`) |
 | Frontend chọn cỡ | `web/src/lib/artworkImage.ts` dựng `<picture>`/`srcset`, có đường lui khi tác phẩm chưa có biến thể |
-| Nén phản hồi HTTP | `internal/middleware/compress.go` **đã nối** vào chuỗi tại `internal/container/container.go:575` |
+| Nén phản hồi HTTP | `internal/middleware/compress.go` **đã nối** vào chuỗi trong `GetServerHandler` |
 | Tách chunk vendor | `web/vite.config.ts` — framer-motion/react-router/react tách riêng theo thư viện, ổn định qua nhiều lần deploy |
 | Gom truy vấn học sinh | `StudentRepository.ListByIDs` gộp một truy vấn, khử id trùng; `enrichArtworks` hết N+1 |
 | Bảng vinh danh một truy vấn | `HasAward` trong `ArtworkFilter` cho phép lấy mọi tác phẩm có giải một lần rồi tự nhóm, thay vì gọi `ListArtworks` cho từng giải |
@@ -169,7 +175,7 @@ Chi tiết kỹ thuật ở [06-frontend.md §11](../detail_design/06-frontend.m
 | 1 luồng duy nhất | Bỏ tab "1 ảnh"/"nhiều ảnh" — chọn 1 hay nhiều ảnh đều vào chung 1 giao diện: `ArtworkPickerGrid` (lưới thẻ) trái + panel sửa phải |
 | `ArtworkPickerGrid.tsx` thay `ArtworkBulkTable.tsx` (đã xoá) | Lưới thẻ ảnh vuông thay bảng HTML mỗi ảnh 1 hàng — không còn cuộn ngang trên mobile, không còn popover phóng to hover |
 | Sửa hàng loạt | Chọn ≥2 thẻ → panel "áp dụng cho N ảnh", field điền thì ghi đè mọi thẻ đang chọn (`applyPatch()`), field trống giữ nguyên — tái dùng nguyên `ArtworkMetaForm`, không thêm prop mới |
-| `AdminDropzone.tsx` mới | Khung kéo-thả riêng cho khu quản trị, KHÔNG dùng chung `Dropzone.tsx` (phục vụ `/upload` độc lập, theme tối qua `index.css` nạp global). Bỏ hiệu ứng framer-motion (xoay 3D, viền chạy) khỏi bản admin |
+| `AdminDropzone.tsx` mới | Khung kéo-thả riêng cho khu quản trị (lúc này tách khỏi `Dropzone.tsx` của trang `/upload` độc lập — trang đó đã bị xoá sau, xem mục dưới). Bỏ hiệu ứng framer-motion (xoay 3D, viền chạy) khỏi bản admin |
 
 ### Dashboard viết lại: bỏ Recharts (hoàn thành 2026-09-06)
 
@@ -179,9 +185,56 @@ tiết kỹ thuật ở [06-frontend.md §7](../detail_design/06-frontend.md), m
 
 | Hạng mục | Ghi chú |
 |---|---|
-| Số liệu ra quyết định | `activity` (nhịp 14 ngày), `school_coverage` (trường thiếu khối nào), `operations` (hàng chờ xử lý) — gộp vào `GET /api/v1/admin/dashboard/stats` sẵn có |
+| Số liệu ra quyết định | `activity` (nhịp hoạt động, mặc định 14 ngày gần nhất — từ 2026-09-07 lọc được theo tháng/khoảng ngày tuỳ chọn qua `from`/`to`, xem [02-roadmap.md P2.12](./02-roadmap.md)), `school_coverage` (trường thiếu khối nào), `operations` (hàng chờ xử lý) — gộp vào `GET /api/v1/admin/dashboard/stats` sẵn có |
 | Bỏ Recharts | `StatCard` tự vẽ sparkline SVG; `package.json` và `vite.config.ts` không còn `recharts`/`vendor-charts` |
 | Bố cục mới | 4 ô chỉ số + 3 card khu vực (Sài Gòn/Cần Thơ/Vũng Tàu) thay ba biểu đồ cũ |
+
+### Lọc khu vực bằng SQL, sửa lệch cột dashboard, xoá công cụ upload nội bộ (2026-09-06)
+
+Mục roadmap [02-roadmap.md P1.3](./02-roadmap.md) cộng vài việc phát sinh cùng đợt.
+
+| Hạng mục | Ghi chú |
+|---|---|
+| `Region` vào `ArtworkFilter` | Lọc `school_id IN (SELECT id FROM schools WHERE region = ?)`, thay lọc trong bộ nhớ sau khi cắt 100 bản ghi. Áp dụng cho `/api/v1/public/artworks`, `/featured`, `/api/v1/admin/artworks`. `models.IsKnownRegion` chặn giá trị lạ trước khi vào SQL |
+| Sửa `dashboardRepository.TopArtworksByEngagement` | `SELECT` từng liệt kê đủ `artworkSelectColumns` nhưng `Scan` chỉ đọc một phần cột dashboard cần — thêm cột artwork nào (vd `topic_category_id`) là lệch vị trí, `Scan` gán nhầm kiểu và trắng cả trang `/admin`. Sửa bằng cách viết `SELECT` liệt kê đúng khớp `Scan`, không dùng chung `artworkSelectColumns` nữa |
+| Xoá công cụ upload nội bộ `/upload` | `UploadTool.tsx`, `Dropzone.tsx`, `PreviewPanel.tsx`, `ResultPanel.tsx`, `Onboarding.tsx`, `StepTimeline.tsx`, `PreviewImage.tsx`, `lib/imageTransform.ts`, `lib/previewImage.ts`, route trong `App.tsx`. Endpoint backend `/api/v1/upload*` **không đổi** — chỉ mất giao diện thao tác tay qua trình duyệt. Xem [ARCHITECTURE.md](../ARCHITECTURE.md) |
+| Gỡ dải "theo khu vực" khỏi 3 trang admin | `RegionSummaryStrip.tsx` + `useRegionSummary.ts` xoá khỏi `ArtworksListPage`/`AwardsPage`/`TopicCategoriesPage` — vừa thêm ở mục roadmap trước đó, gỡ lại vì bộ lọc `region=` trực tiếp trên danh sách đã đủ dùng. Endpoint `GET /api/v1/admin/dashboard/region-summary` ở backend vẫn còn, hiện không có nơi gọi |
+| Mascot "Rồng nhỏ" ở trang public | `MascotAssistant.tsx` + `lib/mascotSearch.ts` — trợ lý tìm kiếm nổi góc dưới-phải (chỉ desktop ≥1024px), so khớp từ khoá cục bộ (bỏ dấu + Levenshtein khoảng cách ngắn) trên API public sẵn có, **không gọi AI ngoài**. Chi tiết ở [06-frontend.md](../detail_design/06-frontend.md) |
+
+### Tải ảnh gốc kèm watermark, xoá tác phẩm dọn luôn S3, bỏ chống trùng lượt xem (2026-09-06)
+
+Không nằm trong lộ trình gốc — ba thay đổi nghiệp vụ có chủ đích, đảo ngược quyết định cũ.
+
+| Hạng mục | Ghi chú |
+|---|---|
+| `GET /api/v1/public/artworks/{id}/download` | Tải ảnh gốc kèm watermark logo VAS, stream qua backend (same-origin). Lỗi watermark chỉ ghi log, vẫn trả ảnh gốc — không chặn tải. Mỗi lượt tải ghi vào `artwork_downloads` (`source='public'`, ẩn danh). Chi tiết ở [API.md](../API.md) |
+| `GET /api/v1/admin/artworks/{id}/download` | Cùng cơ chế, dành cho admin: **không** watermark, **không** ép `is_published`. Ghi vào `artwork_downloads` kèm `admin_user_id` của người tải — xem [02-roadmap.md P2.14](./02-roadmap.md). Dùng trong nút "Tải ảnh gốc" ở `ArtworkEditModal` và trong tải hàng loạt ở `ArtworksListPage` — xem [02-roadmap.md P2.13](./02-roadmap.md) |
+| `DeleteArtwork` xoá luôn S3 | Đảo ngược quyết định cũ (từng cố ý giữ file S3 khi xoá DB để tránh mất dữ liệu do bấm nhầm). `collectArtworkS3Keys` gom key ảnh gốc + mọi biến thể trước khi gọi `s3Repo.Delete`, xoá S3 **trước** DB row. Xem [03-artwork-domain.md §4](../detail_design/03-artwork-domain.md), rủi ro cập nhật ở [03-risks.md R4](./03-risks.md) |
+| Bỏ chống trùng lượt xem 24h | `RecordView` giờ luôn +1 `view_count` mỗi lần gọi, không còn dedupe theo `visitor_token`/24h. Tăng tốc độ phình bảng `artwork_views` — xem [03-risks.md R5](./03-risks.md) |
+
+### Trang danh sách tác phẩm: xoá hàng loạt, tải ảnh hàng loạt, dung lượng ảnh, toggle công khai (2026-09-07)
+
+Không nằm trong lộ trình gốc — xem [02-roadmap.md P2.13](./02-roadmap.md) để biết chi tiết
+đầy đủ. Đóng luôn mục "Đang làm dở" trước đó (nút tải ảnh gốc cho admin thiếu điểm bấm ở UI).
+
+| Hạng mục | Ghi chú |
+|---|---|
+| `DELETE /api/v1/admin/artworks/bulk-delete` | Xoá hàng loạt, tuần tự từng tác phẩm (kèm S3), 1 lỗi không chặn cả lô |
+| Tải ảnh hàng loạt (`.zip`) | `lib/artworkDownload.ts` + `fflate`, đóng gói ở client vì ảnh trên S3 là cross-origin |
+| Dòng dung lượng ảnh | `formatBytes(item.file_size)` ở cả List và Grid của `ArtworksListPage` |
+| Toggle "Hiển thị công khai" | Dùng lại `artworks.is_published` có sẵn, đặt trong `ArtworkEditModal` (không phải `ArtworkMetaForm`) |
+
+### SEO kỹ thuật cơ bản: sitemap, robots.txt, meta động, JSON-LD (hoàn thành 2026-09-07)
+
+Không nằm trong lộ trình gốc — xem [02-roadmap.md P2.15](./02-roadmap.md) để biết chi tiết đầy
+đủ và lý do không làm SSR/prerender toàn phần.
+
+| Hạng mục | Ghi chú |
+|---|---|
+| `GET /sitemap.xml`, `GET /robots.txt` | Route Go động, dựng URL tuyệt đối từ header request, cùng cơ chế `HandleArtworkSharePage` |
+| `ArtworkService.ListPublishedForSitemap` | Tự lặp trang vượt trần `page_size=100`, không enrich |
+| OG/Twitter/JSON-LD nâng cao | Trang chia sẻ tác phẩm thêm `og:image:width/height`, `twitter:image:alt`, breadcrumb `BreadcrumbList` |
+| `hooks/usePageMeta.ts`, `components/JsonLd.tsx` | Title/description/canonical động + structured data (`WebSite`/`CollectionPage`/`BreadcrumbList`) cho 4 trang public, không thêm `react-helmet-async` |
 
 ## 3. Đang làm dở 🚧
 
@@ -202,17 +255,6 @@ gồm cả `/api/v1/public/*`. Chỉ `/api/v1/health` được miễn (`middlewa
 **Cách sửa**: miễn trừ tiền tố `/api/v1/public/` trong middleware, giống cách đã làm cho
 `/api/v1/health`.
 
-### Lọc theo khu vực làm ở tầng ứng dụng
-
-`HandleListFeatured` lấy tối đa 100 tác phẩm tiêu biểu rồi lọc `region` trong bộ nhớ, vì
-`ArtworkFilter` không có trường `Region` (`public_handler.go:158-168`).
-
-**Hệ quả**: nếu số tác phẩm tiêu biểu vượt 100, kết quả bị cắt **trước khi** lọc khu vực —
-một số khu vực có thể thiếu tranh.
-
-**Cách sửa**: thêm `Region` vào `ArtworkFilter`, dịch thành `school_id IN (SELECT id FROM
-schools WHERE region = ?)`.
-
 ### `PublicHandler` gọi thẳng repository
 
 Bỏ qua tầng service cho cảm xúc/bình luận/lượt xem. Chấp nhận được khi chỉ là CRUD một
@@ -228,9 +270,19 @@ về `students` (`artwork_service.go:264-270`).
 Cột `is_hidden` có, repository lọc theo nó, nhưng **không có endpoint** để bật/tắt. Hiện
 phải `UPDATE` bằng SQL tay.
 
-### Chưa kiểm tra magic byte ở đường upload đơn
+### Không còn kiểm tra magic byte ở bất kỳ đường upload nào ⚠️
 
-`ValidateFileContent` chỉ chạy ở đường chunked. Upload đơn tin vào đuôi file.
+`ValidateFileContent` trước đây **chỉ** chạy ở đường chunked, và đường đó đã bị gỡ ngày
+2026-09-07. Nghĩa là hiện không đường nào đối chiếu nội dung thật với đuôi file.
+
+Mức độ đã đổi: trước là "bất đối xứng giữa hai đường", giờ là một lớp phòng thủ **mất hẳn**.
+Xem P1.4 trong [02-roadmap.md](./02-roadmap.md).
+
+### Bảng `uploads` không còn ai dùng
+
+Migration 001 vẫn tạo bảng này (không sửa migration đã commit), nhưng
+`upload_repository.go` và `upload_record.go` đã bị xoá cùng đường upload có transaction. Bảng
+nằm đó rỗng, không code nào đọc/ghi. Dọn được bằng một migration `DROP TABLE` khi tiện.
 
 ### Độ phủ kiểm thử thấp
 
@@ -245,7 +297,7 @@ test** cho `repository` và `container`, cũng như cho frontend.
 | Dọn ảnh mồ côi trên S3 | Từ tác phẩm đã xoá và bulk upload bỏ dở |
 | Xoay vòng log | Không tự xoá file log cũ |
 | Phân quyền theo vai trò | Cột `role` có nhưng mọi admin quyền như nhau |
-| Nhật ký thao tác admin | Không biết ai xoá tác phẩm nào lúc nào |
+| Nhật ký thao tác admin (xoá/sửa) | Đã có phần **tải ảnh** (`artwork_downloads`, xem [02-roadmap.md P2.14](./02-roadmap.md)); ai xoá/sửa tác phẩm lúc nào thì vẫn chưa ghi lại |
 | Xuất dữ liệu | Không xuất được CSV/Excel danh sách tác phẩm |
 
 ## 6. Tình trạng commit

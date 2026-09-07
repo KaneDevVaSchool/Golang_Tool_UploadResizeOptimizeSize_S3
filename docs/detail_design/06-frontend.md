@@ -14,9 +14,9 @@ web/src/
 │   │   ├── HomePage              /
 │   │   ├── FeaturedArtworksPage  /tac-pham-tieu-bieu
 │   │   ├── GalleryPage           /phong-trien-lam
-│   │   └── HallOfFamePage        /bang-vang
-│   │   ├── HallOfFamePage         /bang-vang
-│   │   └── NotFoundPage           * (mọi đường dẫn lạ dưới "/")
+│   │   ├── HallOfFamePage        /bang-vang
+│   │   ├── OpenLetterPage        /thu-ngo
+│   │   └── NotFoundPage          * (mọi đường dẫn lạ dưới "/")
 │   ├── admin/              ◀── khu vực quản trị (session)
 │   │   ├── AdminLayout     bảo vệ route + sidebar
 │   │   ├── Login                 /admin/login
@@ -26,7 +26,6 @@ web/src/
 │   │   ├── AwardsPage            /admin/awards
 │   │   ├── TopicCategoriesPage   /admin/topic-categories
 │   │   └── NotFoundPage           * (mọi đường dẫn lạ dưới "/admin")
-│   └── UploadTool.tsx      ◀── công cụ nội bộ   /upload
 ├── components/{public,admin,...}
 ├── hooks/       useAdminAuth, useParallaxScroll, useRailScroll, useScrollableBody
 └── lib/         api, adminApi, artworkApi, awardApi, dashboardApi, publicApi, ...
@@ -41,7 +40,7 @@ Bảng đường dẫn:
 | `/tac-pham-tieu-bieu` | Tác phẩm tiêu biểu | |
 | `/phong-trien-lam` | Phòng triển lãm (tìm/lọc) | |
 | `/bang-vang` | Bảng vàng | |
-| `/upload` | Công cụ upload nội bộ | Trước đây ở `/`, đã nhường chỗ |
+| `/thu-ngo` | Thư ngỏ Chủ tịch HĐQT | Bố cục một khung nhìn — xem mục riêng bên dưới |
 | `/admin/login` | Đăng nhập Google | |
 | `/admin`, `/admin/*` | Khu quản trị | Bảo vệ bởi `AdminLayout` |
 | Đường dẫn lạ dưới `/` | 404 (theme khu vườn) | `NotFoundPage` public |
@@ -91,7 +90,7 @@ Ba lớp xử lý, mỗi lớp cho một quãng chờ khác nhau:
 |---|---|---|
 | Chuyển trang (route cũ còn hiện) | `RouteProgress.tsx` | Thanh 3px ở đỉnh màn hình |
 | `<Suspense>` thật sự phải treo (mở thẳng URL con, mạng rất chậm) | `RouteFallback.tsx` | Khung xám kiểu bố cục trang đích |
-| Tải bundle lần đầu (trước khi React mount) | `index.html` (`#app-splash`) | Splash toàn màn hình, HTML/CSS thuần |
+| Tải bundle lần đầu (trước khi React mount) | `index.html` (`#app-splash`) + `public/splash.js` | Splash toàn màn hình, HTML/CSS thuần |
 
 **`RouteProgress`** phải phát hiện "đang chờ" mà không dùng `useLocation()` bình thường —
 giá trị đó cũng bị giữ lại cùng cây cũ trong lúc transition treo, không đổi cho tới khi
@@ -113,9 +112,37 @@ spinner giữa khoảng trắng, để không có cú nhảy layout khi nội du
 trước khi stylesheet của route đích kịp tới.
 
 Splash trong `index.html` xử lý quãng mà React **chưa tồn tại** — không thể làm bằng
-component. Gỡ bằng `MutationObserver` theo dõi `#root` có con hay chưa (không dùng sự kiện
-`load`, vì đó là lúc tài nguyên tải xong chứ không phải lúc màn hình có nội dung), kèm chốt
-timeout 8s để không kẹt vĩnh viễn nếu bundle lỗi.
+component. Markup và CSS nằm trong `index.html`, còn script gỡ splash ở **`public/splash.js`**
+nạp bằng `<script src defer>`. Gỡ bằng `MutationObserver` theo dõi `#root` có con hay chưa
+(không dùng sự kiện `load`, vì đó là lúc tài nguyên tải xong chứ không phải lúc màn hình có
+nội dung), kèm chốt timeout 8s để không kẹt vĩnh viễn nếu bundle lỗi.
+
+⚠️ Script này **không được** đưa trở lại thành inline. CSP đặt `script-src 'self'` không có
+`'unsafe-inline'`, nên script nội tuyến bị trình duyệt chặn thẳng và splash sẽ không bao giờ
+tan. Cách còn lại — băm `sha256` đoạn script rồi nhúng hash vào CSP — buộc phải tính lại hash
+trong code Go mỗi lần sửa một ký tự ở đây; quên một lần là splash kẹt vĩnh viễn trên
+production mà log server hoàn toàn im lặng.
+
+### Font tự phục vụ
+
+Be Vietnam Pro và Fraunces nằm trong `web/public/fonts/` (định dạng `woff2`), khai `@font-face`
+ở `src/styles/fonts.css` — **không** nạp từ `fonts.googleapis.com`.
+
+Lý do đầu tiên là CSP: `style-src 'self' 'unsafe-inline'` chặn stylesheet từ origin ngoài, nên
+link Google Fonts trong `index.html` trước đây bị chặn và cả trang tụt về font hệ thống. Nới
+CSP cho Google là sửa được, nhưng đổi lại mỗi lượt xem trang đều gọi sang máy chủ Google —
+tức là địa chỉ IP của từng học sinh và phụ huynh xem tranh đều đi ra ngoài. Self-host bỏ luôn
+cả hai vấn đề, và tiết kiệm hai lần bắt tay DNS/TLS ở đường tải quan trọng nhất.
+
+`fonts.css` **sinh bằng `scripts/fetch-fonts.sh`**, đừng sửa tay: script tải lại từ CSS gốc của
+Google và giữ nguyên `unicode-range`, nên trình duyệt vẫn chỉ tải subset nó cần. Tổng số file
+trên đĩa lớn hơn nhiều so với lượng thật sự truyền — một người xem trang tiếng Việt chỉ chạm
+vào subset `vietnamese` + `latin` của những weight thực sự xuất hiện. Muốn thêm/bớt weight thì
+sửa biến `URL` trong script rồi chạy lại.
+
+`index.html` `preload` riêng subset `vietnamese` + `latin` của weight 400: các `@font-face` nằm
+sau một lớp `@import` nên trình duyệt phát hiện khá muộn, mà splash cần đúng font đó ngay từ
+khung hình đầu. Chỉ preload hai file — nhiều hơn thì tự cạnh tranh băng thông với bundle JS.
 
 ## 3. Bốn client API tách theo khu vực
 
@@ -208,16 +235,21 @@ phải gõ lại mỗi lần.
 
 ## 6. Thành phần trang public
 
-23 component trong `components/public/`, chia theo vai trò:
+Component trong `components/public/` (đếm bằng `ls web/src/components/public/ | wc -l`),
+chia theo vai trò:
 
 | Nhóm | Thành phần |
 |---|---|
 | Bố cục | `PublicNavbar`, `PublicFooter` (khung `PublicLayout` nằm ở `pages/public/`) |
 | Trang chủ | `HeroSection`, `HeroParallaxHills`, `HillDivider`, `EducationLevelGate`, `EducationLevelCard`, `GradeNode` |
-| Tiêu biểu | `FeaturedHero`, `FeaturedGardenScene`, `FeaturedArtworkFrame`, `ArtworkRail`, `RegionTabs` |
+| Tiêu biểu | `FeaturedHero`, `FeaturedGardenScene`, `FeaturedArtworkFrame`, `FeaturedArtworkCard`, `ArtworkRail`, `RegionTabs` |
 | Triển lãm | `GalleryLevelSection`, `GalleryTopicSection`, `GallerySearch`, `GalleryPagination` |
 | Bảng vàng | `HallArtworkCard`, `HallRail`, `HallFireworks` |
 | Tương tác | `PublicLightbox`, `ReactionPicker`, `CommentBox` |
+| Trợ lý | `MascotAssistant` (xem mục riêng dưới đây) |
+
+Trang `/thu-ngo` không có component riêng trong bảng này: toàn bộ nằm trong
+`pages/public/OpenLetterPage.tsx` (xem mục "Trang Thư ngỏ" bên dưới).
 
 ### `GalleryTopicSection` — section theo nhóm chủ đề, dưới 2 phòng cấp học
 
@@ -239,6 +271,82 @@ Backend: `PublicHandler.HandleListArtworks` (`internal/handlers/public_handler.g
 thêm `topic_category_id` từ query — tham số này đã có sẵn trong `ArtworkFilter` và đã dùng ở
 `/api/v1/admin/artworks`, chỉ thiếu ở nhánh public trước khi có section này.
 
+### Trang Thư ngỏ (`/thu-ngo`) — bố cục một khung nhìn
+
+`OpenLetterPage.tsx` là trang public duy nhất **không thiết kế để cuộn**: phần nội dung thư
+nằm trọn trong một khung nhìn.
+
+Bản trước xếp chồng ba section, mỗi section cao gần cả màn hình (banner wordmark → dải 5 huy
+hiệu giá trị → thân thư hai cột) — phải cuộn ba lần mới đọc hết một lá thư chỉ có ba đoạn.
+Bản hiện tại gộp cả ba vào một tờ giấy: wordmark + tiêu đề thành đầu thư, 5 giá trị thu từ
+huy hiệu tròn xuống hàng nhãn chữ có chấm màu ở chân thư.
+
+Đầu thư chỉ còn wordmark và tiêu đề — con dấu tròn "20 năm" ở góc phải đã bỏ. Hai dấu nhận
+diện đặt cạnh nhau trên một hàng hẹp thì tranh nhau sự chú ý, mà mốc 20 năm vốn đã có trong
+dòng kicker ngay dưới wordmark. Bỏ con dấu cũng trả lại chỗ để phóng `.letter-wordmark` lên
+`clamp(2.9rem, 5vw, 4.1rem)`, gần gấp đôi bản trước.
+
+Cơ chế giữ đúng một khung nhìn:
+
+- `.letter-stage` cao `100dvh` — **không** trừ `--vas-navbar-h`. `padding-top` của nó đã
+  chừa chỗ cho navbar, mà `box-sizing: border-box` tính padding nằm trong `height`; trừ
+  thêm ở `min-height` là trừ hai lần, tổng chiều cao dôi ra đúng một nhịp navbar và sinh
+  thanh cuộn thừa. Đây chính là lỗi của bản đầu tiên.
+- Dùng `dvh` chứ không `vh`: trên iOS Safari và Chrome Android, thanh địa chỉ co lại khi
+  cuộn nên `100vh` lớn hơn vùng nhìn thấy thật — cũng sinh thanh cuộn thừa. Có fallback
+  `vh` ở dòng ngay trên cho trình duyệt cũ.
+- `.letter-sheet` dùng `max-height: 100%` chứ không `height`: thư ngắn thì tờ giấy ôm sát
+  chữ, thư dài thì kịch trần khung nhìn.
+- `.letter-body` là chỗ **duy nhất** được cuộn (`flex: 1; min-height: 0; overflow-y: auto`).
+  `min-height: 0` là bắt buộc — không có nó, flex item không co xuống dưới kích thước nội
+  dung và tờ giấy sẽ tràn khỏi khung nhìn.
+- Đệm dọc mỏng hơn đệm ngang ở mọi khổ: chiều dọc quyết định có phải cuộn hay không, chiều
+  ngang thì dư — và lề ngang rộng mới ra dáng tờ thư.
+- Breakpoint `max-height: 850px` (laptop màn thấp — khổ hay phải cuộn nhất) siết khoảng đệm
+  và cỡ chữ **trang trí**, giữ nguyên cỡ chữ thân thư: phần phải đọc thì không được nhỏ đi.
+
+### Bề rộng cột chữ và cách căn lề
+
+`.letter-scene` rộng `min(84rem, 100%)`, `.letter-body` giới hạn `max-width: 68rem` (~90 ký
+tự/dòng). Nới cột chữ là cách giảm chiều cao thân thư mà **không** phải thu nhỏ cỡ chữ: mỗi
+dòng chứa nhiều chữ hơn thì cùng một đoạn văn chiếm ít dòng hơn. Bù lại bằng
+`line-height: 1.8` — dòng càng dài thì khoảng cách dòng càng phải nới, nếu không mắt nhảy
+nhầm hàng khi vắt sang dòng mới.
+
+Thân thư căn **trái**, không `justify`, và `hyphens: none`. Tiếng Việt nhiều từ ghép hai âm
+tiết và không ngắt từ được, nên căn đều hai biên phải giãn khoảng trắng rất thô — sinh ra
+"dòng sông" trắng chạy dọc đoạn văn, đúng thứ gây rối mắt. Trình duyệt cũng không có từ điển
+ngắt âm tiết tiếng Việt nên `hyphens: auto` cắt sai chỗ.
+
+`PublicFooter` vẫn render bình thường bên dưới (địa chỉ hội sở, liên hệ — không bỏ được), nên
+trang vẫn cuộn được xuống footer. `.letter-scroll-cue` là mũi tên nhấp nháy ở đáy báo còn nội
+dung phía dưới; thiếu nó thì đáy màn hình trông như hết trang.
+
+Đệm đáy của `.letter-stage` dày hơn đệm đỉnh (2.5rem so với 0.75rem) để tờ thư hở ra một
+quãng trước khi chạm dải teal của footer — dính sát nhau thì hai khối đọc thành một mảng
+liền, mất ranh giới giữa lá thư và phần chân trang.
+
+Hoạ tiết giấy vẽ hoàn toàn bằng CSS, không tải ảnh texture nào: hai lớp
+`repeating-linear-gradient` rất mảnh cộng lại thành hạt nhiễu, `radial-gradient` cho sắc ngả
+vàng dồn về mép, `clip-path` đa giác biên độ ~4px cho mép răng cưa giấy thủ công,
+`.letter-sheet::before` là đường kẻ lề dọc mép trái (dấu hiệu quen thuộc nhất của giấy viết
+thư — đặt bằng pseudo-element nên không thêm phần tử vào DOM, và nằm gọn trong phần đệm ngang
+nên không bao giờ chạm chữ), hai `.letter-fold` giả nếp gấp làm ba (một vệt sáng kề một vệt
+tối — một đường đơn chỉ trông như kẻ ngang).
+
+Nếp gấp cố ý rất nhạt và `mask-image` cho mờ dần về hai đầu: nó cắt **ngang** dòng chữ, đậm
+một chút là mắt vấp phải giữa câu. Nguyên tắc chung cho cả trang này — mọi hoạ tiết nằm dưới
+vùng chữ đều phải nhạt tới mức chỉ cảm nhận được chứ không nhìn thấy rõ.
+
+Hoạt cảnh mở đầu: phong bì lật nắp (`rotateX(-172deg)` quanh `transform-origin: top center`,
+cần `perspective` trên `.letter-scene`) rồi tờ thư trượt lên. Khi `useReducedMotion()` bật,
+phong bì **không render** — nó chỉ tồn tại để chạy hoạt cảnh, đứng yên thì là một hình thù lạ
+nằm sau tờ thư.
+
+Ở `max-width: 480px` bỏ `clip-path` và drop cap (ở khổ đó chúng chỉ còn là nhiễu), ở
+`max-height: 560px` (điện thoại nằm ngang) ẩn hàng giá trị và mũi tên — giữ cam kết một khung
+nhìn bằng cách hy sinh phần trang trí, không phải bằng cách cho trang cuộn.
+
 ### Hiệu ứng và hiệu năng
 
 `useParallaxScroll` là hook dùng chung cho hiệu ứng cuộn nhiều lớp ở trang chủ. Trang này
@@ -248,6 +356,29 @@ nặng về hình ảnh động (đồi parallax, pháo hoa, cảnh vườn), n�
 - Ảnh nền dùng SVG khi có thể (`garden-butterfly.svg`, `garden-fern-cluster.svg`) — nhẹ và
   sắc nét ở mọi độ phân giải.
 - Framer Motion nằm ở chunk riêng, không kéo theo khi vào khu admin.
+
+### `MascotAssistant` — trợ lý tìm kiếm nổi, chỉ desktop
+
+Mascot rồng nổi góc dưới-phải toàn trang public (`≥1024px` — ẩn hẳn trên tablet/mobile qua
+CSS, tránh che nội dung màn hình nhỏ). Render qua `createPortal(..., document.body)` như
+`AdminPageHeader`/`ConfirmDialog` để không phụ thuộc vị trí gọi trong cây component.
+
+Click mascot mở panel tìm kiếm nội bộ. Logic diễn giải câu gõ tách hẳn khỏi component vào
+`lib/mascotSearch.ts` để test độc lập UI:
+
+- `detectIntent()` so khớp từ khoá tiếng Việt đã bỏ dấu (`giai nhat`, `bang vang`, `ai dat
+  giai`, …) để nhận ra câu hỏi về **giải thưởng** và chuyển sang tra `fetchBillboard()`
+  thay vì tìm tác phẩm thường.
+- Ý định "search" gọi thẳng `fetchPublicArtworks({ search })` — đúng hợp đồng LIKE đã dùng
+  ở `GallerySearch`, không phải API riêng.
+- Cả hai nhánh có bước "gõ gần đúng" bằng Levenshtein khoảng cách ngắn (`isCloseMatch`) khi
+  không khớp chính xác, để chịu được lỗi chính tả nhẹ — **không gọi AI ngoài**, thuần so
+  khớp chuỗi phía client trên dữ liệu đã tải từ API public sẵn có.
+
+Trạng thái ẩn/hiện lưu `localStorage` (`vas_mascot_hidden`), có API đọc/ghi bọc try/catch vì
+trình duyệt ẩn danh có thể chặn `localStorage`. Đóng panel qua Escape, click ra ngoài dock,
+hoặc click lại mascot — dùng `AnimatePresence mode="wait"` để trạng thái "ẩn hẳn" và "đang
+đóng panel" không unmount chồng lên nhau giữa chừng animation.
 
 ## 7. Khung quản trị: header và sidebar
 
@@ -295,8 +426,9 @@ trả lại `opacity`/`transform` bằng tay khi tắt: trạng thái đầu c�
 Dashboard (`pages/admin/Dashboard.tsx`) từng dùng Recharts cho ba biểu đồ (nhịp hoạt động
 14 ngày, phân bổ khối lớp, top tác phẩm dạng bảng). Đã bỏ toàn bộ để đổi sang bố cục gọn
 hơn, vừa khít một viewport không cần cuộn: 4 ô chỉ số dẫn dắt (tác phẩm, lượt xem, cảm xúc,
-bình luận - vẫn dùng sparkline SVG tự vẽ ở `StatCard`, không phải Recharts) và 3 **card khu
-vực** (Sài Gòn/Cần Thơ/Vũng Tàu), mỗi card có:
+tác phẩm nổi bật - ba ô đầu vẫn dùng sparkline SVG tự vẽ ở `StatCard`, không phải Recharts;
+riêng "tác phẩm nổi bật" không có chuỗi theo ngày nên không vẽ sparkline/delta) và 3
+**card khu vực** (Sài Gòn/Cần Thơ/Vũng Tàu), mỗi card có:
 
 - Ảnh hero cắt clip-path (tác phẩm đứng đầu bảng tương tác *của khu vực đó*, suy ra bằng
   cách đối chiếu `top_artworks[].school_id` với `school_coverage[].region` - cả hai danh
@@ -311,6 +443,45 @@ khu vực, không đổi theo thứ hạng - để người đã quen "Sài Gòn
 `formatNumber` (định dạng số kiểu Việt Nam). Các export chỉ phục vụ biểu đồ (`CHART_*`,
 `LEVEL_*`, `formatDayLabel`, `formatCompact`) đã gỡ theo, cùng `recharts` khỏi
 `package.json` và nhánh `vendor-charts` khỏi `vite.config.ts`.
+
+### Nhịp hoạt động: bộ lọc theo tháng/khoảng ngày
+
+`ActivityChart` (trong `Dashboard.tsx`) không còn cố định "14 ngày gần nhất" - thêm
+`ActivityRangePicker`, segmented control 3 chế độ đặt ngay dưới tiêu đề biểu đồ:
+
+- **14 ngày gần nhất** (mặc định khi vào trang) - không gửi `from`/`to` lên API, giữ nguyên
+  hành vi cũ.
+- **Theo tháng** - `<input type="month">`, quy về `from` = ngày 1, `to` = ngày cuối tháng đó
+  (`lastDayOfMonth()` dùng "ngày 0 của tháng sau" để tự đúng cả tháng 2 năm nhuận, không cần
+  bảng tra số ngày/tháng).
+- **Khoảng ngày** - 2 `<input type="date">` from/to tuỳ ý, `max`/`min` ràng buộc lẫn nhau và
+  chặn chọn ngày tương lai.
+
+State `ActivityRangeValue` (union 3 nhánh theo chế độ) sống ở `Dashboard.tsx`, đổi thì
+`useEffect` gọi lại `fetchDashboardStats(signal, range)` - tương tự luồng fetch đã có, chỉ
+thêm tham số.
+
+**Khoảng trống khi tháng/khoảng chọn còn ít dữ liệu.** Repository luôn trả đủ ngày liên tục
+trong `[from, to]` (nguyên tắc cũ, không đổi - xem
+[API.md](../API.md#get-apiv1admindashboardstats)), nhưng `DashboardService.GetStats` cắt bớt
+điểm 0 hoạt động ở **đầu và cuối** chuỗi trước khi trả ra
+(`trimLeadingTrailingZero` trong `dashboard_service.go`) - tháng đang chọn còn dở dang (vd hôm
+nay là ngày 7, 23 ngày còn lại chưa có gì để đếm) sẽ không còn vẽ một đoạn thẳng nằm ngang vô
+nghĩa chiếm hết chỗ trống. Ngày 0 hoạt động nằm **xen giữa** hai ngày có dữ liệu vẫn giữ
+nguyên - đó là tín hiệu thật (ngày đó không ai thao tác gì), khác về bản chất với phần đầu/
+cuối chưa/không còn gì để đếm.
+
+**Mật độ nhãn trục hoành tự thích ứng.** `labelStepFor()` thay cho ngưỡng cứng "> 8 điểm thì
+nhảy 2" (chỉ đúng cho 14 ngày) - tính bước nhảy theo đích ~60px/nhãn trên biểu đồ rộng 640
+điểm ảo, nên một tháng (~30 điểm) hay một khoảng ngày dài vài tháng đều không bị chồng chữ.
+
+**So sánh biến động (`deltas`)** trước đây neo cứng "đủ 14 điểm mới so sánh 7 ngày/7 ngày";
+giờ tổng quát thành "đủ ≥ 4 điểm thì cắt đôi chuỗi đang có mà so sánh nửa/nửa" - áp dụng được
+cho mọi độ dài khoảng, không riêng 14 ngày.
+
+Backend: xem [dashboard/stats](../API.md#get-apiv1admindashboardstats) — tham số `from`/`to`,
+và cách `ActivityTrend` ở `dashboard_repository.go` nhận khoảng `[from, to]` tường minh thay
+vì "N ngày gần nhất".
 
 ## 8. Chạy ở chế độ phát triển
 
@@ -366,6 +537,41 @@ chỉ hiện khi có ít nhất 1 tác phẩm được chọn, gọi
 [03-artwork-domain.md](./03-artwork-domain.md) và [API.md](../API.md)) - một
 request cho cả lô thay vì lặp `toggleFeatured` cho từng id.
 
+**Xoá hàng loạt** dùng cùng thanh `.artworks-bulk-bar`, gọi
+`deleteArtworkBatch()` (`DELETE /api/v1/admin/artworks/bulk-delete`) sau khi
+xác nhận qua `ConfirmDialog` riêng (khác dialog xoá 1 tác phẩm). Response trả
+`deleted < requested` (một vài ảnh lỗi xoá S3) thì hiện toast báo rõ số lượng
+thay vì chỉ nói "thành công" chung chung - tác phẩm chưa xoá được vẫn còn
+nguyên trong danh sách sau khi `load()` lại.
+
+**Tải ảnh xuống hàng loạt (.zip).** `lib/artworkDownload.ts` -
+`buildArtworkZip()` tải tuần tự từng ảnh gốc qua
+`GET /api/v1/admin/artworks/{id}/download` (không watermark, xem
+[03-artwork-domain.md](./03-artwork-domain.md)) rồi nén bằng `zipSync` của
+`fflate` ngay tại trình duyệt. Bắt buộc tải qua backend rồi tự đóng gói ở
+client - không thể lặp thẻ `<a download>` trỏ thẳng URL S3, vì thuộc tính
+`download` chỉ có hiệu lực same-origin và ảnh nằm trên domain S3 khác. Ảnh nào
+tải lỗi bị loại khỏi file zip (không làm hỏng cả lô), tên trùng nhau tự thêm
+hậu tố `(2)`, `(3)`... `triggerBlobDownload()` kích hoạt tải file zip qua thẻ
+`<a>` tạm trỏ `blob:` URL (same-origin nên `download` hoạt động), dùng chung
+cho cả tải zip lẫn tải ảnh gốc đơn lẻ trong `ArtworkEditModal`.
+
+**Dòng dung lượng ảnh.** `formatBytes()` (`lib/api.ts`, dùng lại từ công cụ
+upload gốc) hiện `artworks.file_size` dưới tên tác phẩm ở cả bảng List
+(`.artworks-cell-title`) và thẻ Grid (`.artworks-grid-body`) - trường này đã
+có sẵn trong `ArtworkWithMeta`, chỉ thêm hiển thị.
+
+**Toggle "Hiển thị công khai" trong modal sửa.** `ArtworkEditModal` thêm
+checkbox `is_published` cạnh ảnh preview, tách khỏi `ArtworkMetaForm` (form đó
+dùng chung cho cả lúc *tạo* tác phẩm, khi "công khai" luôn mặc định `true` -
+đặt toggle trong đó sẽ sai ngữ cảnh). Cùng nguyên tắc đã áp dụng cho
+`is_featured` (đặt riêng ở nút icon ngoài `ArtworkMetaForm`, không phải
+field trong form): đây là quyết định **trạng thái** của tác phẩm, không phải
+**metadata** biên tập nội dung. Tắt toggle này dùng lại đúng cột
+`artworks.is_published` có sẵn (không thêm cột `is_active` mới) - cột này vốn
+đã đúng nghĩa "tắt thì ẩn khỏi mọi trang public, không xoá dữ liệu" (xem
+[03-artwork-domain.md §1](./03-artwork-domain.md)).
+
 **Hover phóng ảnh tại chỗ.** `transform: scale()` thuần CSS, không dùng thư
 viện lightbox: bảng List phóng ảnh tràn ra ngoài ô (`overflow: visible` trên
 ô chứa) vì thumbnail quá nhỏ để nhìn rõ nếu chỉ phóng gọn trong khung; Grid
@@ -387,30 +593,15 @@ cuộn nội bộ, xem mục 7) thay vì phủ toàn viewport - tràn xuống đ
 (`components/ConfirmDialog.tsx`). Modal/dialog toàn màn hình mới thêm sau này
 **phải** portal ra `document.body`, không phụ thuộc vị trí render trong cây.
 
-### Dải card "theo khu vực" ở đầu trang Tác phẩm/Giải thưởng/Nhóm chủ đề
+### Dải card "theo khu vực" ở đầu trang Tác phẩm/Giải thưởng/Nhóm chủ đề — đã gỡ bỏ
 
-Ba trang quản trị `ArtworksListPage`, `AwardsPage`, `TopicCategoriesPage` đều mở đầu bằng dải
-6 ô nhỏ (3 khu vực × tác phẩm/học sinh), lấy qua
-`GET /api/v1/admin/dashboard/region-summary` (xem [API.md](../API.md)). Đặt ngay sau
-`<AdminPageHeader />` trong JSX của cả 3 trang — lưu ý `AdminPageHeader` render qua
-`createPortal` nên bản thân nó không chiếm chỗ tại vị trí gọi, phần tử JSX theo sau nó mới là
-nơi hiển thị thật.
-
-Component `components/admin/RegionSummaryStrip.tsx` **tái dùng nguyên `StatCard.tsx`**
-(không viết component nhân bản) — `StatCard` vốn chỉ có 6 `tone` cố định
-(`tri-thuc`/`khai-phong`/`nhan-ai`/`trach-nhiem`/`ban-linh`/`neutral`), mở rộng thêm 3 tone
-`saigon`/`cantho`/`vungtau` map sang đúng `REGION_COLOR` (`lib/chartTheme.ts`) trong
-`TONE_INK`. Đây là thay đổi an toàn cho `StatCard` (thêm entry vào map, không đổi hành vi
-tone cũ) nên `Dashboard.tsx` (nơi `StatCard` gốc phục vụ) không bị ảnh hưởng.
-
-Ba trang dùng chung hook `hooks/useRegionSummary.ts` (state + `useEffect` + `AbortController`,
-gọi 1 lần khi mount) thay vì mỗi trang tự viết lại - tiền lệ đã có ở `useAdminAuth.ts` dùng
-chung cho `AdminLayout`/`AdminHeader`. Lỗi tải dải card này **không toast** (khác
-`fetchDashboardStats` ở Dashboard) - đây là dải phụ trợ ở 3 trang có chức năng chính khác,
-lỗi chỉ ẩn dải (`data.length === 0` → `null`), không làm phiền thao tác chính.
-
-"Học sinh" đếm `COUNT(*)` bản ghi `students` JOIN `schools` theo `region`, **không dedupe
-theo tên** - đúng quy ước ở [01-database.md](./01-database.md) mục `students`.
+Ba trang quản trị `ArtworksListPage`, `AwardsPage`, `TopicCategoriesPage` từng mở đầu bằng
+dải 6 ô nhỏ (3 khu vực × tác phẩm/học sinh) qua `component/admin/RegionSummaryStrip.tsx` +
+`hooks/useRegionSummary.ts`, lấy dữ liệu từ `GET /api/v1/admin/dashboard/region-summary`.
+Component và hook đã bị xoá cùng phần gọi trong cả 3 trang — endpoint
+`region-summary` ở backend vẫn còn (xem [API.md](../API.md)) nhưng hiện không có nơi nào ở
+frontend gọi tới nó. Bộ lọc `region=` trực tiếp trên `ArtworkFilter` (xem
+[03-artwork-domain.md](./03-artwork-domain.md)) đã đảm nhiệm việc lọc theo khu vực khi cần.
 
 ## 11. Trang tải tác phẩm lên: một luồng, lưới thẻ ảnh + panel sửa
 
@@ -464,16 +655,15 @@ do đã áp dụng ở `ArtworksListPage` mục 10). Không còn popover phóng 
 thẻ trong lưới đã đủ lớn để nhận diện, khác thumbnail 3rem trong bảng cũ buộc phải phóng to
 mới đọc được.
 
-**`AdminDropzone` (`components/admin/AdminDropzone.tsx`) — component kéo-thả RIÊNG cho khu
-quản trị, không dùng chung với `Dropzone.tsx`.** `Dropzone.tsx` phục vụ trang `/upload` độc
-lập (`UploadTool.tsx`) — theme tối kiểu glassmorphism định nghĩa trong `index.css` (nạp
-global cho toàn app qua `main.tsx`), có hiệu ứng xoay 3D theo con trỏ và viền chạy vô hạn
-bằng framer-motion. Nhét thẳng component đó vào trang admin nền sáng là nguyên nhân giao diện
-"lệch tông" ở bản trước. `AdminDropzone` viết lại từ đầu: phẳng, không framer-motion, style
-qua `admin.css`/token `--color-*`, giữ nguyên hành vi (kéo-thả, dán Ctrl/Cmd+V, chọn file,
-disabled khi đang lưu) nhưng bớt hẳn phần trình diễn — đây là công cụ quản trị, không phải
-trang giới thiệu. **Sửa `Dropzone.tsx` gốc không ảnh hưởng trang này và ngược lại** — hai
-component độc lập hoàn toàn dù cùng vai trò kéo-thả.
+**`AdminDropzone` (`components/admin/AdminDropzone.tsx`) — component kéo-thả riêng cho khu
+quản trị.** Ban đầu viết tách khỏi `Dropzone.tsx` (component của trang `/upload` độc lập
+lúc đó — theme tối kiểu glassmorphism, hiệu ứng xoay 3D theo con trỏ và viền chạy vô hạn
+bằng framer-motion) vì nhét thẳng component đó vào trang admin nền sáng từng gây giao diện
+"lệch tông". `AdminDropzone`: phẳng, không framer-motion, style qua `admin.css`/token
+`--color-*`, giữ hành vi kéo-thả/dán Ctrl+Cmd+V/chọn file/disabled khi đang lưu nhưng bớt
+phần trình diễn — đây là công cụ quản trị, không phải trang giới thiệu. Trang `/upload` và
+`Dropzone.tsx` đã bị xoá sau đó (xem mục 1); `AdminDropzone` không phụ thuộc nó nên không
+bị ảnh hưởng.
 
 **Ảnh chỉ chạm S3 lúc bấm Lưu, không phải lúc chọn file** — hành vi này KHÔNG đổi so với bản
 trước. Khác với thiết kế bulk-upload gốc mô tả ở [03-artwork-domain.md](./03-artwork-domain.md)
@@ -559,7 +749,50 @@ chỉ cần báo hiệu "thẻ này còn thiếu" rồi người dùng click và
 thêm vào `RequiredMetaField` và `validateMetaForm()` — không thêm điều kiện validate rời rạc ở
 từng nơi gọi.
 
-## 13. Điểm cần lưu ý khi sửa frontend
+## 13. Meta tags động + JSON-LD cho SEO
+
+Trước đây `index.html` chỉ có một `<title>` tĩnh duy nhất dùng chung cho mọi route — Googlebot
+crawl trang chủ hay trang bảng vàng đều thấy cùng một tiêu đề. Xem quyết định kiến trúc đầy đủ
+(vì sao không SSR/prerender) ở [docs/plan/02-roadmap.md P2.15](../plan/02-roadmap.md).
+
+**`hooks/usePageMeta.ts`** — hook tự viết (~40 dòng), KHÔNG dùng `react-helmet-async`: nhu cầu
+chỉ là title + description + canonical cho 4 trang public + `NotFoundPage`, mỗi route có đúng
+một tầng gọi hook, không có component con nào cần ghi đè — không cần cơ chế merge theo cây
+component mà các thư viện quản lý `<head>` giải quyết. Dùng DOM API trực tiếp
+(`document.title`, `querySelector` + tạo/update thẻ `<meta>`/`<link>`), không cleanup khi
+unmount (trang kế tiếp luôn tự gọi hook và ghi đè ngay).
+
+Mỗi trang public tự gọi ở đầu component với `title`/`description` riêng:
+
+| Route | Title |
+|---|---|
+| `/` (HomePage) | Khu vườn nghệ thuật VA Schools — 20 năm Trường Việt Mỹ |
+| `/tac-pham-tieu-bieu` (FeaturedArtworksPage) | Tác phẩm tiêu biểu — Khu vườn nghệ thuật VA Schools |
+| `/phong-trien-lam` (GalleryPage) | Phòng triển lãm — Khu vườn nghệ thuật VA Schools |
+| `/bang-vang` (HallOfFamePage) | Bảng vàng — Khu vườn nghệ thuật VA Schools |
+| `NotFoundPage` (public `*`) | Không tìm thấy trang — VA Schools |
+
+**Canonical cố định, không kèm query param.** `FeaturedArtworksPage` và `GalleryPage` nhận
+`canonicalPath` tường minh (vd `"/tac-pham-tieu-bieu"`) thay vì để hook tự suy từ
+`location.pathname` — các biến thể `?tranh=`, `?khu-vuc=`, `?tim=`, `?khoi=` đều là cùng một
+nội dung cơ bản (lọc/mở modal), không nên để Google index như những trang riêng biệt (duplicate
+content). `/admin/*` KHÔNG dùng hook này (khu quản trị không cần SEO).
+
+**`components/JsonLd.tsx`** — component dùng chung chèn `<script type="application/ld+json">`.
+Không gộp vào `usePageMeta` vì khác bản chất (một `<script>` render trong cây React, không phải
+thao tác DOM thủ công vào `<head>`). Dữ liệu đầu vào luôn dựng sẵn ở component gọi (tên trang,
+mô tả, URL cố định), không lấy trực tiếp từ input người dùng chưa kiểm soát.
+
+| Trang | Schema |
+|---|---|
+| HomePage | `WebSite` |
+| FeaturedArtworksPage, GalleryPage, HallOfFamePage | `CollectionPage` + `BreadcrumbList` |
+
+`CollectionPage` phù hợp hơn `ImageGallery` vì đây là trang danh sách/lọc, không phải một bộ
+sưu tập ảnh cố định. `BreadcrumbList` không thêm cho `HomePage` (gốc, breadcrumb 1 phần tử vô
+nghĩa).
+
+## 14. Điểm cần lưu ý khi sửa frontend
 
 - **Kiểu dữ liệu phải khớp backend.** `ArtworkWithMeta` trong `lib/artworkApi.ts` phản chiếu
   struct Go cùng tên. Lưu ý `s3_url` ra JSON dưới tên **`image_url`**, và `s3_key` không bao

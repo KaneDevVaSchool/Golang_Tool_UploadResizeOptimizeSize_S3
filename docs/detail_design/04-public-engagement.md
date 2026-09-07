@@ -73,9 +73,9 @@ mà không phải gọi thêm một vòng.
 
 | Trường | Ràng buộc | Kiểm ở đâu |
 |---|---|---|
-| `display_name` | Bắt buộc, ≤ 100 **ký tự** | `public_handler.go:413-420` |
-| `content` | Bắt buộc, ≤ 1000 **ký tự** | `public_handler.go:421-428` |
-| `visitor_token` | Bắt buộc | `public_handler.go:429-432` |
+| `display_name` | Bắt buộc, ≤ 100 **ký tự** | `public_handler.go:535-542` |
+| `content` | Bắt buộc, ≤ 1000 **ký tự** | `public_handler.go:543-550` |
+| `visitor_token` | Bắt buộc | `public_handler.go:551-554` |
 
 Độ dài đếm bằng `len([]rune(...))` — **ký tự**, không phải byte. Quan trọng với tiếng Việt:
 "Nguyễn" là 6 ký tự nhưng 8 byte. Đếm byte sẽ từ chối oan những cái tên hợp lệ.
@@ -85,7 +85,7 @@ Hằng số ở handler khớp đúng `VARCHAR` trong migration 011. Sửa một
 ### Chuyện escape HTML — một lỗi đã sửa
 
 Code hiện tại **lưu văn bản nguyên bản**, không escape trước khi ghi DB. Trên đường trả về,
-`html.UnescapeString()` được áp dụng (`public_handler.go:382-383`).
+`html.UnescapeString()` được áp dụng (`public_handler.go:504-505`).
 
 Nguyên do: một phiên bản trước từng escape HTML *trước khi lưu*, khiến React hiển thị
 nguyên chuỗi `&amp;` `&quot;` cho người dùng — vì React vốn đã tự escape khi render, thành
@@ -106,7 +106,7 @@ DELETE /api/v1/public/artworks/{id}/comments/{commentID}?visitor_token=...
 đúng visitor_token. Không khớp → không xoá.
 
 Handler trả **cùng một lỗi 404** cho cả trường hợp "không tồn tại" và "không phải của bạn"
-(`public_handler.go:452-454`). Chủ đích: không để ai dò xem bình luận nào thuộc về ai bằng
+(`public_handler.go:599-601`). Chủ đích: không để ai dò xem bình luận nào thuộc về ai bằng
 cách so sánh mã lỗi trả về.
 
 Trường `can_delete` trong response danh sách được tính bằng cách so `visitor_token` gửi lên
@@ -118,37 +118,33 @@ Cột `is_hidden` tồn tại, và `ListByArtwork(ctx, id, false)` lọc bỏ b�
 public. Nhưng ⚠️ **chưa có endpoint admin nào bật/tắt cờ này** — hiện phải `UPDATE` bằng SQL
 tay. Xem [plan/02-roadmap.md](../plan/02-roadmap.md).
 
-## 5. Lượt xem — chống đếm trùng
+## 5. Lượt xem — đếm mỗi lần mở, không chống trùng
 
-`RecordView()` (`artwork_view_repository.go:34`) là nơi duy nhất `view_count` được tăng:
+`RecordView()` (`artwork_view_repository.go`) là nơi duy nhất `view_count` được tăng:
 
 ```text
-① SELECT 1 FROM artwork_views
-     WHERE artwork_id=? AND visitor_token=? AND viewed_at > (now - 24h)
-   tìm thấy → trả counted=false, dừng          ← tải lại trang không tăng số
-   không thấy → tiếp
-② BEGIN
+① BEGIN
      INSERT artwork_views(...)
      UPDATE artworks SET view_count = view_count + 1
    COMMIT
-③ trả counted=true
+② trả counted=true
 ```
 
-Hai thao tác ở bước ② nằm trong **cùng một transaction**, nên `artwork_views` và
-`view_count` không bao giờ lệch nhau.
+Hai thao tác ở bước ① nằm trong **cùng một transaction**, nên `artwork_views` và
+`view_count` không bao giờ lệch nhau. `counted` luôn `true` khi thành công — tham số này giữ
+lại trong chữ ký hàm để tương thích lời gọi cũ, nhưng handler hiện không còn nhánh nào rẽ
+theo giá trị của nó.
 
-Handler chỉ tăng số hiển thị trong response khi `counted == true`
-(`public_handler.go:192-197`) — người tải lại trang thấy con số đứng yên, đúng như thực tế.
+⚠️ **Đổi so với thiết kế ban đầu**: trước đây có chống trùng 24 giờ theo `visitor_token`
+(một khách tải lại trang trong ngày không bị đếm thêm). Đã bỏ có chủ đích — **mỗi lần gọi
+`GET /api/v1/public/artworks/{id}` kèm `visitor_token` đều +1 `view_count`**, kể cả tải lại
+trang nhiều lần liên tiếp. Frontend gọi qua `recordArtworkView()`
+(`web/src/lib/publicApi.ts`), có gộp request trùng lặp đang bay (`artworkViewInFlight`) để
+một lần render không bắn nhiều request cùng lúc — nhưng không chặn việc gọi lại ở lần
+render/mở trang sau.
 
-Cửa sổ chống trùng 24 giờ là hằng số `viewDedupeWindow` (`artwork_view_repository.go:13`).
-
-⚠️ **Hai hạn chế cần biết:**
-
-- Bảng `artwork_views` **chỉ tăng, không bao giờ được dọn**. Bản ghi cũ hơn 24h không còn
-  tác dụng gì nhưng vẫn nằm đó. Cần job dọn định kỳ — xem [plan/03-risks.md](../plan/03-risks.md).
-- Không có khoá giữa bước ① và ②. Hai request đồng thời từ cùng một visitor có thể cùng
-  vượt qua bước ① và đếm hai lần. Hiếm, và hậu quả nhỏ (lệch một lượt xem), nên không đáng
-  đánh đổi bằng một khoá.
+⚠️ **Hạn chế còn lại**: bảng `artwork_views` chỉ tăng, không bao giờ được dọn — xem
+[plan/03-risks.md](../plan/03-risks.md).
 
 ## 6. Trang chia sẻ có Open Graph
 
@@ -166,7 +162,7 @@ GET /chia-se/tac-pham/{id}
 
 Chi tiết đáng chú ý:
 
-- **Nhận diện scheme qua `X-Forwarded-Proto`** (`public_handler.go:218-224`) — sau reverse
+- **Nhận diện scheme qua `X-Forwarded-Proto`** (`public_handler.go:340-346`) — sau reverse
   proxy, `r.TLS` luôn `nil`, nên nếu không đọc header này thì `og:url` sẽ ra `http://` và
   Facebook có thể từ chối.
 - **Template dùng `html/template`**, không phải `text/template` — tự escape mọi giá trị
@@ -186,7 +182,7 @@ Ba lớp, mỗi lớp lo một chuyện:
 | 3 | Giới hạn độ dài + validate kiểu | Payload rác, dữ liệu vượt cột DB |
 
 Rate limit lớp 1 **chỉ áp cho method ghi**. Người xem lướt trang (toàn `GET`) không bao giờ
-chạm giới hạn này (`container.go:520-526`) — một quyết định quan trọng, vì trang public có
+chạm giới hạn này (nhánh `publicHandlerChain` trong `GetServerHandler`) — một quyết định quan trọng, vì trang public có
 thể có nhiều người xem cùng lúc từ cùng một mạng trường học chung IP.
 
 ⚠️ Đằng sau reverse proxy, rate limit chỉ đúng khi Nginx truyền `X-Forwarded-For` —

@@ -64,15 +64,12 @@ tường minh ở production.
 
 | Biến | Mặc định | Ghi chú |
 |---|---|---|
-| `UPLOAD_MAX_SIZE_MB` | `20` | Mỗi request đơn / mỗi chunk |
-| `UPLOAD_ABSOLUTE_MAX_MB` | `200` | Tổng dung lượng qua đường chunked |
+| `UPLOAD_MAX_SIZE_MB` | `20` | Trần mặc định cho một request upload |
+| `UPLOAD_ABSOLUTE_MAX_MB` | `200` | Trần cứng cho một file ảnh tác phẩm (đường bulk upload của admin) |
 | `UPLOAD_TIMEOUT_SECONDS` | `300` | Timeout thao tác S3 |
 
-Hai điều chỉnh tự động cần biết:
-
-- `AbsoluteMaxSize` **không bao giờ nhỏ hơn** `MaxSize` — tự nâng lên nếu cấu hình sai.
-- `AbsoluteMaxSize` bị **hạ xuống** `MaxSize × 64` nếu tỷ lệ vượt quá, để số chunk không
-  vượt `maxChunksPerUpload=64` (`builder.go:98-103`).
+Một điều chỉnh tự động cần biết: `AbsoluteMaxSize` **không bao giờ nhỏ hơn** `MaxSize` — tự
+nâng lên nếu cấu hình đặt ngược.
 
 ⚠️ `client_max_body_size` trong Nginx phải **≥** `UPLOAD_ABSOLUTE_MAX_MB`, nếu không Nginx
 chặn request trước khi ứng dụng nhìn thấy nó (trả 413).
@@ -166,9 +163,74 @@ công bố tên miền.
 | `CONCURRENCY_LIMIT_ENABLED` | `true` | |
 | `MAX_CONCURRENT_UPLOADS` | `500` | Cân nhắc hạ theo RAM VPS |
 | `CONCURRENCY_ACQUIRE_TIMEOUT_SECONDS` | `30` | Chờ trước khi báo lỗi |
+| `RATE_LIMIT_DOWNLOAD_REQUESTS` | `30` | Trần riêng cho tải ảnh gốc public |
+| `RATE_LIMIT_DOWNLOAD_WINDOW_MINUTES` | `1` | Cửa sổ của bộ đếm tải ảnh |
 
 Hai giới hạn **cố định trong code**, không cấu hình được: metrics 10 req/phút, và ghi dữ
 liệu public 20 req/phút.
+
+Bộ đếm tải ảnh tách riêng vì `GET /api/v1/public/artworks/{id}/download` là thao tác đắt
+nhất trên trang public — đọc trọn object từ S3 rồi ghi một dòng `artwork_downloads` — và là
+đích ngắm chính khi ai đó muốn gom toàn bộ tranh. Người xem thật hiếm khi tải quá vài tấm
+trong một phút, nên trần 30 rộng rãi với họ mà vẫn chặn được việc tải hàng loạt.
+
+## Proxy tin cậy
+
+| Biến | Mặc định | Ghi chú |
+|---|---|---|
+| `TRUSTED_PROXIES` | `127.0.0.0/8,::1/128` | Dải được phép đặt `X-Forwarded-For`/`X-Real-IP` |
+
+⚠️ **Biến này quyết định toàn bộ rate limit có thật sự hoạt động hay không.** Ứng dụng chỉ
+đọc header chuyển tiếp khi chặng kết nối trực tiếp nằm trong danh sách này; ngược lại dùng
+thẳng địa chỉ kết nối. Không có kiểm tra đó thì bất kỳ ai cũng chỉ cần thêm một header
+`X-Forwarded-For` ngẫu nhiên vào mỗi request là có bộ đếm mới, và mọi giới hạn theo IP —
+kể cả 20 req/phút cho bình luận — trở thành vô hiệu.
+
+Ba tình huống triển khai:
+
+| Cách chạy | Giá trị đúng |
+|---|---|
+| Nginx cùng máy (mặc định của dự án) | `127.0.0.0/8,::1/128` |
+| App phơi thẳng ra Internet | **Để rỗng** |
+| Sau Cloudflare / load balancer riêng | Dải IP của dịch vụ đó |
+
+Khai sai dải ở tình huống thứ ba khiến **mọi khách bị gom vào một bộ đếm** — cả trang tự
+khoá đúng lúc đông người nhất, đúng kịch bản R6 trong [plan/03-risks.md](../plan/03-risks.md).
+
+## Chống tải trọn site
+
+| Biến | Mặc định | Ghi chú |
+|---|---|---|
+| `BOT_GUARD_ENABLED` | `true` | Bật lớp nhận diện công cụ tải hàng loạt |
+| `BOT_GUARD_MAX_REQUESTS_PER_MINUTE` | `240` | Số request/phút/IP trước khi bị coi là máy quét |
+| `BOT_GUARD_MAX_PATHS_PER_MINUTE` | `150` | Số **đường dẫn khác nhau**/phút — dấu hiệu đặc trưng của trình tải site |
+| `BOT_GUARD_BLOCK_MINUTES` | `10` | Thời gian giữ hình phạt sau khi vượt ngưỡng |
+
+Bot tìm kiếm và bot mạng xã hội hợp lệ (Googlebot, bingbot, `facebookexternalhit`,
+coccocbot, Zalo…) được **miễn hoàn toàn** — chi tiết cơ chế ở
+[detail_design/05-auth-security.md](../detail_design/05-auth-security.md).
+
+## Header bảo mật
+
+| Biến | Mặc định | Ghi chú |
+|---|---|---|
+| `SECURITY_HSTS_ENABLED` | theo `APP_ENV` | Để trống = bật khi `production` |
+| `SECURITY_CSP_IMAGE_SOURCES` | rỗng | Origin ảnh ngoài; domain S3 đã tự suy ra |
+| `SECURITY_CSP_CONNECT_SOURCES` | rỗng | Origin được phép gọi XHR/fetch tới |
+| `MAX_JSON_BODY_KB` | `1024` | Trần body cho endpoint không phải upload |
+
+⚠️ **Chỉ bật HSTS khi site đã chạy HTTPS hoàn toàn.** Header này bảo trình duyệt từ chối
+mọi kết nối HTTP tới tên miền trong suốt `max-age` (một năm) — bật nhầm khi còn phục vụ
+HTTP sẽ khoá người dùng khỏi site và không thể gỡ từ phía máy chủ.
+
+Domain S3 được suy tự động từ `S3_BUCKET_NAME`/`AWS_REGION`/`S3_ENDPOINT`, nên bình thường
+không cần khai `SECURITY_CSP_IMAGE_SOURCES`. Chỉ thêm khi phục vụ ảnh qua CDN riêng — thiếu
+thì CSP chặn đúng ảnh tác phẩm, và lỗi chỉ lộ ra trên trình duyệt người dùng cuối chứ không
+xuất hiện trong log server.
+
+`MAX_JSON_BODY_KB` tồn tại vì Nginx đặt `client_max_body_size 200m` ở mức server để đường
+upload đi lọt — nếu không có trần riêng ở tầng ứng dụng thì endpoint bình luận cũng nhận
+được body 200MB.
 
 ## Nhật ký
 
@@ -180,35 +242,29 @@ liệu public 20 req/phút.
 Log ghi đồng thời ra stdout (systemd journal thu) và file theo ngày.
 ⚠️ **Không có cơ chế tự xoá log cũ** — xem [03-operations.md](./03-operations.md).
 
-## Resize kiểu WordPress
+> **Đã gỡ (2026-09-07)**: nhóm `WORDPRESS_*` và `IMAGE_*` (resize kiểu WordPress). Code đọc
+> chúng đã bị xoá, nên nếu `.env` cũ còn các dòng này thì chúng chỉ nằm đó vô tác dụng — xoá
+> đi cho gọn.
 
-| Biến | Mặc định | Ghi chú |
-|---|---|---|
-| `WORDPRESS_ENABLED` | `true` | Tắt nếu không dùng |
-| `WORDPRESS_BASE_URL` | — | Phải bắt đầu `http://` hoặc `https://` |
-| `WORDPRESS_UPLOADS_DIR` | `./wp-uploads` | |
-| `WORDPRESS_IMAGE_SIZES` | thumbnail/medium/large | Dạng `tên:RộngxCao,...` |
-| `IMAGE_OPTIMIZATION_ENABLED` | `true` | |
-| `IMAGE_JPEG_QUALITY` | `85` | |
-| `IMAGE_PNG_QUALITY` | `90` | |
-| `IMAGE_ENABLE_WEBP` | `false` | |
-
-`WORDPRESS_BASE_URL` sai định dạng sẽ **chặn server khởi động**.
-
-Tính năng này **không phục vụ trang public** (trang public chỉ dùng ảnh S3). Nếu không tích
-hợp WordPress, đặt `WORDPRESS_ENABLED=false` để giảm bề mặt tấn công.
-
-## Thư mục cố định trong code
+## Thư mục và đường dẫn tương đối
 
 | Đường dẫn | Dùng cho | Cấu hình được |
 |---|---|---|
-| `./uploads` | File tạm + chunk đang dở | ❌ cố định trong `builder.go:560` |
+| `./uploads` | File tạm trong lúc upload | ❌ cố định trong `builder.go` |
 | `./storage/logs` | Log theo ngày | ✅ qua `LOG_DIR` |
-| `./wp-uploads` | Ảnh resize | ✅ qua `WORDPRESS_UPLOADS_DIR` |
+| `./web/dist` | Giao diện đã build (SPA) | ❌ cố định |
+| `./web/public/images/vas-white-mark.png` | Mốc watermark cho ảnh tải về | ❌ cố định (lui về `./web/dist/images/`) |
+| `./internal/database/migrations` | Migration khi `DATABASE_AUTO_MIGRATE=true` | ❌ cố định |
 
-⚠️ `./uploads` là **đường dẫn tương đối** so với thư mục làm việc. systemd unit đặt
-`WorkingDirectory=/opt/s3-upload-tool`, nên thực tế là `/opt/s3-upload-tool/uploads`. Chạy
-binary từ thư mục khác sẽ tạo file tạm ở nơi khác.
+⚠️ **Cả năm đường dẫn trên đều tương đối so với thư mục làm việc.** systemd unit đặt
+`WorkingDirectory=/opt/s3-upload-tool` nên chúng trỏ đúng. Chạy binary từ thư mục khác sẽ
+gây bốn kiểu hỏng khác nhau, trong đó hai kiểu **hỏng im lặng**:
+
+- File tạm rơi vào thư mục lạ.
+- Giao diện không phục vụ được — `/` trả JSON info thay vì trang web.
+- **Watermark bị bỏ qua** — ảnh public tải về không có mốc, chỉ ghi log cảnh báo (fail-open,
+  cố ý: một khâu trang trí hỏng không nên làm hỏng cả lượt tải).
+- **Auto-migrate không tìm thấy file migration** — app không khởi động được.
 
 ## Mẫu `.env` cho production
 
@@ -251,6 +307,12 @@ RATE_LIMIT_ENABLED=true
 CONCURRENCY_LIMIT_ENABLED=true
 MAX_CONCURRENT_UPLOADS=100
 
+# Nginx chạy cùng máy nên chỉ tin loopback. Sai dòng này là hỏng toàn bộ
+# giới hạn theo IP - xem mục "Proxy tin cậy" ở trên.
+TRUSTED_PROXIES=127.0.0.1/32,::1/128
+SECURITY_HSTS_ENABLED=true
+BOT_GUARD_ENABLED=true
+MAX_JSON_BODY_KB=1024
+
 LOG_DIR=./storage/logs
-WORDPRESS_ENABLED=false
 ```

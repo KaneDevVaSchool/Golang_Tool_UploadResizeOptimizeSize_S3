@@ -3,11 +3,11 @@
 Hướng dẫn **cực chi tiết**, dành cho người chưa từng dựng server Linux bao giờ. Mỗi lệnh
 đều kèm: nó làm gì, kết quả đúng trông ra sao, và sai thì sửa thế nào.
 
-> **Tài liệu này khác gì [01-vps-systemd.md](./01-vps-systemd.md)?**
-> File 01 bắt đầu từ lúc VPS **đã có sẵn** Go, Node, MySQL, Nginx — nó là quy trình tra cứu
-> nhanh cho người đã quen. File này bắt đầu từ lúc bạn **chưa mua VPS**, và giải thích cả
-> những thứ file 01 coi là hiển nhiên: tạo user, mở firewall, cấu hình MySQL, tạo IAM user
-> trên AWS. Deploy lần đầu thì đọc file này. Các lần sau dùng file 01.
+> **Đây là tài liệu deploy duy nhất.** Mọi bước đều làm tay, không có script nào chạy thay.
+> Nếu bạn đã quen và chỉ cần cập nhật một bản mới, nhảy thẳng tới
+> [giai đoạn K](#k--cập-nhật-phiên-bản-sau-này).
+>
+> Nếu VPS của bạn đã cài sẵn Go, Node, MySQL và Nginx, bỏ qua giai đoạn B và C.
 
 **Thời gian dự kiến**: 90–120 phút cho lần đầu, trong đó ~20 phút là chờ (DNS, cài gói).
 
@@ -24,9 +24,11 @@ Hướng dẫn **cực chi tiết**, dành cho người chưa từng dựng serv
 | [E](#e--amazon-s3) | Tạo bucket, IAM user, bucket policy | 20 phút |
 | [F](#f--google-oauth) | Tạo OAuth client cho đăng nhập admin | 10 phút |
 | [G](#g--lấy-mã-nguồn-và-cấu-hình) | Clone repo, viết `.env` | 15 phút |
-| [H](#h--deploy-lần-đầu) | Chạy `deploy.sh`, bật HTTPS | 15 phút |
+| [H](#h--build-và-chạy) | Build web + Go, migration, systemd, Nginx, HTTPS | 30 phút |
 | [I](#i--nghiệm-thu) | Kiểm tra từng chức năng thật sự chạy | 15 phút |
 | [J](#j--việc-phải-làm-ngay-sau-khi-chạy-được) | Backup, logrotate, giám sát | 20 phút |
+| [K](#k--cập-nhật-phiên-bản-sau-này) | Deploy bản mới và cách quay lui | 10 phút mỗi lần |
+| [L](#l--nạp-dữ-liệu-demo-cmdseed) | ⚠️ Chỉ cho môi trường thử — xoá sạch dữ liệu | — |
 
 ---
 
@@ -262,7 +264,8 @@ sudo rm -rf /usr/local/go
 sudo tar -C /usr/local -xzf go1.24.2.linux-amd64.tar.gz
 ```
 
-Thêm vào `PATH` cho **mọi** người dùng — quan trọng, vì `deploy.sh` chạy dưới `sudo`:
+Thêm vào `PATH` cho **mọi** người dùng — quan trọng, vì các lệnh build ở giai đoạn H chạy qua
+`sudo -u appuser`:
 
 ```bash
 echo 'export PATH=$PATH:/usr/local/go/bin' | sudo tee /etc/profile.d/go.sh
@@ -277,8 +280,8 @@ sudo env "PATH=$PATH" go version    # kiểm tra cả khi chạy qua sudo
 
 **Đúng thì thấy** `go version go1.24.2 linux/amd64` ở **cả hai** lệnh.
 
-**Sai thì sửa**: nếu lệnh thứ hai báo `command not found`, `deploy.sh` sẽ hỏng ở bước
-build. Thêm đường dẫn tuyệt đối vào `secure_path`:
+**Sai thì sửa**: nếu lệnh thứ hai báo `command not found`, bước build ở H2 sẽ hỏng. Thêm
+đường dẫn tuyệt đối vào `secure_path`:
 
 ```bash
 sudo visudo
@@ -381,8 +384,10 @@ mysql -u vasapp -p va_stu_pic_db_prd -e "SELECT @@character_set_database, @@coll
 **Sai thì sửa**: nếu thấy `utf8mb3`, xoá và tạo lại database đúng như D2 — làm ngay bây giờ
 khi chưa có dữ liệu thì mất 10 giây.
 
-> Không cần chạy migration thủ công. Ứng dụng tự tạo 13 bảng khi khởi động lần đầu
-> (`DATABASE_AUTO_MIGRATE=true`), idempotent qua bảng `schema_migrations`.
+> Chưa cần tạo bảng lúc này — 14 bảng được tạo ở bước H3 bằng `./migrate -up`. Nếu để
+> `DATABASE_AUTO_MIGRATE=true`, ứng dụng cũng tự chạy migration khi khởi động; cả hai đường
+> dùng chung bảng `schema_migrations` nên chạy cả hai không gây hại. Khuyến nghị chạy tay
+> trước ở H3 để thấy lỗi migration **trước khi** service khởi động.
 
 ---
 
@@ -608,8 +613,11 @@ Vài điểm dễ sai:
 - **`CORS_ORIGINS` không được để `*`** khi `APP_ENV=production`. Server sẽ từ chối khởi
   động — cố ý, vì `*` cho phép mọi website gọi API này.
 - **`CSRF_SECURE_COOKIE=false` lúc này là đúng.** Chưa có HTTPS mà bật `true` thì trình
-  duyệt không gửi cookie qua HTTP và bạn không đăng nhập được. Script `setup-https.sh` ở
-  giai đoạn H sẽ tự đổi thành `true`.
+  duyệt không gửi cookie qua HTTP và bạn không đăng nhập được. Bước H7 sẽ đổi thành `true`
+  sau khi chứng chỉ đã chạy — cùng với `SECURITY_HSTS_ENABLED`.
+- **`TRUSTED_PROXIES=127.0.0.1/32,::1/128`** vì Nginx chạy cùng máy. Để trống hoặc ghi sai
+  thì ứng dụng bỏ qua `X-Forwarded-For` và coi **mọi khách là cùng một IP** — rate limit và
+  BotGuard sẽ chặn nhầm tất cả cùng lúc.
 - **`S3_USE_PRESIGNED_URL=false`**: presigned URL có hạn dùng và sẽ hết hạn; ảnh triển lãm
   phải sống lâu dài.
 - **`DATABASE_URL` không cần tham số phía sau.** Ứng dụng tự bổ sung
@@ -631,36 +639,120 @@ ls -l .env
 
 ---
 
-## H — Deploy lần đầu
+## H — Build và chạy
 
-### H1. Preflight
+Bảy bước dưới đây làm tay hoàn toàn. Trước đây chúng nằm trong `deploy/deploy.sh`; script
+đã bị xoá để người vận hành thấy được từng bước đang làm gì và sửa được khi hỏng.
 
-Script này **chỉ đọc, không sửa gì** — nó kiểm tra mọi điều kiện trước khi bắt tay vào
-việc, để lỗi lộ ra sớm thay vì lộ ra giữa chừng.
+Mọi lệnh chạy từ `/opt/s3-upload-tool`, và **chạy dưới `appuser`** (không phải `root`) để
+file sinh ra thuộc đúng chủ sở hữu:
 
 ```bash
 cd /opt/s3-upload-tool
-sudo bash deploy/preflight.sh
 ```
 
-**Đúng thì thấy** toàn dấu `✓`. Sửa hết mọi dòng `✗` trước khi đi tiếp — đừng bỏ qua dòng
-nào với ý nghĩ "chắc không sao".
-
-### H2. Deploy
+### H1. Build giao diện
 
 ```bash
-sudo bash deploy/deploy.sh
+sudo -u appuser bash -c 'cd web && npm ci'
+sudo -u appuser bash -c 'cd web && npm run build'
 ```
 
-Script làm tuần tự: `git pull` → build giao diện → build binary Go → chạy migration → cài
-và khởi động service → cài vhost Nginx → kiểm tra sức khoẻ.
+Kết quả nằm ở `web/dist/`. Mất 2–5 phút, lâu nhất là `npm ci` lần đầu.
 
-Mất 3–8 phút, lâu nhất là `npm install` lần đầu.
+⚠️ **Đừng bỏ qua bước này kể cả khi chỉ sửa code Go.** Backend phục vụ giao diện từ
+`web/dist` theo đường dẫn tương đối, và **ảnh mốc watermark cũng đọc từ đây**. Thiếu
+`web/dist` gây hai hỏng hóc, một trong hai không báo lỗi gì:
 
-**Đúng thì thấy** dòng cuối báo deploy thành công và health check `200`.
+- `/` trả JSON info thay vì trang web — dễ thấy.
+- Ảnh khách tải về **không có watermark** — chỉ ghi một dòng cảnh báo trong log, còn lượt
+  tải vẫn thành công. Đây là lỗi âm thầm, chỉ phát hiện bằng cách mở ảnh ra xem.
 
-**Sai thì sửa**: script **tự khôi phục binary cũ** nếu bản mới không qua health check, nên
-site không chết. Đọc log để biết nguyên nhân:
+**Đúng thì thấy**:
+
+```bash
+ls web/dist/index.html && ls web/public/images/vas-white-mark.png
+```
+
+### H2. Build backend
+
+```bash
+sudo -u appuser env CGO_ENABLED=0 GOOS=linux \
+  go build -trimpath -ldflags="-s -w" -o server ./cmd/server
+```
+
+`CGO_ENABLED=0` cho ra binary tĩnh không phụ thuộc thư viện hệ thống — đây là lý do không
+cần Docker. `-trimpath -ldflags="-s -w"` bỏ đường dẫn build và bảng ký hiệu, nhẹ bớt vài MB.
+
+**Đúng thì thấy** file `server` xuất hiện, `ls -lh server` cỡ 20–30MB.
+
+**Sai thì sửa**: `go: command not found` dưới `sudo` nghĩa là `secure_path` chưa có
+`/usr/local/go/bin` — xem lại C2.
+
+### H3. Chạy migration
+
+```bash
+sudo -u appuser go build -o migrate ./cmd/migrate
+sudo -u appuser ./migrate -status
+sudo -u appuser ./migrate -up
+sudo -u appuser ./migrate -status
+```
+
+Chạy `-status` **trước và sau** để thấy rõ migration nào vừa được áp.
+
+Có **hai đường** chạy migration, dùng chung bảng `schema_migrations` nên không xung đột:
+
+| Đường | Khi nào chạy | Ưu điểm |
+|---|---|---|
+| `./migrate -up` (thủ công) | Bạn gọi, trước khi khởi động service | Thấy lỗi trước khi service lên; đây là cách khuyến nghị |
+| Tự động lúc khởi động | Khi `DATABASE_AUTO_MIGRATE=true` | Không quên; nhưng lỗi migration làm service **không khởi động được** |
+
+⚠️ **Đường dẫn migration là tương đối** (`internal/database/migrations`). Phải chạy từ thư
+mục gốc repo, nếu không sẽ báo không tìm thấy file.
+
+⚠️ **Không có `-down`.** Không quay lui được bằng lệnh; muốn lùi schema phải phục hồi bản sao
+lưu database. Đây là lý do J2 (backup tự động) không phải việc làm cho có.
+
+**Đúng thì thấy** `-status` liệt kê đủ 18 migration ở trạng thái đã áp.
+
+### H4. Thư mục và quyền
+
+```bash
+sudo -u appuser mkdir -p uploads storage/logs storage/backups
+sudo chown -R appuser:appuser /opt/s3-upload-tool
+sudo chmod 600 /opt/s3-upload-tool/.env
+```
+
+Chỉ ba thư mục này cần ghi được. `.env` chứa mật khẩu database và khoá AWS nên phải là `600`
+— chỉ `appuser` đọc được, không ai khác trên máy xem được.
+
+**Đúng thì thấy**:
+
+```bash
+ls -l .env          # -rw------- 1 appuser appuser
+```
+
+### H5. Cài systemd service
+
+```bash
+sudo cp deploy/systemd/s3-upload-tool.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now s3-upload-tool
+sudo systemctl status s3-upload-tool --no-pager
+```
+
+Mở file unit ra đọc trước khi cài — bốn khối quan trọng nhất:
+
+| Dòng | Vì sao cần |
+|---|---|
+| `WorkingDirectory=/opt/s3-upload-tool` | **Bắt buộc.** Migration, `web/dist`, ảnh watermark và thư mục `uploads` đều dùng đường dẫn tương đối. Sai dòng này là hỏng cả bốn, và hai trong số đó hỏng im lặng. |
+| `EnvironmentFile=/opt/s3-upload-tool/.env` | Nạp cấu hình. Thiếu file thì service không lên. |
+| `Restart=on-failure` + `StartLimitBurst=5` | Tự dậy khi crash, nhưng dừng hẳn sau 5 lần lỗi trong 60s để `systemctl status` báo `failed` thay vì restart vô hạn khi `.env` sai. |
+| `ProtectSystem=strict` + `ReadWritePaths=` | Toàn hệ thống chỉ đọc; mở lại đúng `uploads` và `storage`. Nếu sau này app cần ghi thêm thư mục nào, **phải thêm vào đây** nếu không sẽ bị từ chối quyền dù `chown` đúng. |
+
+**Đúng thì thấy** `Active: active (running)`.
+
+**Sai thì sửa**:
 
 ```bash
 sudo journalctl -u s3-upload-tool -n 50 --no-pager
@@ -673,19 +765,44 @@ sudo journalctl -u s3-upload-tool -n 50 --no-pager
 | `Access denied for user` | Sai thông tin `DATABASE_URL` | Thử lại lệnh ở D3 |
 | `dial tcp ... connect: connection refused` | MySQL chưa chạy | `sudo systemctl start mysql` |
 | `no such host` khi gọi S3 | Sai `AWS_REGION` hoặc tên bucket | Xem E4 |
+| `failed to run database migrations` | Chạy sai thư mục, hoặc thiếu quyền DB | Kiểm tra `WorkingDirectory`; thử `./migrate -up` tay ở H3 |
+| `TRUSTED_PROXIES có giá trị không hợp lệ` | Sai định dạng CIDR | Sửa thành `127.0.0.1/32,::1/128` — app vẫn chạy, chỉ bỏ qua dòng sai |
 
-### H3. Kiểm tra trước khi bật HTTPS
+### H6. Cài Nginx
+
+```bash
+sudo cp deploy/nginx/pictures.vaschools.edu.vn.conf /etc/nginx/sites-available/
+sudo ln -sf /etc/nginx/sites-available/pictures.vaschools.edu.vn.conf \
+            /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+`nginx -t` **trước** khi reload: cấu hình sai mà reload thì Nginx giữ bản cũ, nhưng lần
+restart sau sẽ không lên được.
+
+Ba chỗ trong vhost cần hiểu:
+
+| Cấu hình | Vì sao |
+|---|---|
+| `client_max_body_size 200m` | Phải **≥** `UPLOAD_ABSOLUTE_MAX_MB`. Nhỏ hơn thì Nginx trả 413 trước khi ứng dụng thấy request. |
+| `proxy_set_header X-Forwarded-For` | Ứng dụng lấy IP khách từ đây. **Phải khớp `TRUSTED_PROXIES` trong `.env`** — Nginx chạy cùng máy nên `.env` để `127.0.0.1/32,::1/128`. Thiếu header hoặc sai `TRUSTED_PROXIES` thì mọi khách gộp thành một IP, rate limit và BotGuard chặn nhầm tất cả. |
+| `proxy_request_buffering off` | Chuyển thẳng luồng upload cho ứng dụng thay vì đệm trọn file ra đĩa Nginx trước. |
+
+Nếu tên miền khác `pictures.vaschools.edu.vn`, sửa `server_name` trong file trước khi copy.
+
+Kiểm tra trước khi sang HTTPS:
 
 ```bash
 curl http://127.0.0.1:8080/api/v1/health
 curl -H "Host: pictures.vaschools.edu.vn" http://127.0.0.1/api/v1/health
 ```
 
-Lệnh đầu kiểm tra **ứng dụng**, lệnh sau kiểm tra **Nginx đã chuyển tiếp đúng**. Cả hai
-phải trả JSON có `"status":"ok"`. Nếu lệnh đầu chạy mà lệnh sau không, vấn đề nằm ở Nginx
-chứ không phải ứng dụng.
+Lệnh đầu kiểm tra **ứng dụng**, lệnh sau kiểm tra **Nginx đã chuyển tiếp đúng**. Cả hai phải
+trả JSON có `"status":"ok"`. Nếu lệnh đầu chạy mà lệnh sau không, vấn đề ở Nginx chứ không
+phải ứng dụng.
 
-### H4. Bật HTTPS
+### H7. Bật HTTPS
 
 DNS phải trỏ đúng rồi (bước A2) — kiểm tra lại lần cuối:
 
@@ -696,11 +813,24 @@ getent hosts pictures.vaschools.edu.vn
 Phải ra đúng IP VPS. Rồi:
 
 ```bash
-sudo bash deploy/setup-https.sh
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d pictures.vaschools.edu.vn --agree-tos --redirect -m <email-của-bạn>
 ```
 
-Script xin chứng chỉ Let's Encrypt, sửa vhost thêm block 443 và chuyển hướng HTTP→HTTPS, và
-đổi `CSRF_SECURE_COOKIE=true` trong `.env` rồi khởi động lại service.
+Certbot tự sửa vhost: thêm block 443 và chuyển hướng HTTP→HTTPS.
+
+Sau khi có chứng chỉ, **bật hai cờ trong `.env`** rồi khởi động lại:
+
+```bash
+sudo -u appuser sed -i 's/^CSRF_SECURE_COOKIE=.*/CSRF_SECURE_COOKIE=true/' .env
+sudo -u appuser sed -i 's/^SECURITY_HSTS_ENABLED=.*/SECURITY_HSTS_ENABLED=true/' .env
+sudo systemctl restart s3-upload-tool
+```
+
+Vì sao phải đợi có HTTPS mới bật: `CSRF_SECURE_COOKIE=true` khiến trình duyệt **không gửi
+cookie qua HTTP**, nên bật sớm là tự khoá mình khỏi trang đăng nhập. `SECURITY_HSTS_ENABLED`
+bảo trình duyệt chỉ dùng HTTPS với tên miền này — bật khi chứng chỉ chưa chạy thì không vào
+được site và trình duyệt nhớ điều đó khá lâu.
 
 **Sai thì sửa**:
 
@@ -739,7 +869,23 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 # 4. Chứng chỉ hợp lệ và còn hạn
 echo | openssl s_client -connect pictures.vaschools.edu.vn:443 2>/dev/null \
   | openssl x509 -noout -dates
+
+# 5. SEO: sitemap liệt kê được tác phẩm, robots.txt trỏ đúng sitemap
+curl -s https://pictures.vaschools.edu.vn/sitemap.xml | head -20
+curl -s https://pictures.vaschools.edu.vn/robots.txt
+
+# 6. Rate limit đếm đúng theo từng IP, không gộp tất cả làm một
+#    Gọi 25 lần liên tiếp - ngưỡng public là 20 req/phút.
+for i in $(seq 1 25); do
+  curl -s -o /dev/null -w "%{http_code} " \
+    https://pictures.vaschools.edu.vn/api/v1/public/artworks
+done; echo
 ```
+
+**Mục 6 đúng thì thấy** khoảng 20 mã `200` rồi mới tới `429`. Nếu `429` xuất hiện **ngay từ
+vài request đầu** dù bạn là người duy nhất truy cập, gần như chắc chắn `TRUSTED_PROXIES` sai
+— ứng dụng đang gộp mọi khách vào chung một bộ đếm. Kiểm tra lại `.env` và header
+`X-Forwarded-For` trong vhost Nginx.
 
 ⚠️ **Mục 2 là bẫy đã biết.** Middleware API key áp lên toàn bộ `/api/*` và hiện chỉ miễn
 `/api/v1/health`. Nếu trả `401`, khách ẩn danh không xem được trang public — xem mục **P0.1**
@@ -755,6 +901,10 @@ phiên đăng nhập sẵn có:
 - [ ] Vào `/admin`, đăng nhập bằng Google, thấy bảng điều khiển
 - [ ] Upload thử **một ảnh thật** (không phải ảnh test 10KB) qua giao diện admin
 - [ ] Ảnh vừa upload hiện đúng ở trang public
+- [ ] **Bấm tải ảnh ở trang public, mở file tải về và xác nhận có watermark VAS ở góc dưới
+      phải.** Đây là kiểm tra duy nhất bắt được lỗi thiếu `web/dist` — lỗi đó không báo gì,
+      ảnh vẫn tải bình thường, chỉ là không có mốc
+- [ ] Trang `/thu-ngo` mở được
 
 Kiểm tra biến thể ảnh đã sinh đúng — nếu chưa, gallery vẫn chạy nhưng nặng gấp nhiều lần:
 
@@ -846,24 +996,105 @@ tạm để biết quy trình thật sự chạy.
 df -h /                                    # đĩa còn trống — theo dõi hằng tuần
 free -h                                    # RAM
 sudo systemctl status s3-upload-tool       # service còn sống
-sudo bash deploy/status.sh                 # tổng quan mọi thứ
+curl -sf http://127.0.0.1:8080/api/v1/health   # ứng dụng trả lời
+sudo certbot certificates                  # chứng chỉ còn hạn bao lâu
 ```
 
-Đặt lịch nhắc bản thân xem `deploy/status.sh` mỗi tuần, và **đặc biệt là ngày trước khi
-công bố kết quả** — đó là lúc lượng truy cập cao nhất.
+Đặt lịch nhắc bản thân chạy bộ lệnh trên mỗi tuần, và **đặc biệt là ngày trước khi công bố
+kết quả** — đó là lúc lượng truy cập cao nhất.
+
+---
+
+## K — Cập nhật phiên bản sau này
+
+Bảy bước của giai đoạn H rút lại còn năm khi máy đã cài đặt xong. Điểm khác quan trọng: build
+binary mới ra tên `server.new` rồi mới đổi chỗ, để **giữ lại bản cũ làm đường lui**.
+
+```bash
+cd /opt/s3-upload-tool
+
+# 1. Lấy code mới
+sudo -u appuser git pull --ff-only
+
+# 2. Build lại giao diện (đừng bỏ qua — xem cảnh báo ở H1)
+sudo -u appuser bash -c 'cd web && npm ci && npm run build'
+
+# 3. Build binary mới, chưa thay thế bản đang chạy
+sudo -u appuser env CGO_ENABLED=0 GOOS=linux \
+  go build -trimpath -ldflags="-s -w" -o server.new ./cmd/server
+
+# 4. Migration trước khi đổi binary
+sudo -u appuser go build -o migrate ./cmd/migrate
+sudo -u appuser ./migrate -up
+
+# 5. Đổi chỗ và khởi động lại
+sudo systemctl stop s3-upload-tool
+sudo -u appuser mv server server.prev
+sudo -u appuser mv server.new server
+sudo systemctl start s3-upload-tool
+
+# 6. Kiểm tra
+curl -sf http://127.0.0.1:8080/api/v1/health && echo OK
+```
+
+Vì sao migration chạy **trước** khi đổi binary: code mới thường cần cột/bảng mới, nhưng code
+cũ vẫn chạy được với schema đã thêm cột (nó chỉ không dùng tới). Thứ tự ngược lại thì có một
+khoảng thời gian code mới chạy trên schema cũ và lỗi.
+
+### Quay lui khi bản mới hỏng
+
+```bash
+sudo systemctl stop s3-upload-tool
+sudo -u appuser cp server.prev server
+sudo systemctl start s3-upload-tool
+curl -sf http://127.0.0.1:8080/api/v1/health && echo OK
+```
+
+⚠️ **Migration không quay lui được** — không có `-down`. Các migration hiện tại chỉ *thêm*
+bảng/cột nên code cũ chạy lại được bình thường. Nếu bản mới có migration *sửa* hoặc *xoá*
+cột, cách chắc chắn duy nhất là phục hồi bản sao lưu database (J2).
+
+---
+
+## L — Nạp dữ liệu demo (`cmd/seed`)
+
+> ⚠️ **CÔNG CỤ NÀY XOÁ SẠCH DỮ LIỆU.** Nó xoá toàn bộ tác phẩm, học sinh, giải thưởng, bình
+> luận, lượt thích trong database **và xoá cả object ảnh trên S3**, rồi ghi đè bảng `schools`.
+> **Tuyệt đối không chạy trên production.** Chỉ dùng cho máy thử hoặc môi trường demo.
+
+Công cụ giữ lại `admin_users`, `admin_sessions` và `grade_levels` — bạn không bị mất quyền
+đăng nhập.
+
+```bash
+cd /opt/s3-upload-tool
+go run ./cmd/seed --images=/đường/dẫn/tới/thư-mục-ảnh
+```
+
+Trước khi làm gì, công cụ hỏi xác nhận và yêu cầu gõ đúng chuỗi **`XOA`**. Gõ bất cứ thứ gì
+khác thì nó dừng. Cờ `--yes` bỏ qua bước hỏi này — chỉ dùng trong script tự động, và chỉ khi
+bạn chắc chắn đang trỏ vào database thử.
+
+Mỗi ảnh trong thư mục thành một tác phẩm, không dùng lại ảnh nào hai lần. Kiểm tra `.env`
+đang trỏ đúng database **trước khi gõ lệnh**:
+
+```bash
+grep DATABASE_URL .env
+```
 
 ---
 
 ## Tra cứu nhanh
 
 ```bash
-# Cập nhật code
-cd /opt/s3-upload-tool && sudo bash deploy/deploy.sh
-sudo bash deploy/deploy.sh --skip-web    # chỉ sửa Go, nhanh hơn nhiều
-sudo bash deploy/deploy.sh --no-pull     # deploy code đang có, không git pull
+# Cập nhật code — chi tiết ở giai đoạn K
+cd /opt/s3-upload-tool
+sudo -u appuser git pull --ff-only
+sudo -u appuser bash -c 'cd web && npm ci && npm run build'
+sudo -u appuser env CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o server.new ./cmd/server
+sudo -u appuser ./migrate -up
+sudo systemctl stop s3-upload-tool && sudo -u appuser mv server server.prev && sudo -u appuser mv server.new server && sudo systemctl start s3-upload-tool
 
 # Vận hành
-sudo bash deploy/status.sh
 sudo systemctl restart s3-upload-tool
 sudo journalctl -u s3-upload-tool -f
 sudo journalctl -u s3-upload-tool -p err -n 50
@@ -881,6 +1112,5 @@ sudo nginx -t && sudo systemctl reload nginx
 |---|---|
 | Ý nghĩa từng biến trong `.env` | [02-configuration.md](./02-configuration.md) |
 | Vận hành, sự cố, quay lui | [03-operations.md](./03-operations.md) |
-| Quy trình rút gọn cho lần sau | [01-vps-systemd.md](./01-vps-systemd.md) |
 | Hiểu hệ thống được lắp thế nào | [../ARCHITECTURE.md](../ARCHITECTURE.md) |
 | Việc còn phải làm | [../plan/02-roadmap.md](../plan/02-roadmap.md) |

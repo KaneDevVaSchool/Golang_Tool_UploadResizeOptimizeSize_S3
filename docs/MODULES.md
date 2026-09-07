@@ -3,8 +3,9 @@
 Trách nhiệm, phụ thuộc và lưu ý khi sửa từng package. Đọc
 [ARCHITECTURE.md](./ARCHITECTURE.md) trước nếu cần bức tranh tổng thể.
 
-Đối chiếu code tại commit `d0ec7c2`. Quy mô: **88 file Go** (~12.000 dòng trong `internal/`,
-đã tính cả test) và **75 file TypeScript/TSX**.
+Đối chiếu code trên nhánh `feature/artwork-contest-system`, rà lại ngày **2026-09-07**.
+Quy mô: **103 file Go** (~13.600 dòng trong `internal/`, đã tính cả test) và **82 file
+TypeScript/TSX**.
 
 ## Sơ đồ phụ thuộc
 
@@ -41,7 +42,7 @@ Nạp `.env` → thiết lập log → `container.NewContainer()` → chạy `ht
 `SIGINT`/`SIGTERM` → tắt an toàn.
 
 ⚠️ **Thứ tự tắt máy quan trọng, không được đảo**: drain request HTTP trước
-(`server.Shutdown`), rồi mới đóng container (DB, rate limiter, chunk session). Đảo ngược sẽ
+(`server.Shutdown`), rồi mới đóng container (DB, rate limiter, bộ đếm chống quét). Đảo ngược sẽ
 làm request đang xử lý mất kết nối DB/S3 giữa chừng.
 
 Không chứa nghiệp vụ. Cần thêm hành vi lúc khởi động/tắt thì sửa `container.go`, không sửa
@@ -56,12 +57,35 @@ migration lúc khởi động — cả hai dùng chung bảng `schema_migrations
 
 Không có `-down`/rollback tự động.
 
+## `cmd/seed` — Xoá sạch + nạp dữ liệu demo
+
+**File**: [main.go](../cmd/seed/main.go), [data.go](../cmd/seed/data.go)
+
+Dựng lại thủ công một phần dây chuyền repository/service của `container.go` (không kéo
+theo handler/middleware) để: xoá sạch dữ liệu nghiệp vụ (`artworks`, `students`, `awards`,
+`topic_categories`, `artwork_reactions`, `artwork_comments`, `artwork_views` — **không** đụng
+`admin_users`/`admin_sessions`/`grade_levels`), xoá object S3 mà các `artworks` bị xoá đang
+tham chiếu (thu thập `s3_key` + key trong `variants` **trước** khi xoá DB row, không quét
+bucket), rồi nạp lại danh mục (schools/awards/topic_categories) và tạo tác phẩm demo bằng
+cách upload từng ảnh trong một thư mục nguồn (`--images`, mặc định ảnh theme cục bộ) lên S3
+qua `ArtworkService.CreateArtworkFromUpload` — không lặp lại ảnh, mỗi ảnh đúng 1 tác phẩm.
+
+⚠️ Ghi đè luôn bảng `schools` bằng 16 cơ sở thật của Hệ thống Việt Mỹ, thay cho 5 cơ sở cũ
+trong migration 004 (đã lỗi thời) — xem lý do và danh sách đầy đủ ở
+[detail_design/01-database.md](./detail_design/01-database.md). Việc này chỉ an toàn vì
+luôn chạy **sau** bước xoá `artworks`/`students`, lúc đó không còn FK nào RESTRICT chặn
+`DELETE FROM schools`.
+
+Yêu cầu gõ đúng `XOA` để xác nhận (bỏ qua bằng `--yes` khi chạy không tương tác). Không thể
+hoàn tác — chỉ dùng cho môi trường demo/dev, không chạy trên DB đang có dữ liệu hội thi
+thật.
+
 ---
 
 ## `internal/config` — Cấu hình
 
-**Files**: [config.go](../internal/config/config.go) (127 dòng),
-[builder.go](../internal/config/builder.go) (588), [errors.go](../internal/config/errors.go)
+**Files**: [config.go](../internal/config/config.go) (138 dòng),
+[builder.go](../internal/config/builder.go) (589), [errors.go](../internal/config/errors.go)
 
 `config.go` định nghĩa struct `Config` và 11 struct con — **nguồn sự thật duy nhất** cho mọi
 giá trị cấu hình.
@@ -75,7 +99,7 @@ giá trị cấu hình.
 | Nạp `.env` một lần | Qua `sync.Once` — không có nạp lại nóng |
 | Chặn khởi động ở production | Thiếu API key hoặc `CORS_ORIGINS=*` → lỗi ngay |
 | Danh sách admin mặc định | `defaultAllowedAdminEmails` (dòng 20) — 9 tài khoản; để trống `.env` **không** nghĩa là mở cửa |
-| Tự điều chỉnh giới hạn | `AbsoluteMaxSize` bị kẹp về `MaxSize × 64` để số chunk ≤ 64 |
+| Tự điều chỉnh giới hạn | `AbsoluteMaxSize` được nâng lên bằng `MaxSize` nếu cấu hình đặt nhỏ hơn |
 | Cookie secure suy từ `APP_ENV` | Dùng chung cho cả CSRF lẫn session |
 
 ⚠️ Timeout đọc/ghi mặc định trong code (15s/30s) **thấp hơn** giá trị gợi ý trong
@@ -155,23 +179,27 @@ bộ nhớ, mất khi khởi động lại.
 
 ## `internal/middleware` — Chuỗi xử lý HTTP
 
-11 file. Mỗi file một mối quan tâm, ghép lại trong `container.go`.
+Mỗi file một mối quan tâm, ghép lại trong `container.go`.
 
 | File | Dòng | Việc | Đã nối vào chuỗi |
 |---|---|---|---|
 | `request_id.go` | 36 | Sinh/nhận `X-Request-ID` | ✅ |
 | `logging.go` | 36 | Log request kèm ID | ✅ |
-| `cors.go` | 97 | Danh sách origin cho phép | ✅ |
 | `apikey.go` | 44 | Xác thực `X-API-Key`, so sánh hằng thời gian | ✅ |
 | `admin_auth.go` | 55 | Xác thực session, gắn user vào context | ✅ |
-| `csrf.go` | 135 | Double-submit cookie | ✅ |
-| `ratelimit.go` | 200 | Giới hạn tần suất theo IP | ✅ |
+| `bodylimit.go` | 61 | Trần kích thước body theo đường dẫn | ✅ |
 | `concurrency.go` | 68 | Semaphore toàn server | ✅ |
+| `cors.go` | 97 | Danh sách origin cho phép | ✅ |
+| `security_headers.go` | 143 | CSP, Permissions-Policy, COOP/CORP, HSTS | ✅ |
+| `csrf.go` | 161 | Double-submit cookie | ✅ |
+| `clientip.go` | 171 | Xác định IP client qua proxy tin cậy | ✅ (dùng chung) |
+| `ratelimit.go` | 193 | Giới hạn tần suất theo IP | ✅ |
 | `compress.go` | 209 | Nén gzip phản hồi | ✅ |
+| `botguard.go` | 356 | Chặn công cụ tải trọn site | ✅ |
 
 `compress.go` (`GzipMiddleware`) nén phản hồi `text/*` và JSON trên 1KB, bỏ qua các định
-dạng đã nén sẵn (ảnh, video). Được nối ở `container.go:575` và đặt **trong cùng** chuỗi —
-sát mux nhất — vì nó cần thấy `Content-Type` do handler đặt.
+dạng đã nén sẵn (ảnh, video). Đặt **trong cùng** chuỗi — sát mux nhất — vì nó cần thấy
+`Content-Type` do handler đặt.
 
 Ba điểm về `apikey.go` khi sửa:
 
@@ -180,8 +208,16 @@ Ba điểm về `apikey.go` khi sửa:
 - ⚠️ Chỉ miễn trừ `/api/v1/health`. Nghĩa là bật API key sẽ chặn **cả** `/api/v1/public/*` —
   rủi ro R1 trong [plan/03-risks.md](./plan/03-risks.md).
 
-`GetClientIP()` đọc `X-Forwarded-For`. ⚠️ Nginx không truyền header này thì mọi người bị
-tính chung một IP và một người có thể khoá cả trang.
+`clientip.go` là **nền móng của mọi giới hạn theo IP** trong hệ thống. `GetClientIP()` chỉ
+đọc `X-Forwarded-For`/`X-Real-IP` khi chặng kết nối trực tiếp nằm trong `TRUSTED_PROXIES`;
+ngược lại dùng thẳng `RemoteAddr`. `ClientIPKey()` gom IPv6 về khối `/64` trước khi làm khoá
+đếm. ⚠️ Sửa file này là chạm vào rate limit của toàn hệ thống — đọc
+[detail_design/05-auth-security.md §6](./detail_design/05-auth-security.md) trước.
+
+`botguard.go` chặn công cụ tải trọn site nhưng **miễn trừ bot tìm kiếm và bot mạng xã hội**.
+⚠️ Khi thêm chuỗi vào `scraperAgentMarkers`, tuyệt đối không thêm `"bot"`, `"crawler"` hay
+`"spider"` chung chung — Googlebot, bingbot, `facebookexternalhit` đều chứa các chuỗi đó, và
+thêm vào là xoá sổ toàn bộ SEO. Có test khoá lại điều này (`botguard_test.go`).
 
 ## `internal/auth` — Google OAuth và session
 
@@ -206,17 +242,17 @@ hướng xuyên site, `Strict` sẽ không gửi cookie và người dùng vừa
 
 | File | Dòng | Ghi chú |
 |---|---|---|
-| `s3_repository.go` | 97 | Upload, presigned URL, kiểm tra kết nối |
-| `upload_repository.go` | 222 | Bản ghi audit `uploads`, có transaction |
-| `artwork_repository.go` | 309 | CRUD + WHERE động + phân trang + `SetFeaturedBatch` |
+| `s3_repository.go` | 121 | Upload, tải object về, presigned URL, kiểm tra kết nối |
+| `artwork_repository.go` | 342 | CRUD + WHERE động (gồm lọc `region`) + phân trang + `SetFeaturedBatch` + `DeleteBatch` |
+| `artwork_download_repository.go` | 43 | Ghi nhật ký lượt tải ảnh (bảng `artwork_downloads`) |
 | `award_repository.go` | 252 | Giải thưởng + gán/gỡ N:N + lọc theo `grade_level_id` |
-| `topic_category_repository.go` | | Nhóm chủ đề sáng tạo — CRUD, cùng mẫu `award_repository.go` |
-| `dashboard_repository.go` | 423 | Truy vấn tổng hợp + xu hướng 14 ngày, độ phủ trường, chỉ số vận hành |
+| `topic_category_repository.go` | 137 | Nhóm chủ đề sáng tạo — CRUD, cùng mẫu `award_repository.go` |
+| `dashboard_repository.go` | 491 | Truy vấn tổng hợp + xu hướng theo khoảng ngày, độ phủ trường, chỉ số vận hành |
 | `comment_repository.go` | 163 | Gồm `DeleteOwned` kiểm tra quyền sở hữu |
 | `reaction_repository.go` | 114 | `INSERT IGNORE` → idempotent |
 | `admin_user_repository.go` | 120 | Tìm/tạo theo `google_sub` |
 | `session_repository.go` | 92 | Gồm `DeleteExpired` |
-| `artwork_view_repository.go` | 69 | `RecordView` chống trùng 24 giờ |
+| `artwork_view_repository.go` | 48 | `RecordView` — mỗi lần gọi ghi 1 dòng, không chống trùng |
 | `school_repository.go` · `student_repository.go` · `grade_level_repository.go` | | Danh mục và học sinh |
 | `errors.go` | | Lỗi dùng chung tầng repository |
 | `factory.go` | 31 | **Chỉ** cho S3/upload — không dùng cho miền nghiệp vụ |
@@ -244,15 +280,13 @@ qua `?` — không bao giờ nối giá trị vào SQL.
 
 | File | Dòng | Ghi chú |
 |---|---|---|
-| `upload_service.go` | 349 | Upload đơn + upload có transaction |
-| `chunk_upload.go` | ~400 | Phiên chunk in-memory, TTL 45 phút |
-| `artwork_service.go` | 629 | Bulk upload, tạo/sửa/xoá, enrich (topic category + nhiều giải/tác phẩm + `SetFeaturedBatch`, có test ở `artwork_bulk_featured_test.go`) |
-| `award_service.go` | | CRUD giải |
-| `topic_category_service.go` | | CRUD nhóm chủ đề sáng tạo, cùng mẫu `award_service.go` |
-| `dashboard_service.go` | 95 | Gộp số liệu thành 1 DTO (có test ở `dashboard_service_test.go`) |
-| `image_resize.go` | 534 | Resize kiểu WordPress |
-| `image_optimizer.go` | 440 | Chất lượng thích ứng theo dung lượng |
-| `image_variants.go` | — | Sinh biến thể thumb/medium/large × WebP/JPEG |
+| `upload_service.go` | 251 | Upload đơn, trích S3 key từ URL, xoá object |
+| `artwork_service.go` | 754 | Bulk upload, tạo/sửa/xoá (xoá kèm object S3), xoá hàng loạt, enrich, `SetFeaturedBatch`, `ListPublishedForSitemap`, `LogDownload` |
+| `artwork_download_watermark.go` | 180 | Đóng mốc VAS vào ảnh trước khi trả cho khách tải |
+| `award_service.go` | 73 | CRUD giải |
+| `topic_category_service.go` | 80 | CRUD nhóm chủ đề sáng tạo, cùng mẫu `award_service.go` |
+| `dashboard_service.go` | 172 | Gộp số liệu thành 1 DTO, giải nghĩa khoảng ngày (có test ở `dashboard_service_test.go`) |
+| `image_variants.go` | 335 | Sinh biến thể thumb/medium/large × WebP/JPEG |
 | `constants.go` · `errors.go` · `factory.go` | | Hằng số, lỗi, factory (chỉ upload) |
 
 **Về `image_variants.go`**: encode WebP lossy qua `gen2brain/webp` (WASM + purego,
@@ -281,14 +315,12 @@ qua các hàm `*ByIDs`/`*Batch` — N+1 cho `student` từng tồn tại, đã h
 
 | File | Dòng | Phục vụ |
 |---|---|---|
-| `public_handler.go` | 560 | Toàn bộ `/api/v1/public/*` + trang chia sẻ OG |
-| `artwork_handler.go` | 404 | Quản trị tác phẩm (gồm `HandleSetFeaturedBatch`) |
-| `api_handler.go` | 369 | Upload + health |
+| `public_handler.go` | 820 | Toàn bộ `/api/v1/public/*`, trang chia sẻ OG, `/sitemap.xml`, `/robots.txt`, tải ảnh có watermark |
+| `artwork_handler.go` | 513 | Quản trị tác phẩm (gồm `HandleSetFeaturedBatch`, `HandleDeleteBatch`, `HandleDownload`) |
+| `api_handler.go` | 257 | Upload + health |
 | `admin_auth_handler.go` | 274 | Luồng OAuth + phiên |
-| `chunk_handler.go` | 237 | Upload chia phần |
-| `wp_handler.go` | 166 | Resize WordPress |
 | `award_handler.go` | 155 | Giải thưởng |
-| `topic_category_handler.go` | 137 | Nhóm chủ đề sáng tạo, cùng mẫu `award_handler.go` |
+| `topic_category_handler.go` | 140 | Nhóm chủ đề sáng tạo, cùng mẫu `award_handler.go` |
 | `error_mapper.go` | 95 | Chuẩn hoá lỗi, `sanitizeError` |
 | `meta_handler.go` | 62 | Trường + khối lớp |
 | `base_handler.go` | 54 | `SendSuccess`/`SendError` |
@@ -313,7 +345,8 @@ Ba phần:
    HTTP client AWS → S3 → DB + migration → auth → repository → service → handler.
 2. **`GetServerHandler()`** (416–605) — đăng ký route và lắp chuỗi middleware. **Đọc file
    này để biết route thật**, không tin tài liệu.
-3. **`Shutdown()`** (608–633) — dừng rate limiter, dọn chunk session, dừng cleanup, đóng DB.
+3. **`Shutdown()`** — dừng rate limiter, dừng bộ đếm chống quét (BotGuard), dừng cleanup
+   phiên đăng nhập, đóng DB.
 
 Điểm cần biết khi sửa:
 
@@ -334,12 +367,15 @@ Xem [detail_design/06-frontend.md](./detail_design/06-frontend.md) cho thiết k
 
 | Thư mục | Nội dung |
 |---|---|
-| `src/pages/public/` | 4 trang công khai + layout |
-| `src/pages/admin/` | 5 trang quản trị + layout |
-| `src/components/public/` | 22 component trang public |
-| `src/components/admin/` | 6 component quản trị |
+| `src/pages/public/` | 6 trang công khai (chủ, tiêu biểu, phòng triển lãm, bảng vàng, thư ngỏ, 404) + `PublicLayout` |
+| `src/pages/admin/` | 6 trang quản trị + `AdminLayout` + trang đăng nhập |
+| `src/components/public/` | 25 component trang public |
+| `src/components/admin/` | 13 file trong thư mục quản trị (component + kiểu dùng chung) |
 | `src/lib/` | Client API tách theo khu vực xác thực |
-| `src/hooks/` | `useAdminAuth`, `useParallaxScroll`, `useRailScroll`, `useScrollableBody` |
+| `src/hooks/` | `useAdminAuth`, `useDeviceTier`, `usePageMeta`, `useParallaxScroll`, `useRailScroll`, `useScrollableBody` |
+| `src/styles/fonts.css` | `@font-face` cho font tự phục vụ — **sinh bằng `scripts/fetch-fonts.sh`**, không sửa tay |
+| `public/fonts/` | File `woff2` của Be Vietnam Pro + Fraunces, tách theo subset `unicode-range` |
+| `public/splash.js` | Script gỡ splash — để ngoài `index.html` vì CSP cấm script nội tuyến |
 
 Điểm cần biết khi sửa:
 
@@ -347,3 +383,13 @@ Xem [detail_design/06-frontend.md](./detail_design/06-frontend.md) cho thiết k
 - Thêm route mới nhớ dùng `lazy()`, nếu không sẽ kéo ngược vào bundle chính.
 - Chỉ truy cập `visitor_token` qua `lib/visitorToken.ts`.
 - `npm run build` chạy `tsc --noEmit` trước — lỗi kiểu sẽ chặn build.
+- **Không** thêm `<script>` nội tuyến hay `<link>` stylesheet trỏ ra origin ngoài vào
+  `index.html` — CSP (`script-src 'self'`, `style-src 'self' 'unsafe-inline'`) chặn cả hai, và
+  lỗi chỉ hiện trong console trình duyệt người dùng chứ không vào log server.
+
+## `scripts/` — Tiện ích bảo trì
+
+`fetch-fonts.sh` — tải font về `web/public/fonts/` và sinh lại `web/src/styles/fonts.css`.
+
+Đổi bộ weight thì sửa biến `URL` trong script rồi chạy lại, đừng sửa `fonts.css` bằng tay:
+lần chạy sau sẽ ghi đè.

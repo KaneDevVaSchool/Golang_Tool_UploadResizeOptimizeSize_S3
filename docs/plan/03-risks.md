@@ -65,10 +65,11 @@ database tạm ít nhất một lần.
 **Khả năng**: Cao — đã đang xảy ra.
 **Ảnh hưởng**: Trung bình — tốn phí lưu trữ, gây nhầm lẫn khi đối soát.
 
-Hai nguồn sinh rác:
+Một nguồn sinh rác còn lại — **bulk upload bỏ dở**: admin đẩy ảnh lên S3 rồi đóng trình
+duyệt trước khi nhập metadata.
 
-1. **Xoá tác phẩm** — cố ý không xoá file S3 (an toàn hơn khi bấm nhầm).
-2. **Bulk upload bỏ dở** — admin đẩy ảnh lên S3 rồi đóng trình duyệt trước khi nhập metadata.
+(Nguồn còn lại trước đây — xoá tác phẩm cố ý không xoá S3 — đã hết: `DeleteArtwork` giờ xoá
+luôn object S3 khi xoá bản ghi, xem [detail_design/03-artwork-domain.md §4](../detail_design/03-artwork-domain.md).)
 
 **Dấu hiệu**: số object trên S3 nhiều hơn hẳn số dòng `artworks`.
 
@@ -81,11 +82,13 @@ Hai nguồn sinh rác:
 
 ## R5 — `artwork_views` phình to làm chậm trang 🟡
 
-**Khả năng**: Cao khi lượt truy cập tăng.
+**Khả năng**: Cao khi lượt truy cập tăng — **tăng thêm** từ khi bỏ chống trùng lượt xem
+24 giờ: mỗi lần mở lightbox (kể cả mở lại cùng tác phẩm, tải lại trang) đều ghi thêm 1 dòng,
+không còn giới hạn 1 dòng/visitor/24h.
 **Ảnh hưởng**: Trung bình — mỗi lượt xem tranh chậm dần.
 
-Bảng chỉ tăng, và truy vấn chống trùng chạy ở **mỗi lượt xem chi tiết tranh**. Đúng vào lúc
-công bố kết quả — khi lượng truy cập cao nhất — bảng cũng lớn nhất.
+Bảng chỉ tăng, không bao giờ được dọn. Đúng vào lúc công bố kết quả — khi lượng truy cập cao
+nhất — bảng cũng lớn nhất và tốc độ phình nhanh nhất.
 
 **Dấu hiệu**: `SELECT COUNT(*) FROM artwork_views` tăng nhanh; API chi tiết tranh chậm dần.
 
@@ -110,10 +113,15 @@ Khi công bố giải, nhiều phụ huynh vào cùng lúc. Ba điểm nghẽn t
 
 - [ ] Sửa P1.2 (N+1) và cân nhắc thêm cache ngắn cho bảng vàng
 - [ ] **Xem lại giới hạn rate limit** — cân nhắc nâng, vì nhiều người sau cùng một IP NAT
-- [ ] Kiểm tra Nginx truyền `X-Forwarded-For` (nếu thiếu, mọi người tính chung một IP →
-      cả trang bị khoá)
+- [ ] Kiểm tra Nginx truyền `X-Forwarded-For` **và** `TRUSTED_PROXIES` khai đúng dải proxy
+      (từ P2.16 header này chỉ được đọc khi nguồn nằm trong danh sách tin cậy — xem R12)
 - [ ] Thử tải trước với công cụ đo tải
 - [ ] Cân nhắc đặt CDN/Cloudflare trước tên miền
+
+**Đã giảm nhẹ một phần từ P2.16**: bot guard đặt ngoài rate limit chung, nên một máy quét
+bị loại trước khi kịp tiêu tốn hạn mức của những người thật cùng đi ra từ IP NAT của trường.
+Điều này **không** thay thế việc xem lại ngưỡng — nhiều người thật sau một IP vẫn cộng dồn
+vào cùng bộ đếm.
 
 ---
 
@@ -149,6 +157,10 @@ trọng nhất đã được server **tự chặn khởi động**.
 **Đang có**: rate limit 20 req/phút/IP cho thao tác ghi; ràng buộc UNIQUE chống trùng; giới
 hạn độ dài.
 
+⚠️ **Trước P2.16, giới hạn 20 req/phút này gần như vô hiệu**: `GetClientIP` đọc thẳng
+`X-Forwarded-For` do client gửi, nên chỉ cần đổi giá trị header ở mỗi request là có bộ đếm
+mới. Đã sửa — nhưng nó phụ thuộc vào `TRUSTED_PROXIES` khai đúng (xem R12).
+
 **Chưa có**: kiểm duyệt bình luận qua giao diện (P2.1), lọc từ khoá, chặn theo IP.
 
 ⚠️ **Đặc biệt nhạy cảm vì đối tượng là học sinh.** Nên có người trực theo dõi bình luận
@@ -157,15 +169,22 @@ khi cần.
 
 ---
 
-## R9 — Mất phiên upload khi triển khai 🟢
+## R9 — Watermark âm thầm không hoạt động 🟡
 
-**Khả năng**: Thấp.
-**Ảnh hưởng**: Thấp — người dùng upload lại.
+**Khả năng**: Trung bình — xảy ra mỗi khi deploy quên build `web/`.
+**Ảnh hưởng**: Trung bình — ảnh tác phẩm phát tán không có dấu bản quyền của trường, và
+không ai biết cho tới khi tình cờ mở một file tải về.
 
-Phiên chunk lưu trong bộ nhớ, mất khi khởi động lại.
+Ảnh mốc watermark đọc theo đường dẫn **tương đối** (`web/public/images/vas-white-mark.png`,
+lui về `web/dist/images/`). Thiếu file hoặc chạy sai thư mục làm việc thì khâu đóng mốc bị bỏ
+qua: chỉ ghi một dòng cảnh báo trong log, còn lượt tải vẫn trả về ảnh bình thường.
 
-**Xử lý**: triển khai vào giờ thấp điểm. Không cần sửa code — chi phí lưu phiên vào DB lớn
-hơn lợi ích.
+Đây là lựa chọn **cố ý** (fail-open): một khâu trang trí hỏng không đáng làm hỏng cả lượt
+tải của khách. Nhưng nó biến một lỗi cấu hình thành lỗi vô hình.
+
+**Xử lý**: sau mỗi lần deploy, tải một ảnh từ trang public và mở ra xem — đã đưa vào danh
+sách nghiệm thu ở [deploys/00-tu-dau-den-cuoi.md](../deploys/00-tu-dau-den-cuoi.md) giai
+đoạn I. Theo dõi log bằng `grep watermark`.
 
 ---
 
@@ -202,6 +221,54 @@ thật thay vì tin vào tài liệu phiên bản MySQL chính thức.
 
 ---
 
+## R12 — `TRUSTED_PROXIES` khai sai làm hỏng toàn bộ rate limit 🟡
+
+**Khả năng**: Trung bình — mặc định đúng cho kiến trúc hiện tại, rủi ro chỉ phát sinh khi
+đổi cách triển khai.
+**Ảnh hưởng**: Cao theo **cả hai hướng sai**.
+
+Từ P2.16, header `X-Forwarded-For` chỉ được đọc khi chặng kết nối trực tiếp nằm trong
+`TRUSTED_PROXIES`. Đó là điều bắt buộc để rate limit có ý nghĩa, nhưng nó biến một biến môi
+trường thành điểm phụ thuộc duy nhất:
+
+| Sai kiểu gì | Hậu quả |
+|---|---|
+| Khai quá rộng (vd `0.0.0.0/0`) | Mở lại đúng lỗ hổng cũ — ai cũng giả mạo được IP |
+| Để mặc định khi đặt sau Cloudflare/LB | Mọi khách gom vào **một** bộ đếm → cả trang tự khoá, đúng kịch bản R6 |
+
+**Dấu hiệu**: hàng loạt 429 trong log dù lượt truy cập không cao (khai thiếu); hoặc rate
+limit không bao giờ kích hoạt dù bị dội request (khai thừa).
+
+**Kiểm chứng nhanh**: xem log truy cập — nếu mọi dòng đều cùng một IP (thường là
+`127.0.0.1`) trong khi khách đến từ nhiều nơi, thì header đang không được đọc.
+
+**Xử lý**: giá trị mặc định `127.0.0.0/8,::1/128` đúng cho kiến trúc hiện tại (Nginx cùng
+máy). Chỉ đổi khi thật sự thêm một tầng proxy phía trước. Xem
+[deploys/02-configuration.md](../deploys/02-configuration.md).
+
+---
+
+## R13 — Không còn kiểm tra nội dung thật của file upload 🟡
+
+**Khả năng**: Thấp — cần tài khoản admin mới upload được.
+**Ảnh hưởng**: Trung bình.
+
+`ValidateFileContent` (đọc 512 byte đầu, `http.DetectContentType`, đối chiếu với đuôi file)
+trước đây **chỉ** chạy ở đường chunked. Đường đó bị gỡ ngày 2026-09-07, nên hiện không đường
+upload nào kiểm tra nội dung thật — file đặt tên `.jpg` chứa nội dung bất kỳ vẫn lên S3.
+
+Đây là **hồi quy do dọn dẹp**, không phải thiếu sót từ đầu: trước đó lớp phòng thủ có tồn
+tại ở một nửa hệ thống, giờ mất hẳn. Đáng ghi nhận đúng như vậy thay vì coi là chuyện cũ.
+
+Rủi ro thực tế còn thấp vì ba lý do cộng lại: bucket chỉ phục vụ ảnh tĩnh và không thực thi
+nội dung; chỉ admin đã đăng nhập mới upload được; và khâu sinh biến thể sẽ lỗi với file không
+phải ảnh (tuy chỉ ghi log chứ không chặn).
+
+**Xử lý**: đưa `ValidateFileContent` vào đường upload đơn — xem P1.4 trong
+[02-roadmap.md](./02-roadmap.md). Việc nhỏ, hàm đã có sẵn, chỉ cần gọi đúng chỗ.
+
+---
+
 ## Bảng tổng hợp
 
 | Mã | Rủi ro | Mức | Xử lý |
@@ -214,9 +281,11 @@ thật thay vì tin vào tài liệu phiên bản MySQL chính thức.
 | R6 | Đỉnh truy cập | 🟡 | P1.2 + xem lại rate limit |
 | R7 | Cấu hình sai | 🟡 | Danh sách kiểm tra |
 | R8 | Lạm dụng ẩn danh | 🟡 | P2.1 + trực theo dõi |
-| R9 | Mất phiên upload | 🟢 | Chấp nhận |
+| R9 | Watermark âm thầm không hoạt động | 🟡 | Kiểm tra ở nghiệm thu sau mỗi lần deploy |
 | R10 | Migration song song | 🟢 | Chấp nhận ở quy mô hiện tại |
 | R11 | `ADD COLUMN IF NOT EXISTS` lỗi cú pháp MySQL 8.1 | 🟡 | Đã sửa 015/016, tránh cú pháp này về sau |
+| R12 | `TRUSTED_PROXIES` khai sai | 🟡 | Mặc định đúng cho kiến trúc hiện tại; kiểm lại nếu thêm proxy |
+| R13 | Không còn kiểm tra magic byte | 🟡 | P1.4 — gọi `ValidateFileContent` ở upload đơn |
 
 ## Ba việc cần làm trước khi công bố
 

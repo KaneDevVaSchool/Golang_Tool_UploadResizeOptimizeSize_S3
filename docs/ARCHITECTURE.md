@@ -5,17 +5,22 @@
 
 ## 1. Hệ thống này là gì
 
-Một service Go duy nhất phục vụ **ba nhóm người dùng khác nhau** trên cùng một cổng HTTP:
+Một service Go duy nhất phục vụ **hai nhóm người dùng qua trình duyệt**, cộng một nhóm
+client máy-với-máy, trên cùng một cổng HTTP:
 
 | Khu vực | Đường dẫn | Người dùng | Xác thực |
 |---|---|---|---|
 | Trang public "20 năm VASchools" | `/`, `/tac-pham-tieu-bieu`, `/phong-trien-lam`, `/bang-vang` | Phụ huynh, học sinh, khách | Không — ẩn danh hoàn toàn |
 | Admin panel | `/admin/*` | Ban tổ chức hội thi | Google OAuth + session cookie |
-| Công cụ upload nội bộ | `/upload` | Nhân viên kỹ thuật | API key (tuỳ cấu hình) |
+| API upload S3 | `/api/v1/upload*` | Client máy-với-máy (không qua trình duyệt) | API key (tuỳ cấu hình) |
 
-Ba khu vực dùng chung **một binary, một database, một bucket S3**, phân biệt bằng route và
-tầng middleware chứ không tách service. Lựa chọn này phù hợp quy mô hiện tại (một sự kiện,
-vài nghìn tác phẩm) và giữ chi phí vận hành ở mức một VPS.
+Hai khu vực trình duyệt dùng chung **một binary, một database, một bucket S3**, phân biệt
+bằng route và tầng middleware chứ không tách service. Lựa chọn này phù hợp quy mô hiện tại
+(một sự kiện, vài nghìn tác phẩm) và giữ chi phí vận hành ở mức một VPS.
+
+⚠️ Trang frontend `/upload` (`UploadTool.tsx` — giao diện thao tác trực tiếp API trên bằng
+tay) đã bị xoá; endpoint `/api/v1/upload*` **không đổi**, chỉ không còn UI nội bộ để gọi thủ
+công qua trình duyệt. Xem [detail_design/06-frontend.md](./detail_design/06-frontend.md).
 
 ## 2. Sơ đồ tầng
 
@@ -75,18 +80,19 @@ Container dựng hệ thống theo **năng lực sẵn có**, không fail toàn 
 |---|---|
 | `DATABASE_ENABLED=false` | Toàn bộ admin + domain + public API **không được mount**. Upload S3 thuần vẫn chạy. |
 | Thiếu `GOOGLE_CLIENT_ID/SECRET` | `AdminAuthHandler` **vẫn được tạo**, `/auth/google/*` trả 503 có thông báo rõ thay vì 404. |
-| `WORDPRESS_ENABLED=false` | `/api/v1/wp-upload` và `/wp-content/uploads/` không mount. |
-| Chưa build `web/dist` | `/` trả JSON info endpoint thay vì lỗi — tiện khi dev backend riêng. |
+| Chưa build `web/dist` | `/` trả JSON info endpoint thay vì lỗi — tiện khi dev backend riêng. ⚠️ Watermark ảnh tải về cũng đọc mốc từ đây, nên thiếu `web/dist` thì ảnh public tải về **không có watermark** (chỉ ghi log, không báo lỗi). |
+| `BOT_GUARD_ENABLED=false` | Không chặn công cụ tải trọn site; rate limit thường vẫn còn. |
+| `TRUSTED_PROXIES` rỗng | Bỏ qua `X-Forwarded-For`, mọi giới hạn tính theo địa chỉ kết nối trực tiếp — sau Nginx nghĩa là **toàn bộ khách gộp thành một IP**. |
 
 Chủ ý: người vận hành dựng dần từng phần (chạy upload trước, thêm DB sau, thêm OAuth cuối)
 mà không lần nào gặp màn hình trắng không rõ nguyên nhân.
 
-`container.go:187-202` (admin auth) và `container.go:288-312` (domain) là hai khối
-`if db != nil` thể hiện quy tắc này.
+Hai khối `if db != nil` trong `NewContainer` (admin auth và domain) là
+nơi thể hiện quy tắc này.
 
 ### Tự dò region của bucket
 
-`resolveBucketRegion()` (`container.go:661`) hỏi S3 xem bucket thật nằm ở region nào và
+`resolveBucketRegion()` hỏi S3 xem bucket thật nằm ở region nào và
 **ghi đè** `AWS_REGION` nếu lệch. Lý do: cấu hình sai region là lỗi khó chẩn đoán nhất khi
 deploy (upload báo lỗi ký request mơ hồ). Bỏ qua bước này khi dùng endpoint tuỳ chỉnh
 (MinIO/LocalStack) vì `GetBucketLocation` không áp dụng.
@@ -99,11 +105,15 @@ Middleware được áp theo thứ tự **áp sau = nằm ngoài**. Request đi 
 Request
   │
   ├─▶ ConcurrencyLimit   semaphore toàn server, chờ tối đa ACQUIRE_TIMEOUT
+  ├─▶ BotGuard           chặn công cụ tải trọn site; bot tìm kiếm được miễn
   ├─▶ RateLimit          100 req/phút/IP (mặc định)
+  ├─▶ BodyLimit          1MB cho JSON, UPLOAD_ABSOLUTE_MAX_MB cho đường upload
   ├─▶ CSRF               double-submit cookie; bỏ qua GET/HEAD/OPTIONS
   ├─▶ Metrics            đếm request/latency/status
   ├─▶ Logging            ghi log kèm request ID
-  ├─▶ RequestID          sinh/nhận X-Request-ID  ◀── trong cùng, chạy đầu tiên
+  ├─▶ RequestID          sinh/nhận X-Request-ID
+  ├─▶ SecurityHeaders    CSP, Permissions-Policy, COOP/CORP, HSTS có điều kiện
+  ├─▶ Gzip               nén text/JSON > 1KB  ◀── trong cùng, sát mux nhất
   │
   ▼
 mux gốc
@@ -111,22 +121,32 @@ mux gốc
   │                                                        ├── /api/v1/upload*      công khai theo API key
   │                                                        ├── /api/v1/admin/*   ─▶ [AdminAuth] session
   │                                                        ├── /api/v1/public/*  ─▶ [RateLimit 20/phút cho POST|DELETE]
+  │                                                        │                        [RateLimit 30/phút cho GET .../download]
   │                                                        └── /api/v1/metrics   ─▶ [RateLimit 10/phút]
   ├── /auth/google/*   luồng redirect OAuth — CỐ Ý nằm ngoài /api để không dính CORS/API-key
   ├── /chia-se/tac-pham/{id}   HTML có Open Graph, render server-side
+  ├── /robots.txt              text/plain, Disallow /admin /api /auth, trỏ Sitemap
+  ├── /sitemap.xml             XML, 4 URL tĩnh + tác phẩm đã publish (qua /chia-se/tac-pham/{id})
   ├── /wp-content/uploads/*    static, đã chặn liệt kê thư mục
   └── /                        SPA React, fallback index.html
 ```
 
-Ba điểm đáng chú ý về thiết kế chain này:
+Năm điểm đáng chú ý về thiết kế chain này:
 
-**Rate limit phân tầng.** Có ba bộ đếm độc lập: toàn cục (100/phút), metrics (10/phút),
-và ghi dữ liệu public (20/phút). Bộ thứ ba chỉ áp cho `POST`/`DELETE` — người xem lướt
-trang (toàn `GET`) không bao giờ chạm giới hạn này, nhưng người spam bình luận thì có.
-Xem `container.go:515-527`.
+**Rate limit phân tầng.** Bốn bộ đếm độc lập: toàn cục (100/phút), metrics (10/phút), ghi
+dữ liệu public (20/phút), và tải ảnh gốc (30/phút). Hai bộ cuối chỉ áp theo method/đường
+dẫn — người xem lướt trang (toàn `GET` thường) không bao giờ chạm tới, nhưng người spam
+bình luận hoặc gom tranh hàng loạt thì có.
+
+**BotGuard nằm ngoài RateLimit.** Có chủ đích: máy quét bị loại **trước** khi kịp tiêu tốn
+hạn mức chung của những người thật cùng đi ra từ một IP NAT — trường học dùng chung một IP
+ra ngoài. Đảo thứ tự hai lớp này sẽ khiến một công cụ tải site làm cạn hạn mức của cả trường.
+
+**BodyLimit nằm ngoài CSRF.** Cũng có chủ đích: thân request quá khổ bị cắt trước khi bất
+kỳ lớp nào đọc nó, kể cả lớp đọc form của CSRF.
 
 **Logout không qua AdminAuth.** `/api/v1/admin/auth/logout` đăng ký *ngoài*
-`AdminAuthMiddleware` (`container.go:484`). Nếu session đã hết hạn phía server, request
+`AdminAuthMiddleware` (trong `GetServerHandler`). Nếu session đã hết hạn phía server, request
 logout vẫn phải đi lọt để xoá cookie phía client — trả 401 cho người chỉ muốn đăng xuất là
 vô nghĩa.
 
@@ -153,22 +173,20 @@ multipart/form-data
 
 Chi tiết đầy đủ: [detail_design/02-upload-pipeline.md](./detail_design/02-upload-pipeline.md).
 
-### 5.2 Upload chunked — file đến 200MB
+### 5.2 Tải ảnh tác phẩm về
 
 ```text
-POST /upload/init      → ChunkSession (UUID), tính totalChunks, tạo uploads/chunks/<id>/
-POST /upload/chunk     → ghi part_%06d, kiểm tra kích thước từng phần khớp kỳ vọng
-POST /upload/complete  → đủ chunk? → ghép theo thứ tự → ValidateFileContent (magic byte)
-                         → upload S3 → dọn session + thư mục
-POST /upload/abort     → huỷ, xoá chunk đã nhận
+GET /api/v1/public/artworks/{id}/download   → chỉ tác phẩm đã xuất bản
+GET /api/v1/admin/artworks/{id}/download    → mọi tác phẩm, kể cả đang ẩn
+  → S3Repository.GetObject (stream qua backend, không redirect)
+  → nhánh public: đóng watermark VAS vào góc dưới phải
+  → ghi 1 dòng vào artwork_downloads (lỗi ghi log chỉ cảnh báo, không chặn tải)
+  ← Content-Disposition: attachment
 ```
 
-Session lưu **in-memory** (`map[string]*ChunkSession`) — cố ý, vì chunk session chỉ sống
-trong một lần upload ngắn. Restart server làm mất session dở dang, chấp nhận được. Ngược
-lại, session admin lưu DB để sống sót qua restart. Hai lựa chọn trái ngược nhau nhưng đều
-đúng với vòng đời tương ứng.
-
-Tự dọn: TTL 45 phút, quét mỗi 5 phút, trần 64 session đồng thời.
+Cả hai đi qua backend thay vì trả link S3: cùng origin nên không phụ thuộc cấu hình CORS của
+bucket, và đó là chỗ duy nhất chèn được watermark cùng nhật ký. Đổi lại, băng thông ảnh đi
+qua VPS chứ không thẳng từ S3 về máy khách.
 
 ### 5.3 Xem tác phẩm trên trang public
 
@@ -176,9 +194,9 @@ Tự dọn: TTL 45 phút, quét mỗi 5 phút, trần 64 session đồng thời.
 GET /api/v1/public/artworks/{id}?visitor_token=<uuid>
   → ArtworkService.GetArtwork → enrich (học sinh/trường/khối/giải/reaction/comment)
   → nếu artwork chưa publish → 404 (không lộ tồn tại)
-  → ArtworkViewRepository.RecordView: đã xem trong 24h chưa?
-      chưa → ghi artwork_views + tăng view_count
-      rồi  → bỏ qua, không tăng
+  → ArtworkViewRepository.RecordView: ghi artwork_views + tăng view_count
+      mỗi lần gọi là một lượt, không còn chống trùng theo thời gian
+  → đọc lại artwork từ DB để trả về view_count vừa cập nhật
   ← ArtworkWithMeta đầy đủ
 ```
 
@@ -189,14 +207,15 @@ GET /api/v1/public/artworks/{id}?visitor_token=<uuid>
        │
        │ created_by
        ▼
-   artworks ◀──N:1── students ──N:1──▶ schools     (5 cơ sở → 3 region)
+   artworks ◀──N:1── students ──N:1──▶ schools     (16 cơ sở → 3 region)
        │                    └────N:1──▶ grade_levels (12 khối → 2 cấp)
        │
        ├──N:N──▶ awards        (qua artwork_awards)
        ├──1:N──▶ artwork_reactions   (ẩn danh, visitor_token)
        ├──1:N──▶ artwork_comments    (ẩn danh, visitor_token)
-       ├──1:N──▶ artwork_views       (chống đếm trùng 24h)
-       └──N:1──▶ uploads             (lịch sử upload, nullable)
+       ├──1:N──▶ artwork_views       (mỗi lần mở là 1 dòng)
+       ├──1:N──▶ artwork_downloads   (nhật ký tải ảnh gốc)
+       └──N:1──▶ uploads             (bảng chết, không còn ghi)
 ```
 
 `artworks` giữ **bản sao** `school_id` và `grade_level_id` dù đã có qua `students`. Đây là
@@ -212,9 +231,9 @@ Chi tiết từng bảng: [detail_design/01-database.md](./detail_design/01-data
 |---|---|---|
 | Một binary phục vụ cả 3 khu vực | Quy mô một sự kiện; vận hành 1 VPS; không cần điều phối service | Không scale riêng từng khu vực được |
 | Session admin lưu DB | Sống sót qua restart/deploy — admin không bị đá ra mỗi lần cập nhật | Mỗi request admin tốn 1 query |
-| Chunk session in-memory | Vòng đời ngắn, không đáng ghi DB | Mất session dở khi restart |
 | Tương tác public ẩn danh | Yêu cầu nghiệp vụ: phụ huynh xem là thả tim được ngay, không đăng ký | Chống lạm dụng chỉ dựa vào rate limit + visitor_token |
-| Xoá tác phẩm **không** xoá file S3 | Bấm nhầm không mất dữ liệu vĩnh viễn | S3 tích rác, cần dọn định kỳ (xem [plan/03-risks.md](./plan/03-risks.md)) |
+| Xoá tác phẩm **xoá luôn** file S3 | Không để bucket tích rác không ai dọn; xoá S3 trước, hỏng thì giữ nguyên bản ghi DB nên không có bản ghi trỏ vào ảnh đã mất | Bấm nhầm là mất ảnh vĩnh viễn — đổi từ quyết định ngược lại ngày 2026-09-07 |
+| Ảnh tải về đi qua backend | Chỗ duy nhất đóng được watermark và ghi nhật ký; không phụ thuộc CORS của bucket | Băng thông ảnh dồn qua VPS |
 | Migration tự chạy lúc khởi động | Deploy một bước, không quên chạy migrate | Cần cẩn trọng khi có nhiều instance |
 | `enrichArtworks` batch query | Tránh N+1 khi hiển thị danh sách kèm giải/reaction | Vẫn còn 1 query/artwork cho student (xem nợ kỹ thuật) |
 
@@ -225,6 +244,6 @@ Thứ tự trong `main.go:57-70` là quan trọng và **không được đảo**
 1. Nhận `SIGINT`/`SIGTERM`.
 2. `server.Shutdown(ctx)` — ngừng nhận request mới, chờ request đang chạy xong (tối đa
    `SERVER_SHUTDOWN_TIMEOUT_SECONDS`).
-3. `container.Shutdown()` — dừng rate limiter, dọn chunk session, dừng cleanup session, đóng DB.
+3. `container.Shutdown()` — dừng rate limiter, dừng BotGuard, dừng cleanup session, đóng DB.
 
 Đảo ngược hai bước cuối sẽ khiến request đang xử lý mất kết nối DB/S3 giữa chừng.

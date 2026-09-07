@@ -46,9 +46,10 @@ Tiền tố log giúp lọc nhanh:
 ```bash
 grep '\[Container\]'    storage/logs/app-$(date +%F).log   # khởi động, tắt máy
 grep '\[UploadService\]' storage/logs/app-$(date +%F).log  # upload đơn
-grep '\[ChunkUpload\]'   storage/logs/app-$(date +%F).log  # upload chia phần
 grep '\[AdminAuth\]'     storage/logs/app-$(date +%F).log  # đăng nhập, từ chối truy cập
 grep '\[ArtworkService\]' storage/logs/app-$(date +%F).log # nghiệp vụ tác phẩm
+grep '\[BotGuard\]'      storage/logs/app-$(date +%F).log  # chặn công cụ tải trọn site
+grep 'watermark'         storage/logs/app-$(date +%F).log  # cảnh báo không tìm thấy ảnh mốc
 ```
 
 Mọi dòng log kèm request ID để lần theo một request qua nhiều tầng.
@@ -137,8 +138,9 @@ sudo journalctl -u s3-upload-tool -n 50 --no-pager
 | `production requires an explicit CORS_ORIGINS...` | `CORS_ORIGINS=*` | Ghi rõ tên miền |
 | `failed to initialize database` | MySQL chưa chạy / sai thông tin đăng nhập | `systemctl status mysql`, kiểm tra `DATABASE_URL` |
 | `failed to run database migrations` | Thiếu quyền hoặc SQL lỗi | Kiểm tra quyền của `vasapp` trên database |
-| `invalid WordPress base URL` | Thiếu `http://`/`https://` | Sửa `WORDPRESS_BASE_URL` |
 | `bind: address already in use` | Cổng 8080 đã bị chiếm | `sudo lsof -i :8080` |
+| `TRUSTED_PROXIES có giá trị không hợp lệ` | Sai định dạng CIDR trong `.env` | Sửa thành dạng `127.0.0.1/32`; app vẫn chạy nhưng bỏ qua dòng sai |
+| `không đọc được ảnh mốc watermark` | Chạy sai thư mục, hoặc chưa build `web/` | Kiểm tra `WorkingDirectory` của systemd; chạy `npm run build` trong `web/` |
 
 ### Nginx trả 502
 
@@ -174,7 +176,9 @@ Theo thứ tự khả năng:
 |---|---|---|
 | 413 từ Nginx | `client_max_body_size` nhỏ hơn file | Nâng trong vhost, phải ≥ `UPLOAD_ABSOLUTE_MAX_MB` |
 | Ngắt kết nối khi upload file lớn | `proxy_read_timeout` quá ngắn | Nâng lên `300s` |
-| `FILE_TOO_LARGE` từ ứng dụng | Vượt `UPLOAD_MAX_SIZE_MB` | Dùng đường chunked hoặc nâng giới hạn |
+| `FILE_TOO_LARGE` từ ứng dụng | Vượt `UPLOAD_MAX_SIZE_MB` | Nâng `UPLOAD_MAX_SIZE_MB` (và `client_max_body_size` của Nginx cho khớp) |
+| Ảnh tải về không có watermark | Chạy sai thư mục hoặc chưa build `web/` | Xem dòng cảnh báo `watermark` trong log — lỗi này **không** làm hỏng lượt tải nên dễ bỏ sót |
+| Khách bị chặn 403 `AUTOMATED_ACCESS_BLOCKED` | BotGuard nhận nhầm | Kiểm tra `TRUSTED_PROXIES` trước tiên: sai dòng đó thì mọi khách gộp thành một IP và cùng vượt ngưỡng |
 | Lỗi ký request S3 | Sai region/khoá | Xem log `[Container]` dòng region đã dò được |
 | `403` khi xem ảnh | Bucket chưa mở quyền đọc | Xem [S3-PUBLIC-READ.md](../S3-PUBLIC-READ.md) |
 | Ảnh hiển thị một lúc rồi hỏng | Đang bật presigned URL | Đặt `S3_USE_PRESIGNED_URL=false` |
@@ -210,11 +214,24 @@ nhiều sẽ làm cả trang bị khoá với tất cả mọi người.
 
 ## 5. Quay lui
 
+Cách nhanh nhất là đổi lại binary đã giữ từ lần deploy trước — không cần build lại:
+
+```bash
+cd /opt/s3-upload-tool
+sudo systemctl stop s3-upload-tool
+sudo -u appuser cp server.prev server
+sudo systemctl start s3-upload-tool
+curl -sf http://127.0.0.1:8080/api/v1/health && echo OK
+```
+
+Nếu cần quay lui cả mã nguồn và build lại, xem giai đoạn K trong
+[00-tu-dau-den-cuoi.md](./00-tu-dau-den-cuoi.md):
+
 ```bash
 cd /opt/s3-upload-tool
 git log --oneline -10
-git checkout <commit-ổn-định>
-sudo bash deploy/deploy.sh
+sudo -u appuser git checkout <commit-ổn-định>
+# rồi build lại theo H1-H3 và restart service
 ```
 
 ⚠️ **Migration không quay lui tự động.** Không có cơ chế `down`. Nếu bản mới đã thêm bảng/cột
@@ -246,8 +263,10 @@ DELETE FROM artwork_views WHERE viewed_at < NOW() - INTERVAL 2 DAY;
 
 Chạy vào giờ thấp điểm; nếu bảng đã rất lớn, xoá theo lô để tránh khoá bảng lâu.
 
-**Ảnh mồ côi trên S3** phát sinh từ hai nguồn: admin xoá tác phẩm (file cố ý giữ lại), và
-bulk upload bị bỏ dở giữa chừng. Cách rà soát an toàn:
+**Ảnh mồ côi trên S3** giờ chỉ còn **một** nguồn: bulk upload bị bỏ dở giữa chừng (admin đẩy
+ảnh lên S3 rồi đóng trình duyệt trước khi nhập thông tin tác phẩm). Nguồn thứ hai trước đây —
+xoá tác phẩm cố ý giữ lại file — đã hết từ 2026-09-07: `DeleteArtwork` nay xoá cả object S3
+(ảnh gốc, mọi biến thể và thumbnail) trước khi xoá bản ghi. Cách rà soát an toàn:
 
 ```sql
 SELECT s3_key FROM artworks;   -- xuất ra file, đối chiếu với danh sách object trên S3
