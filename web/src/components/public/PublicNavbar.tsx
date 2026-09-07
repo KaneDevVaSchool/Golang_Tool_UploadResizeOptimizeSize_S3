@@ -38,12 +38,23 @@ export function PublicNavbar() {
   return (
     <header className={`public-navbar${scrolled ? " public-navbar--scrolled" : ""}`}>
       <div className="public-navbar-inner">
-        <NavLink to="/" className="public-navbar-brand" onClick={() => setOpen(false)}>
-          <img className="public-navbar-brand-mark" src="/images/vas-wordmark-stacked.png" alt="Vietnam America Schools" />
-          <span className="public-navbar-title">
+        <div className="public-navbar-brand">
+          {/* Logo trỏ ra website trường, còn tiêu đề mới về trang chủ triển lãm:
+              hai đích khác nhau nên phải là hai thẻ <a> riêng, không lồng nhau. */}
+          <a
+            href="https://vaschools.edu.vn/vi/"
+            target="_blank"
+            rel="noreferrer"
+            className="public-navbar-brand-link"
+            aria-label="Website Trường Quốc tế Việt Mỹ VAS"
+            onClick={() => setOpen(false)}
+          >
+            <img className="public-navbar-brand-mark" src="/images/vas-wordmark-stacked.png" alt="Vietnam America Schools" />
+          </a>
+          <NavLink to="/" className="public-navbar-title" onClick={() => setOpen(false)}>
             <span className="public-navbar-title-text">Sắc Màu VASchools</span>
-          </span>
-        </NavLink>
+          </NavLink>
+        </div>
 
         <nav className="public-navbar-links" aria-label="Điều hướng triển lãm">
           {NAV_LINKS.map((link) => (
