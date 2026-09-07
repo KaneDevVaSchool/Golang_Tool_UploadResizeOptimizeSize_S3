@@ -16,11 +16,15 @@ func TestSecurityHeaders_DatHeaderCoBan(t *testing.T) {
 		"X-Frame-Options":              "SAMEORIGIN",
 		"Referrer-Policy":              "strict-origin-when-cross-origin",
 		"Cross-Origin-Resource-Policy": "same-origin",
+		"Permissions-Policy":           "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
 	}
 	for k, v := range want {
 		if got := w.Header().Get(k); got != v {
 			t.Errorf("%s = %q, mong đợi %q", k, got, v)
 		}
+	}
+	if strings.Contains(w.Header().Get("Permissions-Policy"), "interest-cohort") {
+		t.Fatal("Permissions-Policy không được còn interest-cohort — Chrome đã gỡ FLoC và log lỗi console")
 	}
 }
 

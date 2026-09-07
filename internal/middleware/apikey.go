@@ -16,15 +16,7 @@ func APIKeyAuth(apiKey string) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Health probes must work without credentials (load balancer / k8s).
-			if r.URL.Path == "/api/v1/health" {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			// Trang public (khách ẩn danh xem triển lãm) không được có API key —
-			// yêu cầu key ở đây coi như khoá cả trang public ra khỏi Internet.
-			if strings.HasPrefix(r.URL.Path, "/api/v1/public/") {
+			if isAPIKeyExempt(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -49,4 +41,27 @@ func APIKeyAuth(apiKey string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// isAPIKeyExempt: các đường không dùng X-API-Key.
+//
+// API key chỉ bảo vệ công cụ upload cũ (/api/v1/upload, /api/v1/metrics).
+// Trang public, bộ lọc metadata, và khu admin (session cookie Google OAuth)
+// nếu bị đòi key thì trình duyệt không có header đó → 401 hàng loạt, admin
+// không vào được dù đã đăng nhập, phòng triển lãm mất khối lớp/chủ đề.
+func isAPIKeyExempt(path string) bool {
+	if path == "/api/v1/health" {
+		return true
+	}
+	if strings.HasPrefix(path, "/api/v1/public/") {
+		return true
+	}
+	if strings.HasPrefix(path, "/api/v1/admin/") {
+		return true
+	}
+	switch path {
+	case "/api/v1/schools", "/api/v1/grade-levels", "/api/v1/awards", "/api/v1/topic-categories":
+		return true
+	}
+	return false
 }

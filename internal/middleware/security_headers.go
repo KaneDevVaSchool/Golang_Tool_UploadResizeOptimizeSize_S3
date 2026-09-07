@@ -42,8 +42,10 @@ func SecurityHeadersMiddleware(cfg SecurityHeadersConfig) func(http.Handler) htt
 
 			// Khoá sẵn các API trình duyệt mà trang này không bao giờ dùng, để
 			// một đoạn script chèn được vào cũng không xin được quyền.
+			// Không ghi interest-cohort: Chrome đã gỡ FLoC, ghi vào đây chỉ
+			// làm console đỏ "Unrecognized feature: 'interest-cohort'".
 			setIfAbsent(h, "Permissions-Policy",
-				"camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()")
+				"camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 
 			// Chặn trình duyệt cũ đọc tài nguyên của site này từ ngữ cảnh khác.
 			setIfAbsent(h, "Cross-Origin-Resource-Policy", "same-origin")

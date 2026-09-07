@@ -1,4 +1,27 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(ssh -o BatchMode=yes -o ConnectTimeout=10 khoana-trienlamtranh \"whoami && hostname\")",
+      "Bash(ssh -o BatchMode=yes khoana-trienlamtranh \"sudo -n whoami 2>&1\")",
+      "Bash(ssh khoana-trienlamtranh ' *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code} \\(time: %{time_total}s\\)\\\\n\" --max-time 15 https://vaschools.edu.vn/)",
+      "Bash(curl -s -o /dev/null -w \"sis: HTTP %{http_code}\\\\n\" --max-time 15 https://sis.vaschools.edu.vn/)",
+      "Bash(curl -s -o /dev/null -w \"lms: HTTP %{http_code}\\\\n\" --max-time 15 https://lms.vaschools.edu.vn/)",
+      "Bash(nslookup sis.vaschools.edu.vn)",
+      "Bash(curl -s --max-time 10 --resolve trienlamtranh.vaschools.edu.vn:443:115.73.210.29 https://trienlamtranh.vaschools.edu.vn/api/v1/health)",
+      "Bash(curl -s -o /dev/null -w \"public/artworks: HTTP %{http_code}\\\\n\" --max-time 10 --resolve trienlamtranh.vaschools.edu.vn:443:115.73.210.29 https://trienlamtranh.vaschools.edu.vn/api/v1/public/artworks)",
+      "Bash(curl -s -o /dev/null -w \"upload \\(no key\\): HTTP %{http_code}\\\\n\" --max-time 10 --resolve trienlamtranh.vaschools.edu.vn:443:115.73.210.29 https://trienlamtranh.vaschools.edu.vn/api/v1/upload)",
+      "Bash(curl -s -o /dev/null -w \"homepage: HTTP %{http_code}\\\\n\" --max-time 10 --resolve trienlamtranh.vaschools.edu.vn:443:115.73.210.29 https://trienlamtranh.vaschools.edu.vn/)",
+      "Bash(curl -s -o /dev/null -w \"http redirect: HTTP %{http_code}\\\\n\" --max-time 10 --resolve trienlamtranh.vaschools.edu.vn:80:115.73.210.29 http://trienlamtranh.vaschools.edu.vn/)",
+      "Bash(ipconfig /flushdns)",
+      "Bash(cmd.exe /c \"ipconfig /flushdns\")",
+      "Bash(cmd.exe /c \"ipconfig /flushdns 2>&1\")",
+      "Bash(echo \"---exit: $?---\")",
+      "Bash(powershell.exe -NoProfile -Command \"Clear-DnsClientCache; Write-Output 'DNS cache đã xóa'\")",
+      "Bash(ssh -o BatchMode=yes -o ConnectTimeout=10 trienlamtranh 'curl -s -o /dev/null -w '\\\\''internal 8090 -> HTTP %{http_code}\\\\n'\\\\'' --max-time 5 http://127.0.0.1:8090/api/v1/health *)",
+      "Bash(ssh -o BatchMode=yes -o ConnectTimeout=15 -v trienlamtranh \"echo OK\")"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
