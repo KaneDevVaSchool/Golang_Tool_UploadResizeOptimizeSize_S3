@@ -353,7 +353,11 @@ html.scrollable-page {
   position: relative;
   width: min(52rem, 62vw);
   aspect-ratio: 1373 / 960;
+  /* background-logo.webp trước (nhẹ hơn PNG gốc ~38%), url() thường ngay
+     sau làm fallback cho trình duyệt chưa hỗ trợ image-set() - khai báo lạ
+     bị bỏ qua, khai báo hợp lệ trước đó vẫn còn hiệu lực. */
   background-image: url("/images/background-logo.png");
+  background-image: image-set(url("/images/background-logo.webp") type("image/webp"), url("/images/background-logo.png") type("image/png"));
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
@@ -3161,6 +3165,23 @@ html.scrollable-page {
   color: var(--vas-text-muted);
 }
 
+/* Số bình luận là <button> (mở modal kiểm duyệt) trong khi lượt xem vẫn là
+   <span> tĩnh - reset để trông giống nhau, chỉ đổi màu khi hover. */
+.artworks-stat-comment-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.artworks-stat-comment-btn:hover {
+  color: var(--vas-info);
+}
+.artworks-stat-comment-btn:hover svg {
+  color: var(--vas-info);
+}
+
 .reaction-icons {
   display: flex;
   flex-wrap: wrap;
@@ -3421,6 +3442,110 @@ html.scrollable-page {
   .artwork-modal-preview {
     min-height: 12rem;
   }
+}
+
+/* Modal kiểm duyệt bình luận (ArtworkCommentsModal) - dùng chung khung
+   .artwork-modal-* ở trên, hẹp hơn ArtworkEditModal vì không có cột ảnh. */
+.comments-modal-panel {
+  width: min(40rem, calc(100vw - 2.5rem));
+}
+
+.comments-modal-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1rem;
+  color: var(--vas-text-muted);
+  font-size: 0.85rem;
+}
+
+.comments-modal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.comments-modal-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--vas-border);
+  border-radius: var(--vas-radius-sm);
+  background: var(--vas-surface);
+}
+/* Bình luận đã ẩn: làm mờ nội dung để admin phân biệt ngay trong danh sách,
+   không phải đọc badge "Đã ẩn" mới biết. */
+.comments-modal-item.is-hidden {
+  background: var(--vas-surface-muted);
+  opacity: 0.65;
+}
+
+.comments-modal-item-body {
+  flex: 1;
+  min-width: 0;
+}
+.comments-modal-item-body p {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: var(--vas-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.comments-modal-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+.comments-modal-item-head strong {
+  color: var(--vas-text);
+}
+.comments-modal-item-date {
+  font-size: 0.72rem;
+  color: var(--vas-text-muted);
+}
+.comments-modal-item-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--vas-danger);
+  background: color-mix(in srgb, var(--vas-danger) 12%, transparent);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+}
+
+.comments-modal-toggle-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--vas-border);
+  border-radius: var(--vas-radius-sm);
+  background: var(--vas-surface);
+  color: var(--vas-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.comments-modal-toggle-btn:hover:not(:disabled) {
+  background: var(--vas-surface-muted);
+}
+.comments-modal-toggle-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.comments-modal-toggle-btn.is-hidden {
+  color: var(--vas-info);
+  border-color: var(--vas-info);
 }
 
 /* Form 2 cột dùng chung (bulk-upload edit + modal edit). Gap hàng nhỏ hơn

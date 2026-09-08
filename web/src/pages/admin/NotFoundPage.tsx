@@ -1,6 +1,7 @@
 import { LayoutDashboard } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { webpOf } from "../../lib/staticImage";
 
 /**
  * 404 trong khu quản trị - render bên trong AdminLayout (sidebar + header
@@ -15,7 +16,10 @@ export default function AdminNotFoundPage() {
       <AdminPageHeader title="Không tìm thấy trang" subtitle="Đường dẫn này không tồn tại trong khu quản trị" />
 
       <div className="admin-not-found">
-        <img className="admin-not-found-mascot" src="/images/vas-mascot-wave.png" alt="" aria-hidden />
+        <picture>
+          <source srcSet={webpOf("/images/vas-mascot-wave.png")} type="image/webp" />
+          <img className="admin-not-found-mascot" src="/images/vas-mascot-wave.png" alt="" aria-hidden />
+        </picture>
         <p className="admin-not-found-code">404</p>
         <h2 className="admin-not-found-title">Trang bạn tìm không có ở đây</h2>
         <p className="admin-not-found-text">

@@ -28,6 +28,7 @@ import { createPortal } from "react-dom";
 import type { ArtworkWithMeta } from "../../lib/artworkApi";
 import { artworkImageURL, artworkPictureSources } from "../../lib/artworkImage";
 import { recordArtworkView, type ReactionCounts } from "../../lib/publicApi";
+import { webpOf } from "../../lib/staticImage";
 import { toast } from "../../lib/toastBus";
 import { CommentBox } from "./CommentBox";
 import { ReactionPicker } from "./ReactionPicker";
@@ -598,13 +599,16 @@ export function PublicLightbox({
                       </div>
 
                       <div className="public-lightbox-mascot-note">
-                        <motion.img
-                          src="/images/vas-mascot-wave.png"
-                          alt=""
-                          aria-hidden
-                          animate={{ y: [0, -5, 0], rotate: [-2, 2, -2] }}
-                          transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
-                        />
+                        <picture>
+                          <source srcSet={webpOf("/images/vas-mascot-wave.png")} type="image/webp" />
+                          <motion.img
+                            src="/images/vas-mascot-wave.png"
+                            alt=""
+                            aria-hidden
+                            animate={{ y: [0, -5, 0], rotate: [-2, 2, -2] }}
+                            transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+                          />
+                        </picture>
                         <p><strong>VAers mách nhỏ:</strong> Phóng thật gần để gặp những nét vẽ bé xíu đang cất giấu cả một câu chuyện nhé!</p>
                       </div>
 

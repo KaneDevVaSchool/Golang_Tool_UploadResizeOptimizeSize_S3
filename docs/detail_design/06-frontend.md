@@ -356,6 +356,9 @@ nặng về hình ảnh động (đồi parallax, pháo hoa, cảnh vườn), n�
 - Ảnh nền dùng SVG khi có thể (`garden-butterfly.svg`, `garden-fern-cluster.svg`) — nhẹ và
   sắc nét ở mọi độ phân giải.
 - Framer Motion nằm ở chunk riêng, không kéo theo khi vào khu admin.
+- Ảnh PNG tĩnh dùng ở critical path (đồi parallax, mascot, wordmark) đều có bản `.webp`
+  cùng thư mục, phục vụ qua `<picture><source>` — xem `lib/staticImage.ts` và mục "Ảnh tĩnh
+  frontend sang WebP" trong [01-current-state.md](../plan/01-current-state.md).
 
 ### `MascotAssistant` — trợ lý tìm kiếm nổi, chỉ desktop
 

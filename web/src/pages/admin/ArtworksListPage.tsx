@@ -1,6 +1,7 @@
 import { Download, Eye, LayoutGrid, List, Loader2, MessageCircle, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { AdminPageHeader } from "../../components/admin/AdminPageHeader";
+import { ArtworkCommentsModal } from "../../components/admin/ArtworkCommentsModal";
 import { ArtworkEditModal } from "../../components/admin/ArtworkEditModal";
 import { ReactionIcons } from "../../components/admin/ReactionIcons";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -69,6 +70,7 @@ export default function ArtworksListPage() {
 
   const [editing, setEditing] = useState<ArtworkWithMeta | null>(null);
   const [saving, setSaving] = useState(false);
+  const [commentsTarget, setCommentsTarget] = useState<ArtworkWithMeta | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ArtworkWithMeta | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -186,6 +188,12 @@ export default function ArtworksListPage() {
     } finally {
       setDeleting(false);
     }
+  }
+
+  function handleCommentCountChange(artworkId: number, delta: number) {
+    setItems((prev) =>
+      prev.map((a) => (a.id === artworkId ? { ...a, comment_count: Math.max(0, a.comment_count + delta) } : a)),
+    );
   }
 
   async function handleToggleFeatured(item: ArtworkWithMeta) {
@@ -487,6 +495,14 @@ export default function ArtworksListPage() {
                 >
                   <Star size={16} fill={item.is_featured ? "currentColor" : "none"} />
                 </button>
+                <button
+                  type="button"
+                  className="artworks-icon-btn"
+                  title="Xem và kiểm duyệt bình luận"
+                  onClick={() => setCommentsTarget(item)}
+                >
+                  <MessageCircle size={16} />
+                </button>
                 <button type="button" className="artworks-icon-btn" title="Chỉnh sửa" onClick={() => setEditing(item)}>
                   <Pencil size={16} />
                 </button>
@@ -566,10 +582,15 @@ export default function ArtworksListPage() {
                     <Eye size={13} strokeWidth={1.75} aria-hidden />
                     <span>{formatNumber(item.view_count)}</span>
                   </span>
-                  <span className="artworks-stat" title="Bình luận">
+                  <button
+                    type="button"
+                    className="artworks-stat artworks-stat-comment-btn"
+                    title="Xem và kiểm duyệt bình luận"
+                    onClick={() => setCommentsTarget(item)}
+                  >
                     <MessageCircle size={13} strokeWidth={1.75} aria-hidden />
                     <span>{formatNumber(item.comment_count)}</span>
-                  </span>
+                  </button>
                 </span>
                 <ReactionIcons counts={item.reaction_counts} />
               </span>
@@ -629,6 +650,13 @@ export default function ArtworksListPage() {
         busy={saving}
         onSave={handleSave}
         onClose={() => setEditing(null)}
+      />
+
+      <ArtworkCommentsModal
+        open={Boolean(commentsTarget)}
+        artwork={commentsTarget}
+        onClose={() => setCommentsTarget(null)}
+        onCountChange={handleCommentCountChange}
       />
 
       <ConfirmDialog

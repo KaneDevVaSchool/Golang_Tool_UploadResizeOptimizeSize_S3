@@ -236,6 +236,38 @@ export type GradeLevel = {
   display_order: number;
 };
 
+export type ArtworkComment = {
+  id: number;
+  artwork_id: number;
+  display_name: string;
+  content: string;
+  is_hidden: boolean;
+  created_at: string;
+};
+
+/**
+ * fetchArtworkComments: lấy TOÀN BỘ bình luận (kể cả đã ẩn) của 1 tác phẩm
+ * cho màn hình kiểm duyệt - khác endpoint public luôn lọc bỏ comment ẩn.
+ */
+export function fetchArtworkComments(artworkId: number, signal?: AbortSignal): Promise<ArtworkComment[]> {
+  return adminRequest<ArtworkComment[]>(`/api/v1/admin/artworks/${artworkId}/comments`, { signal });
+}
+
+/**
+ * setCommentHidden: ẩn/hiện 1 bình luận. Backend áp ngay cho API public (mọi
+ * lượt gọi tiếp theo tới /public/artworks/{id}/comments đều lọc theo is_hidden).
+ */
+export function setCommentHidden(
+  artworkId: number,
+  commentId: number,
+  isHidden: boolean,
+): Promise<{ is_hidden: boolean }> {
+  return adminRequest<{ is_hidden: boolean }>(`/api/v1/admin/artworks/${artworkId}/comments/${commentId}`, {
+    method: "PATCH",
+    body: { is_hidden: isHidden },
+  });
+}
+
 export function fetchSchools(signal?: AbortSignal): Promise<School[]> {
   return adminRequest<School[]>("/api/v1/schools", { signal });
 }

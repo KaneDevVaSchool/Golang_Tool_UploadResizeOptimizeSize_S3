@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { FeaturedGardenScene } from "../../components/public/FeaturedGardenScene";
 import { usePageMeta } from "../../hooks/usePageMeta";
 import { fadeUp } from "../../lib/motionPresets";
+import { webpOf } from "../../lib/staticImage";
 
 const PAGE_TITLE = "Không tìm thấy trang — VA Schools";
 const PAGE_DESCRIPTION =
@@ -33,13 +34,16 @@ export default function NotFoundPage() {
 
       <div className="not-found-content">
         <motion.div className="not-found-mascot-wrap" custom={0} variants={fadeUp} initial="hidden" animate="show">
-          <motion.img
-            className="not-found-mascot"
-            src="/images/vas-mascot-wave.png"
-            alt="Rồng nhỏ VASchools ngơ ngác vì lạc đường"
-            animate={{ rotate: [-3, 3, -3], y: [0, -6, 0] }}
-            transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
-          />
+          <picture>
+            <source srcSet={webpOf("/images/vas-mascot-wave.png")} type="image/webp" />
+            <motion.img
+              className="not-found-mascot"
+              src="/images/vas-mascot-wave.png"
+              alt="Rồng nhỏ VASchools ngơ ngác vì lạc đường"
+              animate={{ rotate: [-3, 3, -3], y: [0, -6, 0] }}
+              transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </picture>
           <span className="not-found-mascot-shadow" aria-hidden />
           <span className="not-found-signpost" aria-hidden>
             404

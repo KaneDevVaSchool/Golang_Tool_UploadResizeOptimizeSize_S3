@@ -1,3 +1,5 @@
+import { webpOf } from "../../lib/staticImage";
+
 /**
  * Lớp "đồi" parallax cho Hero - dùng nguyên bộ ảnh PNG từ mẫu tham chiếu
  * (C:\Users\ASUS\Desktop\theme: hill1-5, tree, plant, leaf), giữ đúng tông
@@ -7,38 +9,78 @@
  * toàn chiều rộng (hoặc neo 1 góc); layer cha (HeroSection) áp transform
  * theo scroll (xa chậm, gần nhanh) - các component ở đây chỉ render ảnh,
  * không tự animate.
+ *
+ * Mỗi ảnh bọc <picture> với nguồn WebP trước (nhẹ hơn PNG gốc 66-80%),
+ * PNG làm dự phòng cho trình duyệt cũ - cùng mẫu artworkImage.ts dùng cho
+ * ảnh tác phẩm, nhưng ở đây không cần helper JS vì chỉ có 1 cỡ duy nhất.
  */
 
 /** Lớp xa nhất - dãy núi nhiều tầng nhạt/đậm lồng sẵn trong 1 ảnh, phủ
  * toàn chiều rộng, làm hậu cảnh mờ ở chân trời. */
 export function HeroHillFar() {
-  return <img className="hero-hill hero-hill--far" src="/images/parallax/hill1.png" alt="" aria-hidden />;
+  const src = "/images/parallax/hill1.png";
+  return (
+    <picture>
+      <source srcSet={webpOf(src)} type="image/webp" />
+      <img className="hero-hill hero-hill--far" src={src} alt="" aria-hidden />
+    </picture>
+  );
 }
 
 /** Lớp giữa - đồi đơn với cụm cây nhỏ trên đỉnh, đứng lệch phải. */
 export function HeroHillMid() {
-  return <img className="hero-hill hero-hill--mid" src="/images/parallax/hill3.png" alt="" aria-hidden />;
+  const src = "/images/parallax/hill3.png";
+  return (
+    <picture>
+      <source srcSet={webpOf(src)} type="image/webp" />
+      <img className="hero-hill hero-hill--mid" src={src} alt="" aria-hidden />
+    </picture>
+  );
 }
 
 /** Lớp gần nhất - đồi đậm với cây cọ + bụi cây trên đỉnh, đứng lệch trái,
  * chân đồi chạm đáy Hero, làm nền cho mascot/nội dung đứng trước. */
 export function HeroHillNear() {
-  return <img className="hero-hill hero-hill--near" src="/images/parallax/hill4.png" alt="" aria-hidden />;
+  const src = "/images/parallax/hill4.png";
+  return (
+    <picture>
+      <source srcSet={webpOf(src)} type="image/webp" />
+      <img className="hero-hill hero-hill--near" src={src} alt="" aria-hidden />
+    </picture>
+  );
 }
 
 /** Cây cọ đơn lẻ - phần tử tiền cảnh rời rạc, neo góc trái đáy Hero. */
 export function HeroTree() {
-  return <img className="hero-parallax-tree" src="/images/parallax/tree.png" alt="" aria-hidden />;
+  const src = "/images/parallax/tree.png";
+  return (
+    <picture>
+      <source srcSet={webpOf(src)} type="image/webp" />
+      <img className="hero-parallax-tree" src={src} alt="" aria-hidden />
+    </picture>
+  );
 }
 
 /** Dải cỏ/dương xỉ - viền đáy Hero, phần tử tiền cảnh gần nhất. */
 export function HeroPlant() {
-  return <img className="hero-parallax-plant" src="/images/parallax/plant.png" alt="" aria-hidden />;
+  const src = "/images/parallax/plant.png";
+  return (
+    <picture>
+      <source srcSet={webpOf(src)} type="image/webp" />
+      <img className="hero-parallax-plant" src={src} alt="" aria-hidden />
+    </picture>
+  );
 }
 
 /** Lá dương xỉ lớn - góc trên, phần tử tiền cảnh rơi vào khung hình. */
 export function HeroLeaf() {
-  return <img className="hero-parallax-leaf" src="/images/parallax/leaf.png" alt="" aria-hidden />;
+  const src = "/images/parallax/leaf.png";
+  return (
+    <picture>
+      <source srcSet={webpOf(src)} type="image/webp" />
+      <img className="hero-parallax-leaf" src={src} alt="" aria-hidden />
+    </picture>
+  );
 }
 
 /** Bộ 3 con thú rừng (sóc, voi, thỏ - SVG đơn sắc) chạy dọc theo gờ đồi

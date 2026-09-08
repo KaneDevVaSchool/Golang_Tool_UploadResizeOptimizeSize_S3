@@ -137,8 +137,16 @@ export function FeaturedGardenScene({ critters = true }: { critters?: boolean })
 
       {critters && (
         <>
-          <img className="featured-butterfly featured-butterfly--1" src="/images/parallax/garden-butterfly.svg" alt="" />
-          <img className="featured-butterfly featured-butterfly--2" src="/images/parallax/garden-butterfly.svg" alt="" />
+          {/* Wrapper span chạy animation "path" (translate3d), <img> bên trong
+              chạy animation "flap" (scaleX) - phải tách 2 phần tử vì cả hai
+              animation cùng animate transform; đặt chung 1 phần tử sẽ ghi đè
+              lẫn nhau (chỉ animation khai báo sau có hiệu lực). */}
+          <span className="featured-butterfly-wrap featured-butterfly-wrap--1">
+            <img className="featured-butterfly" src="/images/parallax/garden-butterfly.svg" alt="" />
+          </span>
+          <span className="featured-butterfly-wrap featured-butterfly-wrap--2">
+            <img className="featured-butterfly featured-butterfly--2" src="/images/parallax/garden-butterfly.svg" alt="" />
+          </span>
 
           <div className="featured-critter-footer" ref={footerRef}>
             <img className="hero-critter hero-critter--squirrel" src="/images/parallax/squirrel.svg" alt="" />

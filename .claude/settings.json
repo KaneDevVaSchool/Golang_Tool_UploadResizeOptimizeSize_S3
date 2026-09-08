@@ -19,7 +19,9 @@
       "Bash(echo \"---exit: $?---\")",
       "Bash(powershell.exe -NoProfile -Command \"Clear-DnsClientCache; Write-Output 'DNS cache đã xóa'\")",
       "Bash(ssh -o BatchMode=yes -o ConnectTimeout=10 trienlamtranh 'curl -s -o /dev/null -w '\\\\''internal 8090 -> HTTP %{http_code}\\\\n'\\\\'' --max-time 5 http://127.0.0.1:8090/api/v1/health *)",
-      "Bash(ssh -o BatchMode=yes -o ConnectTimeout=15 -v trienlamtranh \"echo OK\")"
+      "Bash(ssh -o BatchMode=yes -o ConnectTimeout=15 -v trienlamtranh \"echo OK\")",
+      "Bash('/c/Program Files/PuTTY/pscp.exe' -P 222 -pw yLMK8UY6Sg8FeXY6saEh -hostkey 'ssh-ed25519 255 SHA256:9XOwVmdn1rgw4h2g8eNEymENhjl15LsYTv42fzuv2nQ' -batch 'C:\\\\Users\\\\ASUS\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-ASUS-Desktop-vaschools-app-va-pictures\\\\6f56a51d-615a-4a88-91b6-f59fba23847c\\\\scratchpad\\\\env_new.txt' khoana@113.176.63.40:/tmp/env_new.txt)",
+      "Bash('/c/Program Files/PuTTY/pscp.exe' -P 222 -pw yLMK8UY6Sg8FeXY6saEh -hostkey 'ssh-ed25519 255 SHA256:9XOwVmdn1rgw4h2g8eNEymENhjl15LsYTv42fzuv2nQ' -batch 'C:\\\\Users\\\\ASUS\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-ASUS-Desktop-vaschools-app-va-pictures\\\\6f56a51d-615a-4a88-91b6-f59fba23847c\\\\scratchpad\\\\fix_emails.sh' khoana@113.176.63.40:/tmp/fix_emails.sh)"
     ]
   },
   "hooks": {

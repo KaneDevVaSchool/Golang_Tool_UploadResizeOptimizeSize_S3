@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { webpOf } from "../../lib/staticImage";
 
 const NAV_LINKS = [
   { to: "/", label: "Trang chủ", end: true },
@@ -49,7 +50,10 @@ export function PublicNavbar() {
             aria-label="Website Trường Quốc tế Việt Mỹ VAS"
             onClick={() => setOpen(false)}
           >
-            <img className="public-navbar-brand-mark" src="/images/vas-wordmark-stacked.png" alt="Vietnam America Schools" />
+            <picture>
+              <source srcSet={webpOf("/images/vas-wordmark-stacked.png")} type="image/webp" />
+              <img className="public-navbar-brand-mark" src="/images/vas-wordmark-stacked.png" alt="Vietnam America Schools" />
+            </picture>
           </a>
           <NavLink to="/" className="public-navbar-title" onClick={() => setOpen(false)}>
             <span className="public-navbar-title-text">Sắc Màu VASchools</span>

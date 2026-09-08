@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { webpOf } from "../lib/staticImage";
 
 type ConfirmDialogProps = {
   open: boolean;
@@ -64,14 +65,17 @@ export function ConfirmDialog({
             exit={{ opacity: 0, y: 12, scale: 0.96 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
           >
-            <motion.img
-              className="confirm-mascot"
-              src="/images/vas-mascot-wave.png"
-              alt=""
-              aria-hidden
-              animate={{ y: [0, -8, 0], rotate: [-4, 4, -4] }}
-              transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
-            />
+            <picture>
+              <source srcSet={webpOf("/images/vas-mascot-wave.png")} type="image/webp" />
+              <motion.img
+                className="confirm-mascot"
+                src="/images/vas-mascot-wave.png"
+                alt=""
+                aria-hidden
+                animate={{ y: [0, -8, 0], rotate: [-4, 4, -4] }}
+                transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </picture>
             <h2 id="confirm-title">{title}</h2>
             <p>{message}</p>
             <div className="confirm-actions">

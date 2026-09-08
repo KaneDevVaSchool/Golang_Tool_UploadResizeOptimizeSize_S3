@@ -1745,18 +1745,68 @@ html.scrollable-page {
 /* ---------------------------------------------------------------------- */
 /* Hero - bướm bay quỹ đạo số 8                                            */
 /* ---------------------------------------------------------------------- */
-/* offset-path vẽ đường bay hình số 8 nằm ngang (lemniscate xấp xỉ bằng 2
-   cubic-bezier nối nhau); offset-distance chạy 0% -> 100% lặp vô hạn kéo
-   emoji đi theo đường đó. rotate: 0deg giữ emoji luôn đứng thẳng (không tự
-   xoay theo tiếp tuyến path) để cánh bướm luôn nhìn "đúng chiều". Cánh vỗ
-   mô phỏng bằng scaleX dao động nhẹ trên cùng phần tử qua animation thứ 2. */
-@keyframes hero-butterfly-fly-1 {
-  0% {
-    offset-distance: 0%;
-  }
-  100% {
-    offset-distance: 100%;
-  }
+/* Trước đây dùng offset-path + animate offset-distance: đúng hình số 8
+   nhưng offset-distance KHÔNG phải composited property - mỗi khung hình
+   trình duyệt phải Layout lại để tính vị trí/góc trên path, chạy suốt vô
+   hạn nên profiler (DevTools Performance) thấy Layout dày đặc suốt thời
+   gian ở trang chủ dù không cuộn/tương tác gì. Thay bằng animate transform
+   translate3d theo waypoint lấy mẫu sẵn từ đúng 2 đường cong Bezier gốc
+   (24 điểm/path, xem lại git log nếu cần regenerate) - cùng hình dạng bay,
+   nhưng translate3d chạy hoàn toàn trên compositor thread, không Layout.
+   top/left đặt đúng điểm đầu path gốc vì keyframe chỉ chứa delta. */
+@keyframes hero-butterfly-path-1 {
+  0% { transform: translate3d(0, 0, 0); }
+  4.17% { transform: translate3d(40px, -36.7px, 0); }
+  8.33% { transform: translate3d(79.9px, -66.7px, 0); }
+  12.5% { transform: translate3d(119.7px, -90px, 0); }
+  16.67% { transform: translate3d(159.3px, -106.7px, 0); }
+  20.83% { transform: translate3d(198.6px, -116.7px, 0); }
+  25% { transform: translate3d(237.5px, -120px, 0); }
+  29.17% { transform: translate3d(276px, -116.7px, 0); }
+  33.33% { transform: translate3d(314.1px, -106.7px, 0); }
+  37.5% { transform: translate3d(351.6px, -90px, 0); }
+  41.67% { transform: translate3d(388.4px, -66.7px, 0); }
+  45.83% { transform: translate3d(424.6px, -36.7px, 0); }
+  50% { transform: translate3d(460px, 0, 0); }
+  54.17% { transform: translate3d(495.4px, 36.7px, 0); }
+  58.33% { transform: translate3d(531.5px, 66.7px, 0); }
+  62.5% { transform: translate3d(568.1px, 90px, 0); }
+  66.67% { transform: translate3d(605.2px, 106.7px, 0); }
+  70.83% { transform: translate3d(642.5px, 116.7px, 0); }
+  75% { transform: translate3d(680px, 120px, 0); }
+  79.17% { transform: translate3d(717.5px, 116.7px, 0); }
+  83.33% { transform: translate3d(754.8px, 106.7px, 0); }
+  87.5% { transform: translate3d(791.9px, 90px, 0); }
+  91.67% { transform: translate3d(828.5px, 66.7px, 0); }
+  95.83% { transform: translate3d(864.6px, 36.7px, 0); }
+  100% { transform: translate3d(900px, 0, 0); }
+}
+@keyframes hero-butterfly-path-2 {
+  0% { transform: translate3d(0, 0, 0); }
+  4.17% { transform: translate3d(-35px, 32.1px, 0); }
+  8.33% { transform: translate3d(-69.9px, 58.3px, 0); }
+  12.5% { transform: translate3d(-104.7px, 78.8px, 0); }
+  16.67% { transform: translate3d(-139.3px, 93.3px, 0); }
+  20.83% { transform: translate3d(-173.6px, 102.1px, 0); }
+  25% { transform: translate3d(-207.5px, 105px, 0); }
+  29.17% { transform: translate3d(-241px, 102.1px, 0); }
+  33.33% { transform: translate3d(-274.1px, 93.3px, 0); }
+  37.5% { transform: translate3d(-306.6px, 78.8px, 0); }
+  41.67% { transform: translate3d(-338.4px, 58.3px, 0); }
+  45.83% { transform: translate3d(-369.6px, 32.1px, 0); }
+  50% { transform: translate3d(-400px, 0, 0); }
+  54.17% { transform: translate3d(-430.4px, -32.1px, 0); }
+  58.33% { transform: translate3d(-461.5px, -58.3px, 0); }
+  62.5% { transform: translate3d(-493.1px, -78.8px, 0); }
+  66.67% { transform: translate3d(-525.2px, -93.3px, 0); }
+  70.83% { transform: translate3d(-557.5px, -102.1px, 0); }
+  75% { transform: translate3d(-590px, -105px, 0); }
+  79.17% { transform: translate3d(-622.5px, -102.1px, 0); }
+  83.33% { transform: translate3d(-654.8px, -93.3px, 0); }
+  87.5% { transform: translate3d(-686.9px, -78.8px, 0); }
+  91.67% { transform: translate3d(-718.5px, -58.3px, 0); }
+  95.83% { transform: translate3d(-749.6px, -32.1px, 0); }
+  100% { transform: translate3d(-780px, 0, 0); }
 }
 @keyframes hero-butterfly-flap {
   0%,
@@ -1769,13 +1819,12 @@ html.scrollable-page {
 }
 .hero-butterfly {
   position: absolute;
-  top: 0;
-  left: 0;
   font-size: 1.6rem;
   pointer-events: none;
   filter: drop-shadow(0 3px 6px rgba(36, 20, 23, 0.15));
-  offset-rotate: 0deg;
-  animation: hero-butterfly-fly-1 var(--dur, 16s) ease-in-out infinite;
+  animation-duration: var(--dur, 16s);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
   animation-delay: var(--delay, 0s);
 }
 .hero-butterfly::before {
@@ -1786,14 +1835,18 @@ html.scrollable-page {
 .hero-butterfly--1 {
   --dur: 17s;
   --delay: 0s;
-  offset-path: path("M 60 420 C 220 260, 380 260, 520 420 C 660 580, 820 580, 960 420");
+  top: 420px;
+  left: 60px;
+  animation-name: hero-butterfly-path-1;
 }
 .hero-butterfly--2 {
   --dur: 21s;
   --delay: -6s;
   font-size: 1.25rem;
   opacity: 0.8;
-  offset-path: path("M 900 200 C 760 340, 620 340, 500 200 C 380 60, 240 60, 120 200");
+  top: 200px;
+  left: 900px;
+  animation-name: hero-butterfly-path-2;
 }
 @media (max-width: 768px) {
   .hero-butterfly {
@@ -2215,14 +2268,14 @@ html.scrollable-page {
     margin-top: 0.15rem;
   }
   .hero-title-lead {
-    font-size: 1.18rem;
+    font-size: 1.32rem;
   }
   .hero-title-main {
-    font-size: clamp(2.15rem, 11vw, 2.55rem);
+    font-size: clamp(2.4rem, 12.5vw, 2.85rem);
   }
   .hero-subtitle {
     margin-top: 0.2rem;
-    font-size: 0.82rem;
+    font-size: 0.88rem;
     line-height: 1.45;
   }
   .hero-region-cta {
@@ -3634,31 +3687,104 @@ html.scrollable-page {
   }
 }
 
-.featured-butterfly {
+/* Waypoint translate3d thay offset-path/offset-distance - cùng lý do đã
+   ghi ở khối "Hero - bướm bay quỹ đạo số 8" phía trên (offset-distance bắt
+   Layout mỗi khung hình, translate3d chạy hoàn toàn trên compositor). */
+@keyframes featured-butterfly-path-1 {
+  0% { transform: translate3d(0, 0, 0); }
+  4.17% { transform: translate3d(39.6px, -27.5px, 0); }
+  8.33% { transform: translate3d(78.4px, -50px, 0); }
+  12.5% { transform: translate3d(116.6px, -67.5px, 0); }
+  16.67% { transform: translate3d(154.1px, -80px, 0); }
+  20.83% { transform: translate3d(191px, -87.5px, 0); }
+  25% { transform: translate3d(227.5px, -90px, 0); }
+  29.17% { transform: translate3d(263.6px, -87.5px, 0); }
+  33.33% { transform: translate3d(299.3px, -80px, 0); }
+  37.5% { transform: translate3d(334.7px, -67.5px, 0); }
+  41.67% { transform: translate3d(369.9px, -50px, 0); }
+  45.83% { transform: translate3d(405px, -27.5px, 0); }
+  50% { transform: translate3d(440px, 0, 0); }
+  54.17% { transform: translate3d(475px, 27.5px, 0); }
+  58.33% { transform: translate3d(510px, 50px, 0); }
+  62.5% { transform: translate3d(545px, 67.5px, 0); }
+  66.67% { transform: translate3d(580px, 80px, 0); }
+  70.83% { transform: translate3d(615px, 87.5px, 0); }
+  75% { transform: translate3d(650px, 90px, 0); }
+  79.17% { transform: translate3d(685px, 87.5px, 0); }
+  83.33% { transform: translate3d(720px, 80px, 0); }
+  87.5% { transform: translate3d(755px, 67.5px, 0); }
+  91.67% { transform: translate3d(790px, 50px, 0); }
+  95.83% { transform: translate3d(825px, 27.5px, 0); }
+  100% { transform: translate3d(860px, 0, 0); }
+}
+@keyframes featured-butterfly-path-2 {
+  0% { transform: translate3d(0, 0, 0); }
+  4.17% { transform: translate3d(-39.6px, -27.5px, 0); }
+  8.33% { transform: translate3d(-78.3px, -50px, 0); }
+  12.5% { transform: translate3d(-116.3px, -67.5px, 0); }
+  16.67% { transform: translate3d(-153.3px, -80px, 0); }
+  20.83% { transform: translate3d(-189.6px, -87.5px, 0); }
+  25% { transform: translate3d(-225px, -90px, 0); }
+  29.17% { transform: translate3d(-259.6px, -87.5px, 0); }
+  33.33% { transform: translate3d(-293.3px, -80px, 0); }
+  37.5% { transform: translate3d(-326.3px, -67.5px, 0); }
+  41.67% { transform: translate3d(-358.3px, -50px, 0); }
+  45.83% { transform: translate3d(-389.6px, -27.5px, 0); }
+  50% { transform: translate3d(-420px, 0, 0); }
+  54.17% { transform: translate3d(-450.4px, 27.5px, 0); }
+  58.33% { transform: translate3d(-481.5px, 50px, 0); }
+  62.5% { transform: translate3d(-513.1px, 67.5px, 0); }
+  66.67% { transform: translate3d(-545.2px, 80px, 0); }
+  70.83% { transform: translate3d(-577.5px, 87.5px, 0); }
+  75% { transform: translate3d(-610px, 90px, 0); }
+  79.17% { transform: translate3d(-642.5px, 87.5px, 0); }
+  83.33% { transform: translate3d(-674.8px, 80px, 0); }
+  87.5% { transform: translate3d(-706.9px, 67.5px, 0); }
+  91.67% { transform: translate3d(-738.5px, 50px, 0); }
+  95.83% { transform: translate3d(-769.6px, 27.5px, 0); }
+  100% { transform: translate3d(-800px, 0, 0); }
+}
+/* Path (translate3d) và flap (scaleX) cùng animate transform, nên phải
+   tách 2 phần tử: wrapper span lo path, <img> con lo flap - đặt chung 1
+   phần tử thì animation khai báo sau ghi đè animation khai báo trước
+   (cả hai cùng set transform, không tự cộng dồn). */
+.featured-butterfly-wrap {
   position: absolute;
-  top: 0;
-  left: 0;
+  pointer-events: none;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-duration: var(--dur, 18s);
+}
+.featured-butterfly-wrap--1 {
+  --dur: 19s;
+  top: 260px;
+  left: 40px;
+  animation-name: featured-butterfly-path-1;
+}
+.featured-butterfly-wrap--2 {
+  --dur: 24s;
+  animation-delay: -9s;
+  top: 460px;
+  left: 860px;
+  animation-name: featured-butterfly-path-2;
+}
+.featured-butterfly {
+  display: block;
   width: 2.4rem;
   height: auto;
   color: var(--vas-trach-nhiem);
   filter: drop-shadow(0 3px 6px rgba(36, 20, 23, 0.15));
-  offset-rotate: 0deg;
-  animation: hero-butterfly-fly-1 var(--dur, 18s) ease-in-out infinite, hero-butterfly-flap 0.5s ease-in-out infinite;
+  animation: hero-butterfly-flap 0.5s ease-in-out infinite;
 }
-.featured-butterfly--1 {
-  --dur: 19s;
+.featured-butterfly-wrap--1 .featured-butterfly {
   color: var(--vas-nhan-ai);
-  offset-path: path("M 40 260 C 200 140, 340 140, 480 260 C 620 380, 760 380, 900 260");
 }
 .featured-butterfly--2 {
-  --dur: 24s;
-  animation-delay: -9s;
   width: 1.9rem;
   opacity: 0.85;
-  offset-path: path("M 860 460 C 700 340, 560 340, 440 460 C 320 580, 180 580, 60 460");
 }
 @media (max-width: 768px) {
-  .featured-butterfly {
+  .featured-butterfly-wrap {
     display: none;
   }
 }
@@ -6746,13 +6872,14 @@ html.scrollable-page {
   .section-kicker::before,
   .public-footer-leaf,
   .featured-butterfly,
+  .featured-butterfly-wrap,
   .artwork-frame-skeleton,
   .artwork-frame-award,
   .artwork-frame-crown {
     animation: none !important;
   }
   /* Giữ mặt đất (sóng / đồi) — chỉ tắt tầng sinh vật chuyển động. */
-  .featured-butterfly,
+  .featured-butterfly-wrap,
   .featured-critter-footer {
     display: none;
   }
@@ -6931,6 +7058,31 @@ html.scrollable-page {
   min-width: 0;
   /* Chừa chỗ cho dải tên giải nhô lên trên đỉnh card. */
   padding-top: 1.45rem;
+}
+
+/* Bọc ngoài một hoặc nhiều tác phẩm cùng hạng. Bình thường chỉ 1 khung
+   (không ảnh hưởng layout cũ); đồng giải thì nhiều khung xếp cạnh nhau,
+   tự xuống dòng khi hết chỗ - xem thêm quy tắc [data-shared] bên dưới. */
+.hall-podium-entries {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: end;
+  gap: 1.1rem;
+  width: 100%;
+}
+.hall-podium-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 0;
+}
+/* Đồng giải: mỗi khung nhường chỗ cho khung khác trong cùng hạng, không
+   còn chiếm trọn bề ngang cột như trường hợp 1 tác phẩm/hạng. */
+.hall-podium-slot[data-shared="true"] .hall-podium-entry {
+  flex-basis: 11rem;
+  max-width: 13rem;
 }
 
 /* Vùng ôm khung tranh - mốc định vị cho vòng nguyệt quế và hào quang. */
@@ -7330,6 +7482,14 @@ html.scrollable-page {
 }
 .hall-podium-slot[data-rank="1"] .hall-card-media {
   height: clamp(12rem, 37svh, 21.5rem);
+}
+/* Đồng giải: khung hẹp lại theo bề ngang (nhiều khung/hạng) nhưng vẫn cao
+   như cũ thì ảnh bị "gầy" mất cân đối - hạ chiều cao theo tỉ lệ khung. */
+.hall-podium-slot[data-shared="true"] .hall-card-media {
+  height: clamp(8.5rem, 24svh, 13.5rem);
+}
+.hall-podium-slot[data-rank="1"][data-shared="true"] .hall-card-media {
+  height: clamp(9.5rem, 27svh, 15rem);
 }
 
 .hall-card-media img {
@@ -7821,21 +7981,24 @@ html.scrollable-page {
     gap: 0.85rem;
   }
   .hall-podium-crest {
-    font-size: 0.68rem;
+    font-size: 0.74rem;
     padding: 0.26rem 0.6rem;
   }
   .hall-podium-slot[data-rank="1"] .hall-podium-crest {
-    font-size: 0.72rem;
+    font-size: 0.78rem;
   }
   .hall-podium-banner,
   .hall-podium-slot[data-rank="1"] .hall-podium-banner {
-    font-size: 0.66rem;
+    font-size: 0.72rem;
   }
   .hall-podium-name {
-    font-size: 0.82rem;
+    font-size: 0.9rem;
   }
   .hall-podium-student {
-    font-size: 0.7rem;
+    font-size: 0.78rem;
+  }
+  .hall-podium-school {
+    font-size: 0.76rem;
   }
 }
 
@@ -7867,14 +8030,33 @@ html.scrollable-page {
     height: 2.2rem;
     font-size: 1.05rem;
   }
+  .hall-tier-heading h2 {
+    font-size: 1.28rem;
+  }
+  .hall-tier-sub {
+    font-size: 0.86rem;
+  }
   .hall-tier-count {
     flex-basis: 100%;
     padding-left: 2.9rem;
+    font-size: 0.86rem;
   }
   /* Hai vạch ngang bóp khối chữ còn vài ký tự trên màn hẹp - bỏ vạch, để
      tiêu đề và dòng phụ dùng trọn bề ngang. */
   .hall-honour-rule {
     display: none;
+  }
+  /* Mất 2 vạch hai bên thì .hall-honour-titles (flex: 0 0 auto) không còn
+     gì kéo nó ra giữa - tự căn giữa container thay vì dạt trái. */
+  .hall-honour-heading {
+    justify-content: center;
+    text-align: center;
+  }
+  .hall-honour-heading h2 {
+    font-size: 1.32rem;
+  }
+  .hall-honour-sub {
+    font-size: 0.88rem;
   }
   .hall-closing {
     padding: 1.6rem 1.15rem 1.4rem;
@@ -8242,7 +8424,7 @@ html.scrollable-page {
      Chúng nằm dưới nội dung và không mang thông tin nào. */
   .hero-parallax-leaf,
   .hero-critter,
-  .featured-butterfly,
+  .featured-butterfly-wrap,
   .hero-petal {
     display: none;
   }

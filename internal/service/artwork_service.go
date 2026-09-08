@@ -137,6 +137,13 @@ type ArtworkService interface {
 	// quyết định log cảnh báo - xem ArtworkHandler.HandleDownload và
 	// PublicHandler.HandleDownloadArtwork.
 	LogDownload(ctx context.Context, download *models.ArtworkDownload) error
+	// ListComments trả TOÀN BỘ bình luận (kể cả đã ẩn) của 1 tác phẩm cho màn
+	// hình kiểm duyệt admin - khác PublicHandler.HandleListComments vốn luôn
+	// lọc includeHidden=false.
+	ListComments(ctx context.Context, artworkID int64) ([]*models.ArtworkComment, error)
+	// SetCommentHidden bật/tắt cờ is_hidden cho 1 bình luận thuộc đúng
+	// artworkID - dùng cho nút ẩn/hiện ở màn hình kiểm duyệt admin.
+	SetCommentHidden(ctx context.Context, artworkID, commentID int64, hidden bool) error
 }
 
 type artworkService struct {
@@ -606,6 +613,14 @@ func (s *artworkService) SetFeaturedBatch(ctx context.Context, ids []int64, feat
 		return fmt.Errorf("chưa chọn tác phẩm nào")
 	}
 	return s.artworkRepo.SetFeaturedBatch(ctx, ids, featured)
+}
+
+func (s *artworkService) ListComments(ctx context.Context, artworkID int64) ([]*models.ArtworkComment, error) {
+	return s.commentRepo.ListByArtwork(ctx, artworkID, true)
+}
+
+func (s *artworkService) SetCommentHidden(ctx context.Context, artworkID, commentID int64, hidden bool) error {
+	return s.commentRepo.SetHidden(ctx, commentID, artworkID, hidden)
 }
 
 // enrichArtworks gộp thông tin học sinh/trường/khối lớp/giải/reaction/comment

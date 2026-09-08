@@ -160,25 +160,19 @@ export default function HallOfFamePage() {
       else byTier.set(tier, [entry]);
     }
 
-    // Bục lấy thẳng tác phẩm admin đã gán - cuộc thi chỉ có một giải Nhất,
-    // một Nhì, một Ba nên mỗi hạng đúng một ô. Trang KHÔNG tự xếp hạng lại
-    // (theo lượt thích hay bất cứ tiêu chí nào): ai đạt giải là quyết định
-    // của ban giám khảo, trang chỉ trình bày.
-    //
-    // Phòng dữ liệu bất thường (admin lỡ gán 2 tác phẩm cùng hạng), lấy id
-    // nhỏ nhất để bục luôn đúng 3 ô thay vì vỡ bố cục, và cảnh báo ở
-    // console để admin biết mà sửa - im lặng nuốt mất một giải thì tệ hơn.
+    // Bục lấy thẳng tác phẩm admin đã gán - thường mỗi hạng đúng một ô,
+    // nhưng cuộc thi có thể trao đồng giải (2 giải Nhất...) nên một hạng có
+    // thể chứa nhiều tác phẩm - slot khi đó xếp chồng nhiều khung thay vì
+    // chỉ giữ 1 và bỏ phần còn lại. Trang KHÔNG tự xếp hạng lại (theo lượt
+    // thích hay bất cứ tiêu chí nào): ai đạt giải là quyết định của ban
+    // giám khảo, trang chỉ trình bày. Sắp theo id để thứ tự hiển thị ổn
+    // định giữa các lần tải.
     const podiumList = PODIUM_ORDER.map((rank) => {
       const list = byTier.get(rank) ?? [];
       if (list.length === 0) return null;
-      if (list.length > 1 && import.meta.env.DEV) {
-        console.warn(
-          `[Bảng vàng] Hạng ${rank} có ${list.length} tác phẩm được gán giải, chỉ hiện 1. Kiểm tra lại phần gán giải trong admin.`,
-        );
-      }
-      const entry = [...list].sort((a, b) => a.id - b.id)[0];
-      return { rank, entry };
-    }).filter((slot): slot is { rank: number; entry: BillboardEntry } => slot !== null);
+      const sorted = [...list].sort((a, b) => a.id - b.id);
+      return { rank, entries: sorted };
+    }).filter((slot): slot is { rank: number; entries: BillboardEntry[] } => slot !== null);
 
     // Mọi giải ngoài podium (Khuyến khích, giải chuyên đề...) vào dải dưới.
     const specialList = [...byTier.entries()]
@@ -186,9 +180,9 @@ export default function HallOfFamePage() {
       .sort(([a], [b]) => a - b)
       .flatMap(([, list]) => list);
 
-    // Thứ tự lightbox = đúng thứ tự mắt đọc trang: bục (trái→phải) rồi
-    // tới dải giải chuyên đề.
-    const flat = [...podiumList.map((slot) => slot.entry), ...specialList];
+    // Thứ tự lightbox = đúng thứ tự mắt đọc trang: bục (trái→phải, trong
+    // mỗi hạng theo id) rồi tới dải giải chuyên đề.
+    const flat = [...podiumList.flatMap((slot) => slot.entries), ...specialList];
 
     return { podium: podiumList, specials: specialList, ordered: flat };
   }, [entries]);
@@ -279,10 +273,20 @@ export default function HallOfFamePage() {
                 </header>
 
                 <div className="hall-podium" role="list">
-                  {podium.map(({ rank, entry }) => {
+                  {podium.map(({ rank, entries: rankEntries }) => {
                     const meta = TIER_META[rank];
+                    // Thường một tác phẩm/hạng; đồng giải thì nhiều tác phẩm
+                    // xếp chồng trong cùng slot (data-shared đổi layout ảnh
+                    // từ "một khung to" sang "lưới khung nhỏ hơn" - xem CSS).
+                    const shared = rankEntries.length > 1;
                     return (
-                      <div key={rank} className="hall-podium-slot" data-rank={rank} role="listitem">
+                      <div
+                        key={rank}
+                        className="hall-podium-slot"
+                        data-rank={rank}
+                        data-shared={shared ? "true" : undefined}
+                        role="listitem"
+                      >
                         <span className="hall-podium-crest">
                           {rank === 1 ? (
                             <Crown size={15} strokeWidth={2.2} aria-hidden />
@@ -292,47 +296,53 @@ export default function HallOfFamePage() {
                           {meta.crest}
                         </span>
 
-                        <div className="hall-podium-stage">
-                          {/* Vòng nguyệt quế ôm hai bên khung quán quân. */}
-                          {rank === 1 && (
-                            <>
-                              <span className="hall-laurel hall-laurel--left" aria-hidden>
-                                <LaurelBranch />
-                              </span>
-                              <span className="hall-laurel hall-laurel--right" aria-hidden>
-                                <LaurelBranch />
-                              </span>
-                            </>
-                          )}
+                        <div className="hall-podium-entries">
+                          {rankEntries.map((entry) => (
+                            <div key={entry.id} className="hall-podium-entry">
+                              <div className="hall-podium-stage">
+                                {/* Vòng nguyệt quế ôm hai bên khung quán quân. */}
+                                {rank === 1 && (
+                                  <>
+                                    <span className="hall-laurel hall-laurel--left" aria-hidden>
+                                      <LaurelBranch />
+                                    </span>
+                                    <span className="hall-laurel hall-laurel--right" aria-hidden>
+                                      <LaurelBranch />
+                                    </span>
+                                  </>
+                                )}
 
-                          <HallArtworkCard
-                            item={entry}
-                            award={entry.award}
-                            index={rank}
-                            variant="podium"
-                            medalLabel={meta.medal}
-                            onClick={() => handleOpenArtwork(flatIndexOf(entry))}
-                          />
-                        </div>
+                                <HallArtworkCard
+                                  item={entry}
+                                  award={entry.award}
+                                  index={rank}
+                                  variant="podium"
+                                  medalLabel={meta.medal}
+                                  onClick={() => handleOpenArtwork(flatIndexOf(entry))}
+                                />
+                              </div>
 
-                        <div className="hall-podium-base">
-                          <span className="hall-podium-rank" aria-hidden>
-                            {rank}
-                          </span>
-                          <span className="hall-podium-banner">{meta.banner}</span>
-                          {!isCanonicalAwardName(rank, entry.award.name) && (
-                            <span className="hall-podium-award" title={entry.award.name}>
-                              {entry.award.name}
-                            </span>
-                          )}
-                          <span className="hall-podium-name" title={entry.title}>{`“${entry.title}”`}</span>
-                          <span className="hall-podium-student" title={entry.student_name}>
-                            Họa sĩ nhí {entry.student_name}
-                          </span>
-                          <span className="hall-podium-school" title={entry.school_name}>
-                            {entry.class_name ? `Lớp ${entry.class_name} · ` : ""}
-                            {entry.school_name}
-                          </span>
+                              <div className="hall-podium-base">
+                                <span className="hall-podium-rank" aria-hidden>
+                                  {rank}
+                                </span>
+                                <span className="hall-podium-banner">{meta.banner}</span>
+                                {!isCanonicalAwardName(rank, entry.award.name) && (
+                                  <span className="hall-podium-award" title={entry.award.name}>
+                                    {entry.award.name}
+                                  </span>
+                                )}
+                                <span className="hall-podium-name" title={entry.title}>{`"${entry.title}"`}</span>
+                                <span className="hall-podium-student" title={entry.student_name}>
+                                  Họa sĩ nhí {entry.student_name}
+                                </span>
+                                <span className="hall-podium-school" title={entry.school_name}>
+                                  {entry.class_name ? `Lớp ${entry.class_name} · ` : ""}
+                                  {entry.school_name}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     );

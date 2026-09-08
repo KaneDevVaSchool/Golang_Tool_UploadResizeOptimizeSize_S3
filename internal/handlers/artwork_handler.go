@@ -465,6 +465,62 @@ func (h *ArtworkHandler) HandleSetFeaturedBatch(w http.ResponseWriter, r *http.R
 	h.SendSuccess(w, map[string]any{"updated": len(body.IDs), "is_featured": body.Featured})
 }
 
+// HandleListComments GET /api/v1/admin/artworks/{id}/comments - trả TOÀN BỘ
+// bình luận (kể cả đã ẩn) để màn hình kiểm duyệt tự hiển thị trạng thái, khác
+// endpoint public luôn lọc bỏ comment is_hidden=1.
+func (h *ArtworkHandler) HandleListComments(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		h.SendError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Chỉ hỗ trợ GET")
+		return
+	}
+	artworkID, ok := parsePathID(r, "id")
+	if !ok {
+		h.SendError(w, http.StatusBadRequest, "INVALID_ID", "ID tác phẩm không hợp lệ")
+		return
+	}
+
+	comments, err := h.service.ListComments(r.Context(), artworkID)
+	if err != nil {
+		h.SendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Không tải được bình luận")
+		return
+	}
+	h.SendSuccess(w, comments)
+}
+
+// HandleSetCommentHidden PATCH /api/v1/admin/artworks/{id}/comments/{commentID}
+// - body {is_hidden: bool}. Ẩn khỏi trang public ngay vì PublicHandler luôn
+// lọc includeHidden=false ở mọi lượt gọi tiếp theo.
+func (h *ArtworkHandler) HandleSetCommentHidden(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		h.SendError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Chỉ hỗ trợ PATCH")
+		return
+	}
+	artworkID, ok := parsePathID(r, "id")
+	if !ok {
+		h.SendError(w, http.StatusBadRequest, "INVALID_ID", "ID tác phẩm không hợp lệ")
+		return
+	}
+	commentID, ok := parsePathID(r, "commentID")
+	if !ok {
+		h.SendError(w, http.StatusBadRequest, "INVALID_ID", "ID bình luận không hợp lệ")
+		return
+	}
+
+	var body struct {
+		IsHidden bool `json:"is_hidden"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		h.SendError(w, http.StatusBadRequest, "INVALID_BODY", "Dữ liệu gửi lên không hợp lệ")
+		return
+	}
+
+	if err := h.service.SetCommentHidden(r.Context(), artworkID, commentID, body.IsHidden); err != nil {
+		h.SendError(w, http.StatusNotFound, "NOT_FOUND", "Không tìm thấy bình luận")
+		return
+	}
+	h.SendSuccess(w, map[string]bool{"is_hidden": body.IsHidden})
+}
+
 func parseArtworkFilter(r *http.Request) models.ArtworkFilter {
 	q := r.URL.Query()
 	filter := models.ArtworkFilter{

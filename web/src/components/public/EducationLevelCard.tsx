@@ -2,6 +2,7 @@ import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } fro
 import { ArrowRight, Rocket } from "lucide-react";
 import type { PointerEvent } from "react";
 import { fadeUp } from "../../lib/motionPresets";
+import { webpOf } from "../../lib/staticImage";
 
 type EducationLevelCardProps = {
   level: "primary" | "secondary";
@@ -119,13 +120,16 @@ function SecondaryNightScene({ layers, reduceMotion }: { layers: SecondaryLayers
       </motion.div>
 
       <motion.div className="edu-card-layer edu-card-layer--island" style={{ x: layers.islandX, y: layers.islandY }}>
-        <motion.img
-          className="edu-card-island"
-          src="/images/island.png"
-          alt=""
-          animate={reduceMotion ? undefined : { y: [0, -10, 0], rotate: [0, 1.1, 0] }}
-          transition={{ duration: 5.8, repeat: Infinity, ease: "easeInOut" }}
-        />
+        <picture>
+          <source srcSet={webpOf("/images/island.png")} type="image/webp" />
+          <motion.img
+            className="edu-card-island"
+            src="/images/island.png"
+            alt=""
+            animate={reduceMotion ? undefined : { y: [0, -10, 0], rotate: [0, 1.1, 0] }}
+            transition={{ duration: 5.8, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </picture>
       </motion.div>
 
       <motion.div className="edu-card-layer edu-card-layer--wave-near" style={{ x: layers.waveNearX, y: layers.waveNearY }}>
@@ -179,21 +183,30 @@ export function EducationLevelCard({ level, artworkCount, onSelect, peeking = fa
       <div className="edu-card-decor" aria-hidden>
         {level === "primary" ? (
           <>
-            <img className="edu-card-hill" src="/images/parallax/hill5.png" alt="" />
-            <motion.img
-              className="edu-card-art edu-card-art--tree"
-              src="/images/parallax/tree.png"
-              alt=""
-              animate={{ y: [0, -6, 0], rotate: [0, 1.5, 0] }}
-              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-            />
-            <motion.img
-              className="edu-card-art edu-card-art--leaf"
-              src="/images/parallax/leaf.png"
-              alt=""
-              animate={{ rotate: [0, -3, 0] }}
-              transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
-            />
+            <picture>
+              <source srcSet={webpOf("/images/parallax/hill5.png")} type="image/webp" />
+              <img className="edu-card-hill" src="/images/parallax/hill5.png" alt="" />
+            </picture>
+            <picture>
+              <source srcSet={webpOf("/images/parallax/tree.png")} type="image/webp" />
+              <motion.img
+                className="edu-card-art edu-card-art--tree"
+                src="/images/parallax/tree.png"
+                alt=""
+                animate={{ y: [0, -6, 0], rotate: [0, 1.5, 0] }}
+                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </picture>
+            <picture>
+              <source srcSet={webpOf("/images/parallax/leaf.png")} type="image/webp" />
+              <motion.img
+                className="edu-card-art edu-card-art--leaf"
+                src="/images/parallax/leaf.png"
+                alt=""
+                animate={{ rotate: [0, -3, 0] }}
+                transition={{ duration: 4.2, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
+              />
+            </picture>
             <motion.span
               className="edu-card-float edu-card-float--1"
               animate={{ y: [0, -10, 0], rotate: [0, 6, 0] }}

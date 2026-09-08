@@ -20,7 +20,10 @@ type CommentRepository interface {
 	// DeleteOwned chỉ xoá khi comment thuộc đúng artwork và visitor token đã
 	// tạo nó; token hoạt động như quyền sở hữu ẩn danh phía trình duyệt.
 	DeleteOwned(ctx context.Context, id, artworkID int64, visitorToken string) (bool, error)
-	SetHidden(ctx context.Context, id int64, hidden bool) error
+	// SetHidden bật/tắt cờ is_hidden cho kiểm duyệt admin - ràng buộc thêm
+	// artworkID trong WHERE (giống DeleteOwned) để URL /artworks/{id}/comments/{commentID}
+	// không thể ẩn nhầm comment của tác phẩm khác chỉ bằng cách đoán commentID.
+	SetHidden(ctx context.Context, id, artworkID int64, hidden bool) error
 	CountByArtwork(ctx context.Context, artworkID int64) (int64, error)
 	// CountByArtworkBatch trả map artworkID -> số comment KHÔNG ẩn, dùng cho
 	// trang danh sách nhiều tác phẩm để tránh N+1 query.
@@ -101,8 +104,12 @@ func (r *commentRepository) DeleteOwned(ctx context.Context, id, artworkID int64
 	return rows > 0, nil
 }
 
-func (r *commentRepository) SetHidden(ctx context.Context, id int64, hidden bool) error {
-	result, err := r.db.ExecContext(ctx, `UPDATE artwork_comments SET is_hidden = ? WHERE id = ?`, hidden, id)
+func (r *commentRepository) SetHidden(ctx context.Context, id, artworkID int64, hidden bool) error {
+	result, err := r.db.ExecContext(
+		ctx,
+		`UPDATE artwork_comments SET is_hidden = ? WHERE id = ? AND artwork_id = ?`,
+		hidden, id, artworkID,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to set comment hidden state: %w", err)
 	}
@@ -111,7 +118,7 @@ func (r *commentRepository) SetHidden(ctx context.Context, id int64, hidden bool
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("comment not found: id=%d", id)
+		return fmt.Errorf("comment not found: id=%d, artwork_id=%d", id, artworkID)
 	}
 	return nil
 }

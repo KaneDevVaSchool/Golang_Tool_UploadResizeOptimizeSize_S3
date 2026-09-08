@@ -4,6 +4,7 @@ import { AdminHeader } from "../../components/admin/AdminHeader";
 import { AdminSidebar } from "../../components/admin/AdminSidebar";
 import { PageHeaderSlotProvider } from "../../components/admin/pageHeaderPortal";
 import { useAdminAuth } from "../../hooks/useAdminAuth";
+import { webpOf } from "../../lib/staticImage";
 import "../../styles/admin.css";
 
 const SIDEBAR_COLLAPSE_KEY = "vas_admin_sidebar_collapsed";
@@ -78,7 +79,10 @@ export default function AdminLayout() {
   if (loading) {
     return (
       <div className="admin-loading-screen" role="status" aria-live="polite">
-        <img src="/images/vas-mascot-wave.png" alt="" aria-hidden />
+        <picture>
+          <source srcSet={webpOf("/images/vas-mascot-wave.png")} type="image/webp" />
+          <img src="/images/vas-mascot-wave.png" alt="" aria-hidden />
+        </picture>
         <div className="admin-loading-shadow" aria-hidden />
         {/* Nói rõ đang chờ CÁI GÌ: màn hình này đợi API xác thực phiên, có
             thể lâu hơn hẳn một lần tải trang, và "Đang tải…" trơ ra vài giây

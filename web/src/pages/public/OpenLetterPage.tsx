@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { webpOf } from "../../lib/staticImage";
 
 const PARAGRAPHS = [
   `Hệ thống trường Việt Mỹ – VASchools là nơi tập hợp đội ngũ giáo viên, cán bộ nhân viên có
@@ -97,11 +98,14 @@ export default function OpenLetterPage() {
           <span className="letter-fold letter-fold--bottom" aria-hidden />
 
           <header className="letter-head">
-            <img
-              className="letter-wordmark"
-              src="/images/vas-wordmark-stacked.png"
-              alt="Vietnam America Schools"
-            />
+            <picture>
+              <source srcSet={webpOf("/images/vas-wordmark-stacked.png")} type="image/webp" />
+              <img
+                className="letter-wordmark"
+                src="/images/vas-wordmark-stacked.png"
+                alt="Vietnam America Schools"
+              />
+            </picture>
             <div className="letter-head-text">
               <p className="letter-kicker">Kỷ niệm 20 năm thành lập · 2006 – 2026</p>
               <h1 className="letter-title" id="letter-title">

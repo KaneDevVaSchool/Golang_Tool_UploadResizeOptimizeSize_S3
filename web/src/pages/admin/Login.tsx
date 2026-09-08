@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useScrollableBody } from "../../hooks/useScrollableBody";
 import { toast } from "../../lib/toastBus";
+import { webpOf } from "../../lib/staticImage";
 import "../../styles/admin.css";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -55,7 +56,10 @@ export default function Login() {
 
   return (
     <div className="admin-login">
-      <img className="admin-login-watermark" src="/images/background-logo.png" alt="" aria-hidden />
+      <picture>
+        <source srcSet={webpOf("/images/background-logo.png")} type="image/webp" />
+        <img className="admin-login-watermark" src="/images/background-logo.png" alt="" aria-hidden />
+      </picture>
       <div className="admin-login-scrim" aria-hidden />
 
       <motion.div
@@ -65,13 +69,16 @@ export default function Login() {
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
         <header className="admin-login-header">
-          <img
-            className="admin-login-logo"
-            src="/images/logo-2.png"
-            alt="Vietnam America Schools — Trường học của sự lắng nghe"
-            width={320}
-            height={92}
-          />
+          <picture>
+            <source srcSet={webpOf("/images/logo-2.png")} type="image/webp" />
+            <img
+              className="admin-login-logo"
+              src="/images/logo-2.png"
+              alt="Vietnam America Schools — Trường học của sự lắng nghe"
+              width={320}
+              height={92}
+            />
+          </picture>
         </header>
 
         <div className="admin-login-card">

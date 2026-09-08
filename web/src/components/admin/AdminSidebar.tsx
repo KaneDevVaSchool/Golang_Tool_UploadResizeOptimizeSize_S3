@@ -1,6 +1,7 @@
 import { Image, LayoutDashboard, Layers, Sparkles, Trophy, Upload, X } from "lucide-react";
 import { useEffect, type ComponentType } from "react";
 import { NavLink } from "react-router-dom";
+import { webpOf } from "../../lib/staticImage";
 
 type IconType = ComponentType<{ size?: number | string; strokeWidth?: number }>;
 
@@ -187,7 +188,10 @@ export function AdminSidebar({
         {!showCollapsed && (
           <div className="admin-sidebar-footer">
             <a href="/" target="_blank" rel="noreferrer" className="admin-sidebar-promo">
-              <img src="/images/vas-mascot-wave.png" alt="" className="admin-sidebar-promo-art" aria-hidden />
+              <picture>
+                <source srcSet={webpOf("/images/vas-mascot-wave.png")} type="image/webp" />
+                <img src="/images/vas-mascot-wave.png" alt="" className="admin-sidebar-promo-art" aria-hidden />
+              </picture>
               <span className="admin-sidebar-promo-copy">
                 <strong>Xem triển lãm</strong>
                 <span>Ngắm tác phẩm như khách ghé thăm</span>

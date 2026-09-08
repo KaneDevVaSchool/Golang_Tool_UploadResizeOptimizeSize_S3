@@ -5,6 +5,9 @@ import { Link } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { artworkImageURL } from "../../lib/artworkImage";
 import { detectIntent, isQueryTooShort, runMascotSearch, type MascotResult } from "../../lib/mascotSearch";
+import { webpOf } from "../../lib/staticImage";
+
+const MASCOT_SRC = "/images/vas-mascot-wave.png";
 
 const HIDE_STORAGE_KEY = "vas_mascot_hidden";
 
@@ -145,7 +148,10 @@ export function MascotAssistant() {
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
           >
             <span className="mascot-restore-avatar" aria-hidden>
-              <img src="/images/vas-mascot-wave.png" alt="" />
+              <picture>
+                <source srcSet={webpOf(MASCOT_SRC)} type="image/webp" />
+                <img src={MASCOT_SRC} alt="" />
+              </picture>
             </span>
           </motion.button>
         ) : !leaving ? (
@@ -376,7 +382,10 @@ export function MascotAssistant() {
               whileHover={{ scale: 1.08 }}
               whileTap={{ scale: 0.94 }}
             >
-              <img src="/images/vas-mascot-wave.png" alt="" className="mascot-fab-img" />
+              <picture>
+                <source srcSet={webpOf(MASCOT_SRC)} type="image/webp" />
+                <img src={MASCOT_SRC} alt="" className="mascot-fab-img" />
+              </picture>
             </motion.button>
           </motion.div>
         ) : null}

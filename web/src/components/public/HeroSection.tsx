@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { HeroCritters, HeroHillFar, HeroHillMid, HeroHillNear, HeroLeaf, HeroPlant, HeroTree } from "./HeroParallaxHills";
 import { useParallaxScrollListener } from "../../hooks/useParallaxScroll";
 import { fadeUp } from "../../lib/motionPresets";
+import { webpOf } from "../../lib/staticImage";
 import type { Region } from "./RegionTabs";
 
 const REGION_BUTTONS: { key: Region; label: string; icon: string }[] = [
@@ -222,15 +223,18 @@ export function HeroSection({ onSelectRegion }: { onSelectRegion: (region: Regio
       </div>
 
       <div className="hero-content" ref={contentRef}>
-        <motion.img
-          className="hero-wordmark"
-          src="/images/vas-wordmark-stacked.png"
-          alt="VA Schools"
-          custom={0}
-          variants={fadeUp}
-          initial="hidden"
-          animate="show"
-        />
+        <picture>
+          <source srcSet={webpOf("/images/vas-wordmark-stacked.png")} type="image/webp" />
+          <motion.img
+            className="hero-wordmark"
+            src="/images/vas-wordmark-stacked.png"
+            alt="VA Schools"
+            custom={0}
+            variants={fadeUp}
+            initial="hidden"
+            animate="show"
+          />
+        </picture>
         {/* Huy hiệu kỷ niệm - thay dòng kicker chữ hoa phẳng bằng một khối
             có viền/nền riêng: mốc "20" được tách ra làm con số lớn để mắt
             có một điểm dừng trước khi vào tiêu đề, thay vì 6 khối chữ cùng

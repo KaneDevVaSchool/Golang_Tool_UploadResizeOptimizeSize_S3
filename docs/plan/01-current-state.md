@@ -115,6 +115,27 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 | Bảng vinh danh một truy vấn | `HasAward` trong `ArtworkFilter` cho phép lấy mọi tác phẩm có giải một lần rồi tự nhóm, thay vì gọi `ListArtworks` cho từng giải |
 | Index cho truy vấn nóng | Migration `014`: `(is_published, created_at DESC)` và `(artwork_id, is_hidden, created_at DESC)` — bỏ được filesort |
 
+### Ảnh tĩnh frontend sang WebP (hoàn thành 2026-09-08)
+
+Chưa nằm trong roadmap có sẵn — làm theo yêu cầu trực tiếp nâng cấp tốc độ tải trang. Khác
+với "Tối ưu truyền tải" ở trên (nhắm vào ảnh **tác phẩm** upload qua S3), mục này nhắm vào
+ảnh **trang trí tĩnh** đóng gói cùng frontend (`web/public/images/`) — loại trước đó không
+qua pipeline sinh biến thể của backend nên vẫn là PNG thô, một số nạp tĩnh ngay ở trang chủ
+(dải đồi parallax của `HeroSection`, mascot rồng của `MascotAssistant`, wordmark của
+`PublicNavbar`) — tức nằm trong critical path của lượt tải đầu tiên.
+
+| Hạng mục | Ghi chú |
+|---|---|
+| 12 ảnh PNG → WebP | Sinh một lần bằng `sharp` (quality 82), giữ nguyên PNG gốc làm dự phòng. Tổng dung lượng 12 file giảm từ ~1.53MB còn ~423KB (~72%); riêng `vas-mascot-wave.png` (mascot, hiện ở mọi trang public) giảm 90% (620KB → 59KB) |
+| `web/src/lib/staticImage.ts` | Hàm `webpOf()` duy nhất đổi đuôi `.png` → `.webp` — không viết logic chọn định dạng riêng ở từng component, cùng triết lý với `lib/artworkImage.ts` nhưng đơn giản hơn vì asset tĩnh chỉ có 1 cỡ, không cần chọn theo kích thước |
+| Cách áp dụng | Bọc `<picture><source type="image/webp">` quanh `<img>`/`<motion.img>` hiện có — giữ nguyên class/props trên thẻ `img` nên không đụng CSS (đã xác nhận `public.css`/`admin.css` chỉ select trực tiếp qua class trên ảnh, không có selector kiểu `.cha img`) |
+| Trường hợp CSS `background-image` | `.admin-content-watermark-logo` (admin.css) dùng `image-set()` với `url()` PNG làm fallback đứng trước — trình duyệt không hỗ trợ `image-set()` bỏ qua khai báo lạ, giữ khai báo PNG hợp lệ phía trên |
+| Không đổi | Backend, API, migration, biến môi trường — thuần thay asset tĩnh + cách render ở frontend |
+
+⚠️ Không tự động hoá bước sinh WebP (không thêm vào `npm run build`): asset tĩnh này thay đổi
+hiếm, sinh một lần bằng tay là đủ. Thêm ảnh trang trí tĩnh mới thì lặp lại thao tác này thủ
+công, không phải sinh ra ở mỗi lần build.
+
 ### Trạng thái chờ khi chuyển trang (hoàn thành 2026-09-06)
 
 Chưa nằm trong roadmap có sẵn — làm theo yêu cầu trực tiếp cải thiện trải nghiệm khi mạng

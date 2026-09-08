@@ -417,6 +417,8 @@ func (c *Container) GetServerHandler() http.Handler {
 			adminAPIMux.HandleFunc("GET /api/v1/admin/artworks/{id}/download", c.ArtworkHandler.HandleDownload)
 			adminAPIMux.HandleFunc("PATCH /api/v1/admin/artworks/{id}/featured", c.ArtworkHandler.HandleSetFeatured)
 			adminAPIMux.HandleFunc("PATCH /api/v1/admin/artworks/bulk-featured", c.ArtworkHandler.HandleSetFeaturedBatch)
+			adminAPIMux.HandleFunc("GET /api/v1/admin/artworks/{id}/comments", c.ArtworkHandler.HandleListComments)
+			adminAPIMux.HandleFunc("PATCH /api/v1/admin/artworks/{id}/comments/{commentID}", c.ArtworkHandler.HandleSetCommentHidden)
 		}
 		if c.AwardHandler != nil {
 			adminAPIMux.HandleFunc("GET /api/v1/admin/awards", c.AwardHandler.HandleListAwards(true))
