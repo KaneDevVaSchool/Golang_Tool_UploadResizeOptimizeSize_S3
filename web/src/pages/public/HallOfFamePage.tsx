@@ -84,8 +84,8 @@ function tierOf(entry: BillboardEntry): number {
   return OTHER_TIER;
 }
 
-/** Thứ tự hiển thị trong bục: Nhì trái - Nhất giữa - Ba phải. */
-const PODIUM_ORDER = [2, 1, 3];
+/** Thứ tự hiển thị trong bục: mỗi hạng một hàng, Nhất trên cùng - Nhì - Ba. */
+const PODIUM_ORDER = [1, 2, 3];
 
 /**
  * Nhánh nguyệt quế cho khung quán quân. Vẽ tay bằng path thay vì dùng icon

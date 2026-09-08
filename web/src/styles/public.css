@@ -7035,17 +7035,18 @@ html.scrollable-page {
 }
 
 /* --- Tầng 1: bục vinh danh --------------------------------------------- */
-/* align-items:end để ba cột cùng chạm một đường đáy: cột giữa cao hơn nhờ
-   ảnh to hơn + bệ dày hơn, chứ không phải nhờ đẩy lệch bằng margin - nhờ
-   vậy hàng vẫn thẳng khi tên tác phẩm dài ngắn khác nhau. */
+/* Mỗi hạng một hàng riêng (Nhất trên cùng, to nhất - rồi Nhì - rồi Ba),
+   thay vì ba cột cạnh nhau: card được to hơn hẳn vì không còn phải chia ba
+   bề ngang, và thứ hạng đọc theo đúng thứ tự trên xuống thay vì theo vị
+   trí trái/giữa/phải. */
 .hall-podium {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: end;
-  gap: 1.75rem;
-  /* Bục hẹp hơn dãy card bên dưới: 3 khung trải hết 84rem thì mỗi bức to
-     quá, đẩy chiều cao vượt màn hình. */
-  max-width: 68rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.5rem;
+  /* Hàng vẫn bó hẹp hơn dãy card bên dưới - card to hết cỡ 84rem thì phá
+     mất cảm giác "bục", trông như một dải grid thường. */
+  max-width: 46rem;
   margin-inline: auto;
   width: 100%;
 }
@@ -7056,6 +7057,7 @@ html.scrollable-page {
   flex-direction: column;
   align-items: center;
   min-width: 0;
+  width: 100%;
   /* Chừa chỗ cho dải tên giải nhô lên trên đỉnh card. */
   padding-top: 1.45rem;
 }
@@ -7078,12 +7080,8 @@ html.scrollable-page {
   min-width: 0;
   flex: 1 1 0;
 }
-/* Đồng giải: mỗi khung nhường chỗ cho khung khác trong cùng hạng, không
-   còn chiếm trọn bề ngang cột như trường hợp 1 tác phẩm/hạng. */
-.hall-podium-slot[data-shared="true"] .hall-podium-entry {
-  flex-basis: 11rem;
-  max-width: 13rem;
-}
+/* max-width theo hạng (1 tác phẩm/hạng) và quy tắc [data-shared] (nhiều
+   tác phẩm/hạng) khai báo cạnh phần chiều cao ảnh - xem .hall-card-media. */
 
 /* Vùng ôm khung tranh - mốc định vị cho vòng nguyệt quế và hào quang. */
 .hall-podium-stage {
@@ -7473,23 +7471,28 @@ html.scrollable-page {
 
 /* Ảnh trên bục: chiều cao bám theo viewport (svh = phần chắc chắn nhìn
    thấy trên di động, không đổi khi thanh địa chỉ ẩn/hiện) chứ không theo
-   tỉ lệ cố định, để cả bục vinh danh lọt trong một màn hình mà không phải
-   cuộn. clamp giữ ảnh không quá nhỏ trên laptop thấp, cũng không phình to
-   trên màn dọc. Cột giữa cao hơn hai bên - chính chỗ này tạo bậc của bục. */
+   tỉ lệ cố định thay vì bám chiều cao viewport: mỗi hạng giờ chiếm trọn
+   một hàng riêng (không còn ba cột phải ép vừa một màn hình), nên card
+   được to hẳn theo bề ngang khả dụng của hàng, không bị trần chiều cao. */
 .hall-card--podium .hall-card-media {
-  aspect-ratio: auto;
-  height: clamp(9.5rem, 30svh, 17rem);
+  aspect-ratio: 4 / 3;
+  height: auto;
 }
-.hall-podium-slot[data-rank="1"] .hall-card-media {
-  height: clamp(12rem, 37svh, 21.5rem);
+/* Hạng Nhất: khung rộng hơn hẳn (không chỉ cao hơn) - đây là chỗ tạo bậc
+   giữa các hạng khi cả ba đều xếp dọc cùng bề ngang hàng như nhau. */
+.hall-podium-slot[data-rank="1"] .hall-podium-entry {
+  max-width: 26rem;
 }
-/* Đồng giải: khung hẹp lại theo bề ngang (nhiều khung/hạng) nhưng vẫn cao
-   như cũ thì ảnh bị "gầy" mất cân đối - hạ chiều cao theo tỉ lệ khung. */
-.hall-podium-slot[data-shared="true"] .hall-card-media {
-  height: clamp(8.5rem, 24svh, 13.5rem);
+.hall-podium-slot[data-rank="2"] .hall-podium-entry,
+.hall-podium-slot[data-rank="3"] .hall-podium-entry {
+  max-width: 20rem;
 }
-.hall-podium-slot[data-rank="1"][data-shared="true"] .hall-card-media {
-  height: clamp(9.5rem, 27svh, 15rem);
+/* Đồng giải: nhiều khung chung một hàng thì mỗi khung nhường bớt bề ngang
+   cho khung khác, không còn được hưởng max-width của trường hợp 1 tác
+   phẩm/hạng ở trên. */
+.hall-podium-slot[data-shared="true"] .hall-podium-entry {
+  flex-basis: 13rem;
+  max-width: 16rem;
 }
 
 .hall-card-media img {
@@ -8003,22 +8006,15 @@ html.scrollable-page {
 }
 
 @media (max-width: 640px) {
-  /* Bục xếp dọc: Nhất lên trước, rồi Nhì, rồi Ba. Ba cột chen trên màn
-     hẹp làm ảnh nhỏ tới mức không nhìn ra tranh - thứ hạng lúc này đọc
-     theo thứ tự trên xuống thay vì theo chiều cao. */
+  /* Bục đã xếp dọc từ desktop (mỗi hạng một hàng: Nhất - Nhì - Ba) - màn
+     hẹp chỉ cần siết khoảng cách và bề rộng card, không cần đổi hướng. */
   .hall-podium {
-    grid-template-columns: minmax(0, 1fr);
     gap: 1.75rem;
   }
-  .hall-podium-slot[data-rank="1"] {
-    order: -1;
-  }
-  /* Bục xếp dọc thì không còn ba cột phải vừa một màn hình nữa - trả ảnh
-     về tỉ lệ cố định (phải huỷ height ở trên, nếu không nó vẫn thắng). */
-  .hall-podium-slot[data-rank="1"] .hall-card-media,
-  .hall-card--podium .hall-card-media {
-    aspect-ratio: 4 / 3;
-    height: auto;
+  .hall-podium-slot[data-rank="1"] .hall-podium-entry,
+  .hall-podium-slot[data-rank="2"] .hall-podium-entry,
+  .hall-podium-slot[data-rank="3"] .hall-podium-entry {
+    max-width: 22rem;
   }
   .hall-tier-heading {
     flex-wrap: wrap;
@@ -8079,10 +8075,10 @@ html.scrollable-page {
   }
 }
 
-/* Màn hình thấp (laptop 13" ngang, cửa sổ bị thu): banner và bệ bục co
-   thêm để ba bục vẫn trọn trong tầm nhìn. Chỉ áp khi còn đủ rộng cho 3
-   cột - dưới 640px bục đã xếp dọc nên quy tắc này không liên quan. */
-@media (max-height: 780px) and (min-width: 641px) {
+/* Màn hình thấp (laptop 13" ngang, cửa sổ bị thu): siết khoảng đệm và ẩn
+   bớt chữ phụ để đỡ phải cuộn nhiều - bục giờ xếp hàng dọc theo thiết kế
+   (không còn ép 3 cột vừa một màn hình) nên áp dụng ở mọi bề ngang. */
+@media (max-height: 780px) {
   .hall-section {
     padding-top: 0.5rem;
   }
@@ -8091,14 +8087,6 @@ html.scrollable-page {
   }
   .hall-podium-base {
     padding: 0.4rem 0.7rem 0.5rem;
-  }
-  /* Bục đã cao thêm một nấc cho trang trọng - trên màn thấp phải siết trần
-     lại, nếu không hàng dưới của bục bị đẩy khỏi tầm nhìn. */
-  .hall-card--podium .hall-card-media {
-    height: clamp(8rem, 25svh, 12.5rem);
-  }
-  .hall-podium-slot[data-rank="1"] .hall-card-media {
-    height: clamp(9.5rem, 31svh, 15rem);
   }
   .hall-honour-heading {
     margin-bottom: 1.5rem;
@@ -8207,6 +8195,42 @@ html.scrollable-page {
     transform: scale(calc(var(--fw-scale, 1) * 3.4));
   }
 }
+/* Vòng khói sáng lan rộng sau chớp nổ - dùng ::after của chính flash thay
+   vì thêm phần tử DOM mới, để không đụng tới ngân sách hiệu năng theo
+   device tier (xem BURST_BUDGET trong HallFireworks.tsx). Nở chậm và mờ
+   dần lâu hơn flash, tạo cảm giác "dư âm" của quả pháo thay vì tắt phụt. */
+.hall-firework-flash::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  border: 1px solid var(--fw-color, #f0b429);
+  opacity: 0;
+  transform: scale(1);
+  animation: hall-firework-ring 6s ease-out infinite;
+  animation-delay: var(--fw-delay, 0s);
+}
+@keyframes hall-firework-ring {
+  0%,
+  10% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  13% {
+    opacity: 0.6;
+  }
+  /* Nở qua đúng 1 lần rồi tắt - vòng khói chỉ cần rộng hơn chớp sáng ở
+     đỉnh (::after kế thừa transform scale của .hall-firework-flash nên
+     hệ số ở đây không cần lớn, cha đã phóng to sẵn). */
+  32% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
 
 .hall-firework-spark {
   position: absolute;
@@ -8224,7 +8248,10 @@ html.scrollable-page {
   animation: hall-firework-burst 6s ease-out infinite;
   animation-delay: var(--fw-delay, 0s);
 }
-/* Tia đứng yên trong lúc viên đạn còn đang bay (0 → 10%), rồi mới bung. */
+/* Tia đứng yên trong lúc viên đạn còn đang bay (0 → 10%), rồi mới bung.
+   Opacity dao động nhẹ ở pha rơi (30-38%) thay vì mờ tuyến tính - đúng
+   cảm giác tàn pháo lấp lánh (twinkle) chứ không phải một chấm sáng tắt
+   dần đều. */
 @keyframes hall-firework-burst {
   0%,
   10% {
@@ -8238,6 +8265,13 @@ html.scrollable-page {
   26% {
     opacity: 0.95;
     transform: rotate(var(--fw-angle)) translateY(calc(-84px * var(--fw-scale, 1))) scale(1);
+  }
+  30% {
+    opacity: 0.5;
+  }
+  34% {
+    opacity: 0.9;
+    transform: rotate(var(--fw-angle)) translateY(calc(-96px * var(--fw-scale, 1))) scale(0.55);
   }
   40% {
     opacity: 0;
