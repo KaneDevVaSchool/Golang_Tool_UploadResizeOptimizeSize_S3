@@ -7046,7 +7046,7 @@ html.scrollable-page {
   gap: 2.5rem;
   /* Hàng vẫn bó hẹp hơn dãy card bên dưới - card to hết cỡ 84rem thì phá
      mất cảm giác "bục", trông như một dải grid thường. */
-  max-width: 46rem;
+  max-width: 50rem;
   margin-inline: auto;
   width: 100%;
 }
@@ -7074,11 +7074,39 @@ html.scrollable-page {
   width: 100%;
 }
 .hall-podium-entry {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   min-width: 0;
   flex: 1 1 0;
+  /* Chừa chỗ cho khối chân đế 3D (::after, xem bên dưới) nhô ra dưới bệ. */
+  padding-bottom: var(--hall-plinth-h, 0.9rem);
+}
+/* Khối chân đế 3D dưới mỗi bệ - mô phỏng bục thể thao thật (mặt trước tối
+   dần xuống đáy để gợi độ dày khối + bóng đổ), cao thấp khác nhau theo
+   hạng qua --hall-plinth-h (khai ở từng data-rank bên dưới): Nhất cao
+   nhất, Ba thấp nhất. Trước đây chỉ hạng Nhất có hào quang/viền nổi bật,
+   hai hạng còn lại chỉ là card phẳng + dải chữ - giờ cả ba đều "đứng"
+   trên một khối bục thật thay vì lơ lửng. Đặt ở entry (mỗi tác phẩm một
+   chân đế riêng, không dùng chung 1 khối cho cả slot) vì đồng giải có
+   thể xuống dòng trên màn hẹp - dùng chung sẽ chỉ khối cuối có chân đế,
+   các khối phía trên "lơ lửng". Không phải .hall-podium-base vì đó
+   overflow:hidden để cắt số hạng chìm tràn góc, và không thêm phần tử
+   JSX. */
+.hall-podium-entry::after {
+  content: "";
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 0;
+  height: var(--hall-plinth-h, 0.9rem);
+  z-index: 0;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--hall-accent, var(--vas-trach-nhiem)) 85%, #000 15%) 0%,
+    color-mix(in srgb, var(--hall-accent, var(--vas-trach-nhiem)) 55%, #000 45%) 100%);
+  border-radius: 0 0 0.6rem 0.6rem;
+  box-shadow: 0 10px 18px rgba(20, 20, 15, 0.24);
 }
 /* max-width theo hạng (1 tác phẩm/hạng) và quy tắc [data-shared] (nhiều
    tác phẩm/hạng) khai báo cạnh phần chiều cao ảnh - xem .hall-card-media. */
@@ -7161,12 +7189,15 @@ html.scrollable-page {
   width: 100%;
   margin-top: 0.7rem;
   padding: 0.6rem 0.85rem 0.7rem;
-  border-radius: 0.85rem;
+  /* Vuông 2 góc dưới - nối liền vào khối chân đế 3D (.hall-podium-slot::after)
+     ngay bên dưới thay vì để hở khe cong giữa hai khối. */
+  border-radius: 0.85rem 0.85rem 0 0;
   text-align: center;
   overflow: hidden;
   background: var(--hall-rank-base, rgba(255, 255, 255, 0.9));
   box-shadow: 0 6px 18px rgba(20, 60, 50, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
+
 /* Số hạng cỡ lớn, chìm mờ phía sau chữ - đọc ra thứ bậc từ xa. */
 .hall-podium-rank {
   position: absolute;
@@ -7181,18 +7212,16 @@ html.scrollable-page {
   opacity: 0.13;
   pointer-events: none;
 }
-/* Chữ nổi trên số hạng chìm, và mọi dòng đều gói trong đúng một hàng - tràn
-   thì cắt bằng "…". Ba bệ nằm cạnh nhau nên chỉ cần một dòng rớt xuống là
-   ba cột lệch đáy nhau ngay; thà cắt tên trường dài còn hơn vỡ hàng, tên
-   đầy đủ vẫn đọc được trong lightbox. */
+/* Chữ nổi trên số hạng chìm. Trước đây khoá 1 dòng + cắt "…" vì ba bệ nằm
+   cạnh nhau (cột) cần cùng chiều cao - giờ mỗi hạng chiếm hẳn một hàng
+   riêng nên không còn ràng buộc đó; tên tác phẩm/trường dài được xuống
+   dòng đầy đủ thay vì mất chữ. */
 .hall-podium-base > *:not(.hall-podium-rank) {
   position: relative;
   z-index: 1;
   display: block;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: break-word;
 }
 .hall-podium-banner {
   font-size: 0.72rem;
@@ -7229,12 +7258,14 @@ html.scrollable-page {
   color: var(--vas-text-muted);
 }
 
-/* Hạng Nhất: cột giữa - ảnh to hơn, bệ vàng đậm, viền vàng. */
+/* Hạng Nhất: cột giữa - ảnh to hơn, bệ vàng đậm, viền vàng, chân đế cao
+   nhất trong ba khối (đúng hình dáng bục thể thao thật: Nhất cao nhất). */
 .hall-podium-slot[data-rank="1"] {
   --hall-rank-line: #e0a512;
   --hall-rank-ink: #7a5205;
   --hall-rank-base: linear-gradient(180deg, #ffd76a 0%, #f5b127 55%, #e69a12 100%);
   --hall-accent: #e0a512;
+  --hall-plinth-h: 1.7rem;
 }
 .hall-podium-slot[data-rank="1"] .hall-podium-crest {
   font-size: 0.84rem;
@@ -7262,19 +7293,21 @@ html.scrollable-page {
   opacity: 0.16;
 }
 
-/* Hạng Nhì: bạc. */
+/* Hạng Nhì: bạc, chân đế thấp hơn Nhất - đúng thứ hai trên bục thật. */
 .hall-podium-slot[data-rank="2"] {
   --hall-rank-line: #9aa6b8;
   --hall-rank-ink: #46536a;
   --hall-rank-base: linear-gradient(180deg, #f4f7fb 0%, #dde4ee 100%);
   --hall-accent: #8c99ad;
+  --hall-plinth-h: 1.15rem;
 }
-/* Hạng Ba: đồng. */
+/* Hạng Ba: đồng, chân đế thấp nhất. */
 .hall-podium-slot[data-rank="3"] {
   --hall-rank-line: #d9a441;
   --hall-rank-ink: #8a5a1c;
   --hall-rank-base: linear-gradient(180deg, #fdf1d8 0%, #f6e0b6 100%);
   --hall-accent: #c98b32;
+  --hall-plinth-h: 0.85rem;
 }
 
 /* Khung gỗ trang trọng nhất — Bảng vàng. Dày hơn tiêu biểu: walnut kép
@@ -7481,18 +7514,18 @@ html.scrollable-page {
 /* Hạng Nhất: khung rộng hơn hẳn (không chỉ cao hơn) - đây là chỗ tạo bậc
    giữa các hạng khi cả ba đều xếp dọc cùng bề ngang hàng như nhau. */
 .hall-podium-slot[data-rank="1"] .hall-podium-entry {
-  max-width: 26rem;
+  max-width: 29rem;
 }
 .hall-podium-slot[data-rank="2"] .hall-podium-entry,
 .hall-podium-slot[data-rank="3"] .hall-podium-entry {
-  max-width: 20rem;
+  max-width: 22.5rem;
 }
 /* Đồng giải: nhiều khung chung một hàng thì mỗi khung nhường bớt bề ngang
    cho khung khác, không còn được hưởng max-width của trường hợp 1 tác
    phẩm/hạng ở trên. */
 .hall-podium-slot[data-shared="true"] .hall-podium-entry {
-  flex-basis: 13rem;
-  max-width: 16rem;
+  flex-basis: 14.5rem;
+  max-width: 18rem;
 }
 
 .hall-card-media img {
