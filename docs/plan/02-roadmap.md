@@ -154,17 +154,22 @@ qua WASM nhúng + purego, nên build tĩnh giữ nguyên.
 
 ## Ưu tiên 2 — Vận hành và trải nghiệm
 
-### P2.1 — API kiểm duyệt bình luận
+### P2.1 — API kiểm duyệt bình luận ✅
 
 Cột `is_hidden` đã có và đã được lọc; chỉ thiếu endpoint.
 
 **Cách làm.** `PATCH /api/v1/admin/artworks/{id}/comments/{commentID}` với thân
 `{is_hidden: bool}`, cộng một màn hình danh sách bình luận trong admin.
 
-**Hoàn thành khi.**
+**Kết quả.** `GET .../comments` (toàn bộ, kể cả đã ẩn) + `PATCH .../comments/{commentID}` ở
+`ArtworkHandler`, đi qua `ArtworkService.ListComments`/`SetCommentHidden` (đúng luồng
+Handler→Service→Repository, không phải ngoại lệ như `PublicHandler`). Frontend:
+`ArtworkCommentsModal` mở từ icon bình luận ở `/admin/artworks`. Xem
+[API.md](../API.md) và [04-public-engagement.md](../detail_design/04-public-engagement.md).
 
-- [ ] Admin ẩn/hiện được bình luận từ giao diện, không cần chạm SQL
-- [ ] Bình luận bị ẩn biến mất khỏi API public ngay
+- [x] Admin ẩn/hiện được bình luận từ giao diện, không cần chạm SQL
+- [x] Bình luận bị ẩn biến mất khỏi API public ngay (endpoint public đã lọc `is_hidden` từ
+      trước, endpoint admin không cần làm gì thêm để đạt tiêu chí này)
 
 ### P2.2 — Dọn ảnh mồ côi trên S3
 
@@ -604,6 +609,7 @@ Không cần cho lần chạy này, ghi lại để không quên.
 ✅ Đã xong    P0.2 commit việc tồn đọng
               P1.2 gom truy vấn học sinh (+ bảng vinh danh, index migration 014)
               P1.5 biến thể ảnh WebP
+              P2.1 kiểm duyệt bình luận
               P2.3 nén gzip phản hồi
 
 Tuần này      P0.3 xoay vòng log
@@ -612,7 +618,6 @@ Tuần sau      P1.1 dọn artwork_views
               P1.4 magic byte upload đơn
 
 Trước sự kiện P1.3 lọc khu vực bằng SQL
-              P2.1 kiểm duyệt bình luận
 
 Sau sự kiện   P2.2 dọn S3, P2.4, P2.5, và nhóm Ưu tiên 3
 ```

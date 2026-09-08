@@ -67,7 +67,7 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 |---|---|
 | 6 trang | Trang chủ, tiêu biểu, phòng triển lãm, bảng vàng, thư ngỏ, 404 |
 | Cảm xúc ẩn danh | 6 loại, idempotent nhờ `INSERT IGNORE` + ràng buộc UNIQUE |
-| Bình luận ẩn danh | Tự nhập tên, tự xoá bình luận của mình |
+| Bình luận ẩn danh | Tự nhập tên, tự xoá bình luận của mình; admin kiểm duyệt ẩn/hiện qua `/admin/artworks` (`ArtworkCommentsModal`) |
 | Đếm lượt xem | Mỗi lần mở là 1 lượt — bỏ chống trùng 24 giờ ngày 2026-09-07 |
 | Tải ảnh có watermark | Qua proxy backend, ghi nhật ký vào `artwork_downloads` |
 | Trợ lý mascot | Tìm kiếm trong dữ liệu sẵn có, không gọi dịch vụ AI nào |
@@ -275,11 +275,6 @@ bảng, nhưng sẽ thành vấn đề ngay khi thêm luật nghiệp vụ (lọ
 
 `UpdateArtwork` sửa `school_id`/`grade_level_id` trên `artworks` nhưng không đồng bộ ngược
 về `students` (`artwork_service.go:264-270`).
-
-### Chưa có API kiểm duyệt bình luận
-
-Cột `is_hidden` có, repository lọc theo nó, nhưng **không có endpoint** để bật/tắt. Hiện
-phải `UPDATE` bằng SQL tay.
 
 ### Không còn kiểm tra magic byte ở bất kỳ đường upload nào ⚠️
 

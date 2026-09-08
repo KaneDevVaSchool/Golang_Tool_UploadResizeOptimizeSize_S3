@@ -530,6 +530,43 @@ gọi lặp endpoint đơn lẻ ở trên, dùng cho thao tác chọn nhiều tr
 
 `ids` rỗng → **400 `VALIDATION_ERROR`**. Id không tồn tại bị bỏ qua lặng lẽ, không coi là lỗi.
 
+### `GET /api/v1/admin/artworks/{id}/comments`
+
+Kiểm duyệt bình luận. Trả **toàn bộ** bình luận của tác phẩm — kể cả `is_hidden=true` — khác
+`GET /api/v1/public/artworks/{id}/comments` vốn luôn lọc bỏ comment đã ẩn. Sắp mới nhất
+trước.
+
+```json
+{
+  "success": true,
+  "data": [
+    { "id": 41, "artwork_id": 12, "display_name": "Phụ huynh lớp 3A2",
+      "content": "Tranh đẹp quá!", "is_hidden": false, "created_at": "2026-09-01T08:12:00+07:00" },
+    { "id": 40, "artwork_id": 12, "display_name": "…",
+      "content": "…", "is_hidden": true, "created_at": "2026-08-30T10:00:00+07:00" }
+  ]
+}
+```
+
+### `PATCH /api/v1/admin/artworks/{id}/comments/{commentID}`
+
+Ẩn/hiện 1 bình luận.
+
+```json
+{ "is_hidden": true }
+```
+
+```json
+{ "success": true, "data": { "is_hidden": true } }
+```
+
+`commentID` không thuộc đúng `{id}` (hoặc không tồn tại) → **404 `NOT_FOUND`** — cùng lỗi
+cho cả hai trường hợp, không phân biệt để tránh dò tồn tại bằng mã lỗi (cùng nguyên tắc với
+`DELETE /public/.../comments/{commentID}`, xem
+[04-public-engagement.md](./detail_design/04-public-engagement.md)). Ẩn có hiệu lực ngay:
+`GET /public/artworks/{id}/comments` lọc theo `is_hidden` ở mọi lượt gọi tiếp theo, không
+cần cache invalidation.
+
 ## Giải thưởng
 
 | Method | Đường dẫn |

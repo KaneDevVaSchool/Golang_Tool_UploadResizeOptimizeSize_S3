@@ -596,6 +596,18 @@ cuộn nội bộ, xem mục 7) thay vì phủ toàn viewport - tràn xuống đ
 (`components/ConfirmDialog.tsx`). Modal/dialog toàn màn hình mới thêm sau này
 **phải** portal ra `document.body`, không phụ thuộc vị trí render trong cây.
 
+**Kiểm duyệt bình luận (`ArtworkCommentsModal`).** Icon bình luận (số `comment_count` ở cột
+"Tương tác" trong List, icon riêng ở Grid) mở modal liệt kê **toàn bộ** bình luận của tác
+phẩm — kể cả đã ẩn — qua `GET /api/v1/admin/artworks/{id}/comments`, mỗi dòng có nút Ẩn/Hiện
+gọi `PATCH .../comments/{commentID}` (xem [API.md](../API.md) và
+[04-public-engagement.md](./04-public-engagement.md)). Component dùng chung khung CSS
+`.artwork-modal-*` với `ArtworkEditModal` (cùng lý do portal ra `document.body`, xem dưới),
+chỉ thêm class riêng `.comments-modal-*` cho phần danh sách. Ẩn/hiện thành công cập nhật
+`comment_count` ngay trên state `items` của trang (không phải gọi lại `load()` cả danh sách)
+qua callback `onCountChange`, và tải lại danh sách bình luận mỗi lần mở modal (kể cả cùng
+tác phẩm) để không hiện dữ liệu cũ nếu có bình luận mới từ trang public trong lúc admin đang
+xem trang khác.
+
 ### Dải card "theo khu vực" ở đầu trang Tác phẩm/Giải thưởng/Nhóm chủ đề — đã gỡ bỏ
 
 Ba trang quản trị `ArtworksListPage`, `AwardsPage`, `TopicCategoriesPage` từng mở đầu bằng

@@ -115,8 +115,22 @@ với token của từng bình luận — frontend chỉ hiện nút xoá ở b�
 ### Kiểm duyệt
 
 Cột `is_hidden` tồn tại, và `ListByArtwork(ctx, id, false)` lọc bỏ bình luận bị ẩn khỏi API
-public. Nhưng ⚠️ **chưa có endpoint admin nào bật/tắt cờ này** — hiện phải `UPDATE` bằng SQL
-tay. Xem [plan/02-roadmap.md](../plan/02-roadmap.md).
+public. Màn hình kiểm duyệt ở admin (`/admin/artworks` → icon bình luận trên mỗi tác phẩm,
+`ArtworkCommentsModal.tsx`) gọi:
+
+```text
+GET   /api/v1/admin/artworks/{id}/comments                    -> toàn bộ bình luận, kể cả đã ẩn
+PATCH /api/v1/admin/artworks/{id}/comments/{commentID}  body: {is_hidden}
+```
+
+Khác `PublicHandler` (ngoại lệ gọi thẳng repository ở §0 CLAUDE.md), hai endpoint này đi qua
+`ArtworkService.ListComments`/`SetCommentHidden` — đúng luồng Handler → Service → Repository
+vì `ArtworkHandler` không nằm trong diện ngoại lệ.
+
+`CommentRepository.SetHidden` nhận cả `id` **và** `artworkID` trong `WHERE` (cùng nguyên tắc
+với `DeleteOwned` ở mục 4.4) — admin không thể ẩn nhầm bình luận của tác phẩm khác chỉ bằng
+cách đổi `commentID` trên URL của tác phẩm mình đang xem. Không khớp cả hai → 404, không cập
+nhật.
 
 ## 5. Lượt xem — đếm mỗi lần mở, không chống trùng
 
