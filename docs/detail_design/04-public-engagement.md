@@ -50,14 +50,21 @@ Mọi request sau đó    →  đọc lại và gửi kèm
 bằng `ENUM` trong MySQL. Handler kiểm tra qua `models.ValidReactionTypes` trước khi chạm DB,
 nên giá trị lạ bị chặn ở tầng ứng dụng với thông báo rõ ràng thay vì để MySQL báo lỗi.
 
-### Quy tắc: nhiều loại được, trùng loại thì không
+### Quy tắc: mỗi người một cảm xúc, đổi loại thì thay thế
 
-Ràng buộc `UNIQUE(artwork_id, visitor_token, reaction_type)` cho phép **một người thả nhiều
-loại cảm xúc khác nhau** trên cùng tác phẩm, nhưng mỗi loại chỉ tính một lần.
+Giống Facebook: một visitor chỉ giữ **đúng một** cảm xúc trên một tác phẩm tại một thời
+điểm. Chọn loại mới thì loại cũ biến mất, không cộng dồn.
 
-Repository dùng `INSERT IGNORE` (`reaction_repository.go:36`) nên bấm lại nhiều lần là vô
-hại — không lỗi, không nhân bản. Idempotent theo đúng nghĩa: gửi lại request cho cùng kết
-quả.
+> ⚠️ Trước đây tài liệu này ghi ngược lại — "một người thả nhiều loại cảm xúc khác nhau" —
+> đúng với ràng buộc DB lúc đó (`UNIQUE(artwork_id, visitor_token, reaction_type)` chỉ chặn
+> trùng đúng loại) nhưng sai với trải nghiệm: `ReactionPicker.tsx` phía frontend chỉ hiển
+> thị đúng một icon "đang chọn" cho mỗi visitor, nên đổi loại mà backend cộng dồn khiến
+> tổng lượt hiện sai — bấm ❤️ rồi đổi 👍 thì tổng nhảy từ 1 lên 2 dù chỉ một người thao tác.
+> Phát hiện lúc người dùng báo lỗi thực tế, sửa ngày 2026-09-09.
+
+Repository (`reaction_repository.go`) giờ chạy trong một transaction: xoá mọi reaction khác
+loại của visitor cho tác phẩm đó, rồi mới `INSERT IGNORE` reaction mới. `INSERT IGNORE` vẫn
+giữ để bấm lại đúng loại đang có là vô hại — không lỗi, không nhân bản.
 
 ```text
 POST   /api/v1/public/artworks/{id}/reactions          body: {reaction_type, visitor_token}
