@@ -1,4 +1,4 @@
-// Diễn giải câu gõ tự do của khách vào ô tìm kiếm của mascot rồng thành một
+// Diễn giải câu gõ tự do của khách vào ô tìm kiếm của mascot Kỳ Lân thành một
 // trong ba ý định đã biết, rồi map sang đúng API public sẵn có
 // (fetchPublicArtworks/fetchBillboard) - KHÔNG gọi AI ngoài, chỉ so khớp từ
 // khoá tiếng Việt (có bỏ dấu) và một bước "gõ gần đúng" (Levenshtein khoảng

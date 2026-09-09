@@ -1514,7 +1514,7 @@ html.scrollable-page {
   mask-image: linear-gradient(to bottom, transparent 0%, black 28%);
 }
 
-/* Giá đỡ parallax cho hoa lá/rồng/mascot/cây cỏ: phủ toàn Hero, chỉ dịch
+/* Giá đỡ parallax cho hoa lá/mascot/cây cỏ: phủ toàn Hero, chỉ dịch
    chuyển theo scroll (translateY set inline từ React); phần tử con bên
    trong giữ nguyên position/animation riêng của nó (sway CSS, scale
    framer, …) nên không có xung đột thuộc tính transform giữa 2 tầng. */
@@ -8506,7 +8506,7 @@ html.scrollable-page {
 
 /* ---------------------------------------------------------------------- */
 /* Trang 404 (public) - dùng nền FeaturedGardenScene có sẵn, chỉ thêm khối */
-/* nội dung ở giữa: mascot rồng + biển 404 + lối tắt quay lại.             */
+/* nội dung ở giữa: mascot Kỳ Lân + biển 404 + lối tắt quay lại.           */
 /* ---------------------------------------------------------------------- */
 .not-found-page {
   position: relative;
@@ -8658,7 +8658,7 @@ html.scrollable-page {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Mascot rồng đỏ - trợ lý tìm kiếm nổi, CHỈ desktop (≥1024px)             */
+/* Mascot Kỳ Lân - trợ lý tìm kiếm nổi, CHỈ desktop (≥1024px)              */
 /* Xem web/src/components/public/MascotAssistant.tsx.                     */
 /*                                                                          */
 /* z-index 500: trên mọi nội dung trang (cao nhất trong khu vực dùng dưới  */

@@ -21,7 +21,7 @@ const SHORTCUTS = [
  * FeaturedGardenScene (đồi núi + bướm, không có tầng thú chạy) thay vì dựng
  * một nền riêng, để không lệch phong cách với Tác phẩm tiêu biểu/Bảng vàng.
  *
- * Mascot rồng (vas-mascot-wave.png) đứng giữa, "lạc lối" - chỉ khác trạng
+ * Mascot Kỳ Lân (vas-mascot-wave.png) đứng giữa, "lạc lối" - chỉ khác trạng
  * thái vẫy tay bình thường ở chỗ nghiêng đầu + có biển gỗ ghi 404, gợi ý
  * "trang này không có ở đây" thay vì lỗi khô khan.
  */
@@ -39,7 +39,7 @@ export default function NotFoundPage() {
             <motion.img
               className="not-found-mascot"
               src="/images/vas-mascot-wave.png"
-              alt="Rồng nhỏ VASchools ngơ ngác vì lạc đường"
+              alt="Kỳ Lân VASchools ngơ ngác vì lạc đường"
               animate={{ rotate: [-3, 3, -3], y: [0, -6, 0] }}
               transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
             />
@@ -57,7 +57,7 @@ export default function NotFoundPage() {
           Không tìm thấy trang này
         </motion.h1>
         <motion.p className="not-found-subtitle" custom={3} variants={fadeUp} initial="hidden" animate="show">
-          Đường dẫn bạn vào có thể đã đổi chỗ, hoặc chưa từng tồn tại. Chú rồng nhỏ của trường mời bạn quay lại
+          Đường dẫn bạn vào có thể đã đổi chỗ, hoặc chưa từng tồn tại. Chú Kỳ Lân của trường mời bạn quay lại
           khu vườn triển lãm nhé.
         </motion.p>
 

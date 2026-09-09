@@ -38,11 +38,11 @@ function inspireForResult(result: MascotResult): string {
 }
 
 /**
- * Mascot rồng nổi góc dưới-phải, chỉ desktop (≥1024px). Click mascot
+ * Mascot Kỳ Lân nổi góc dưới-phải, chỉ desktop (≥1024px). Click mascot
  * mở/đóng panel tìm kiếm nội bộ (không gọi AI ngoài).
  *
  * Đóng panel: click lại mascot, click ra ngoài dock, hoặc Escape.
- * Ẩn trợ lý: chữ "Ẩn" trên panel — thu thành nút "Rồng nhỏ" cùng góc.
+ * Ẩn trợ lý: chữ "Ẩn" trên panel — thu thành nút "Kỳ Lân" cùng góc.
  * Hai trạng thái này không được unmount chung một nhịp, kẻo cắt animation exit.
  */
 export function MascotAssistant() {
@@ -141,7 +141,7 @@ export function MascotAssistant() {
             type="button"
             className="mascot-restore"
             onClick={handleRestore}
-            aria-label="Gọi lại rồng nhỏ"
+            aria-label="Gọi lại Kỳ Lân"
             initial={{ opacity: 0, y: 10, scale: 0.92 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.94, transition: { duration: 0.16 } }}
@@ -167,7 +167,7 @@ export function MascotAssistant() {
                   className="mascot-panel"
                   role="dialog"
                   aria-modal="false"
-                  aria-label="Rồng nhỏ, trợ lý tìm kiếm"
+                  aria-label="Kỳ Lân, trợ lý tìm kiếm"
                   initial={{ opacity: 0, y: 24, scale: 0.92 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 18, scale: 0.94, transition: { duration: 0.18, ease: [0.4, 0, 1, 1] } }}
@@ -175,14 +175,14 @@ export function MascotAssistant() {
                 >
                   <header className="mascot-panel-header">
                     <div className="mascot-panel-heading">
-                      <span className="mascot-panel-heading-label">Rồng nhỏ</span>
+                      <span className="mascot-panel-heading-label">Kỳ Lân</span>
                       <span className="mascot-panel-heading-greeting">{greeting}</span>
                     </div>
                     <button
                       type="button"
                       className="mascot-panel-dismiss"
                       onClick={handleHide}
-                      aria-label="Ẩn trợ lý rồng nhỏ"
+                      aria-label="Ẩn trợ lý Kỳ Lân"
                     >
                       Ẩn
                     </button>
@@ -366,7 +366,7 @@ export function MascotAssistant() {
               type="button"
               className={`mascot-fab${open ? " mascot-fab--active" : ""}`}
               onClick={() => setOpen((v) => !v)}
-              aria-label={open ? "Đóng rồng nhỏ" : "Mở rồng nhỏ"}
+              aria-label={open ? "Đóng Kỳ Lân" : "Mở Kỳ Lân"}
               aria-expanded={open}
               initial={{ scale: 0, rotate: -20 }}
               animate={
