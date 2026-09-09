@@ -12,8 +12,11 @@ import (
 // ReactionRepository quản lý artwork_reactions - cảm xúc ẩn danh (6 loại),
 // định danh qua visitor_token (không phải xác thực danh tính thật).
 type ReactionRepository interface {
-	// Upsert thêm 1 reaction; nếu visitor đã react cùng loại cho cùng tác
-	// phẩm thì không lỗi (idempotent nhờ UNIQUE KEY + INSERT IGNORE).
+	// Upsert ghi nhận 1 reaction, thay thế reaction khác loại (nếu có) của
+	// cùng visitor cho cùng tác phẩm - giống Facebook: mỗi người chỉ giữ một
+	// cảm xúc trên một tác phẩm tại một thời điểm, chọn loại mới thì loại cũ
+	// biến mất chứ không cộng dồn. Idempotent nếu chọn lại đúng loại đang có
+	// (UNIQUE KEY + INSERT IGNORE).
 	Upsert(ctx context.Context, artworkID int64, reactionType, visitorToken, ipAddress string) error
 	Remove(ctx context.Context, artworkID int64, reactionType, visitorToken string) error
 	// CountByArtwork trả về map reaction_type -> số lượng cho 1 tác phẩm.
@@ -32,13 +35,33 @@ func NewReactionRepository(db *database.DB) ReactionRepository {
 }
 
 func (r *reactionRepository) Upsert(ctx context.Context, artworkID int64, reactionType, visitorToken, ipAddress string) error {
-	query := `
-		INSERT IGNORE INTO artwork_reactions (artwork_id, reaction_type, visitor_token, ip_address, created_at)
-		VALUES (?, ?, ?, ?, ?)
-	`
-	_, err := r.db.ExecContext(ctx, query, artworkID, reactionType, visitorToken, ipAddress, time.Now())
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	// Xoá trước mọi reaction KHÁC loại của visitor này trên tác phẩm này -
+	// đây là chỗ khoá lại hành vi "mỗi người 1 reaction". Thiếu bước này thì
+	// UNIQUE KEY (artwork_id, visitor_token, reaction_type) chỉ chặn trùng
+	// đúng loại, còn đổi loại thì cộng dồn thêm dòng mới thay vì thay thế.
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM artwork_reactions WHERE artwork_id = ? AND visitor_token = ? AND reaction_type != ?`,
+		artworkID, visitorToken, reactionType,
+	); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to clear previous reaction: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT IGNORE INTO artwork_reactions (artwork_id, reaction_type, visitor_token, ip_address, created_at) VALUES (?, ?, ?, ?, ?)`,
+		artworkID, reactionType, visitorToken, ipAddress, time.Now(),
+	); err != nil {
+		tx.Rollback()
 		return fmt.Errorf("failed to upsert reaction: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit reaction transaction: %w", err)
 	}
 	return nil
 }
