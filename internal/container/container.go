@@ -297,7 +297,7 @@ func NewContainer() (*Container, error) {
 		topicCategoryHdlr = handlers.NewTopicCategoryHandler(topicCategorySvc)
 		dashboardHdlr = handlers.NewDashboardHandler(dashboardSvc)
 		metaHandler = handlers.NewMetaHandler(schoolRepo, gradeRepo)
-		publicHandler = handlers.NewPublicHandler(artworkSvc, reactionRepo, commentRepo, viewRepo, awardRepo, s3Repo, cfg.AWS.BucketName)
+		publicHandler = handlers.NewPublicHandler(artworkSvc, reactionRepo, commentRepo, viewRepo, awardRepo)
 	} else {
 		log.Println("[Container] Database chưa bật - quản lý tác phẩm/giải thưởng/dashboard sẽ không khả dụng cho tới khi DATABASE_ENABLED=true")
 	}
@@ -465,11 +465,14 @@ func (c *Container) GetServerHandler() http.Handler {
 	// (20 req/phút/IP, tách biệt với rate limiter chung toàn API) chỉ áp
 	// dụng cho method state-changing (POST/DELETE) qua điều kiện method
 	// ngay trong middleware, GET không bị giới hạn riêng.
+	//
+	// Không có route tải ảnh gốc công khai (đã gỡ có chủ đích, xem
+	// docs/plan/03-risks.md) - khách chỉ xem được qua biến thể ảnh hiển thị
+	// trên trang, không có đường chính thức nào để tải file gốc.
 	if c.PublicHandler != nil {
 		publicMux := http.NewServeMux()
 		publicMux.HandleFunc("GET /api/v1/public/artworks", c.PublicHandler.HandleListArtworks)
 		publicMux.HandleFunc("GET /api/v1/public/artworks/featured", c.PublicHandler.HandleListFeatured)
-		publicMux.HandleFunc("GET /api/v1/public/artworks/{id}/download", c.PublicHandler.HandleDownloadArtwork)
 		publicMux.HandleFunc("GET /api/v1/public/artworks/{id}", c.PublicHandler.HandleGetArtwork)
 		publicMux.HandleFunc("GET /api/v1/public/artworks/{id}/comments", c.PublicHandler.HandleListComments)
 		publicMux.HandleFunc("GET /api/v1/public/billboard", c.PublicHandler.HandleBillboard)
@@ -484,27 +487,7 @@ func (c *Container) GetServerHandler() http.Handler {
 			c.RateLimiters = append(c.RateLimiters, publicRateLimiter)
 			strictLimit := middleware.RateLimitMiddleware(publicRateLimiter)(publicMux)
 
-			// Tải ảnh gốc có bộ đếm RIÊNG, chặt hơn hẳn: đây là thao tác đắt
-			// nhất trên trang public (đọc trọn object từ S3, ghi nhật ký tải)
-			// và là đích ngắm chính của việc thu thập tranh hàng loạt. Người
-			// xem thật hiếm khi tải quá vài tấm trong một phút.
-			downloadRate := c.Config.RateLimit.DownloadRequests
-			if downloadRate <= 0 {
-				downloadRate = 30
-			}
-			downloadWindow := c.Config.RateLimit.DownloadWindow
-			if downloadWindow <= 0 {
-				downloadWindow = time.Minute
-			}
-			downloadRateLimiter := middleware.NewRateLimiter(downloadRate, downloadWindow, c.Config.RateLimit.CleanupInterval)
-			c.RateLimiters = append(c.RateLimiters, downloadRateLimiter)
-			downloadLimit := middleware.RateLimitMiddleware(downloadRateLimiter)(publicMux)
-
 			publicHandlerChain = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/download") {
-					downloadLimit.ServeHTTP(w, r)
-					return
-				}
 				if r.Method == http.MethodPost || r.Method == http.MethodDelete {
 					strictLimit.ServeHTTP(w, r)
 					return

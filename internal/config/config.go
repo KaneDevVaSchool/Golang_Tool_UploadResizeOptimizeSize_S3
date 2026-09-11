@@ -29,13 +29,6 @@ type RateLimitConfig struct {
 	Requests        int           // requests per window
 	Window          time.Duration // time window
 	CleanupInterval time.Duration
-	// DownloadRequests là trần riêng cho đường tải ảnh gốc
-	// (/api/v1/public/artworks/{id}/download). Tách khỏi bộ đếm chung vì tải
-	// ảnh là thao tác đắt (đọc S3, ghi log) và là mục tiêu chính của việc thu
-	// thập hàng loạt, trong khi người xem thật hiếm khi tải quá vài tấm.
-	DownloadRequests int
-	// DownloadWindow là window của bộ đếm tải ảnh.
-	DownloadWindow time.Duration
 }
 
 // SecurityConfig gom các lựa chọn phòng thủ không thuộc rate limit.

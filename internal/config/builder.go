@@ -187,20 +187,6 @@ func (b *ConfigBuilder) WithRateLimit(enabled bool, requests int, windowMinutes 
 	return b
 }
 
-// WithDownloadRateLimit đặt trần riêng cho đường tải ảnh gốc. Gọi SAU
-// WithRateLimit vì cùng ghi vào b.config.RateLimit.
-func (b *ConfigBuilder) WithDownloadRateLimit(requests int, windowMinutes int) *ConfigBuilder {
-	if requests <= 0 {
-		requests = 30
-	}
-	if windowMinutes <= 0 {
-		windowMinutes = 1
-	}
-	b.config.RateLimit.DownloadRequests = requests
-	b.config.RateLimit.DownloadWindow = time.Duration(windowMinutes) * time.Minute
-	return b
-}
-
 // WithSecurity nối các lựa chọn phòng thủ (proxy tin cậy, chống quét, CSP).
 func (b *ConfigBuilder) WithSecurity(sec SecurityConfig) *ConfigBuilder {
 	b.config.Security = sec
@@ -457,9 +443,6 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 	botGuardMaxPaths := parseInt(getEnv("BOT_GUARD_MAX_PATHS_PER_MINUTE", "150"), 150)
 	botGuardBlockMinutes := parseInt(getEnv("BOT_GUARD_BLOCK_MINUTES", "10"), 10)
 
-	downloadRateRequests := parseInt(getEnv("RATE_LIMIT_DOWNLOAD_REQUESTS", "30"), 30)
-	downloadRateWindow := parseInt(getEnv("RATE_LIMIT_DOWNLOAD_WINDOW_MINUTES", "1"), 1)
-
 	// HSTS mặc định theo production, nhưng vẫn cho tắt tường minh: bật HSTS
 	// khi site còn phục vụ HTTP sẽ khoá trình duyệt khỏi site suốt max-age.
 	enableHSTS := appEnv == "production"
@@ -511,7 +494,6 @@ func (b *ConfigBuilder) BuildFromEnv() (*Config, error) {
 		WithDatabase(dbEnabled, dbDriver, dbDataSource, dbMaxOpen, dbMaxIdle, dbMaxLifetime, dbAutoMigrate).
 		WithDirectories("./uploads").
 		WithRateLimit(rateLimitEnabled, rateLimitRequests, rateLimitWindow, rateLimitCleanup).
-		WithDownloadRateLimit(downloadRateRequests, downloadRateWindow).
 		WithSecurity(securityCfg).
 		WithCSRF(csrfEnabled, csrfSecureCookie).
 		WithConcurrency(concurrencyEnabled, maxConcurrent, acquireTimeout).

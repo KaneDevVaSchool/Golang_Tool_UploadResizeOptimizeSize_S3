@@ -5,12 +5,9 @@ import (
 	"encoding/xml"
 	"html"
 	"html/template"
-	"io"
 	"log"
-	"mime"
 	"net/http"
 	"net/url"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +16,6 @@ import (
 	"s3-upload-tool/internal/models"
 	"s3-upload-tool/internal/repository"
 	"s3-upload-tool/internal/service"
-	"s3-upload-tool/internal/utils"
 )
 
 // maxCommentContentLength giới hạn độ dài bình luận - khớp cột
@@ -85,6 +81,10 @@ type artworkSharePageData struct {
 // liệu (reaction/comment) được bảo vệ bằng rate-limit riêng ở container.go
 // (nghiêm hơn API chung), không dùng session/API key vì đây là tương tác
 // công khai theo đúng yêu cầu "ẩn danh tự do".
+//
+// Không có endpoint tải ảnh gốc cho khách xem ẩn danh (đã gỡ có chủ đích) -
+// xem docs/plan/03-risks.md. Khu quản trị vẫn tải được qua
+// ArtworkHandler.HandleDownload, dùng cho việc quản lý tác phẩm/giải.
 type PublicHandler struct {
 	BaseHandler
 	artworkService service.ArtworkService
@@ -92,8 +92,6 @@ type PublicHandler struct {
 	commentRepo    repository.CommentRepository
 	viewRepo       repository.ArtworkViewRepository
 	awardRepo      repository.AwardRepository
-	s3Repo         repository.S3Repository
-	s3Bucket       string
 }
 
 func NewPublicHandler(
@@ -102,8 +100,6 @@ func NewPublicHandler(
 	commentRepo repository.CommentRepository,
 	viewRepo repository.ArtworkViewRepository,
 	awardRepo repository.AwardRepository,
-	s3Repo repository.S3Repository,
-	s3Bucket string,
 ) *PublicHandler {
 	return &PublicHandler{
 		artworkService: artworkService,
@@ -111,8 +107,6 @@ func NewPublicHandler(
 		commentRepo:    commentRepo,
 		viewRepo:       viewRepo,
 		awardRepo:      awardRepo,
-		s3Repo:         s3Repo,
-		s3Bucket:       s3Bucket,
 	}
 }
 
@@ -221,82 +215,6 @@ func (h *PublicHandler) HandleGetArtwork(w http.ResponseWriter, r *http.Request)
 	h.SendSuccess(w, artwork)
 }
 
-// HandleDownloadArtwork GET /api/v1/public/artworks/{id}/download - stream ảnh
-// gốc qua API (same-origin) để trình duyệt tải xuống ngay, không mở tab S3.
-func (h *PublicHandler) HandleDownloadArtwork(w http.ResponseWriter, r *http.Request) {
-	id, ok := parsePathID(r, "id")
-	if !ok {
-		h.SendError(w, http.StatusBadRequest, "INVALID_ID", "ID tác phẩm không hợp lệ")
-		return
-	}
-
-	artwork, err := h.artworkService.GetArtwork(r.Context(), id)
-	if err != nil {
-		h.SendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Không tải được tác phẩm")
-		return
-	}
-	if artwork == nil || !artwork.IsPublished {
-		h.SendError(w, http.StatusNotFound, "NOT_FOUND", "Không tìm thấy tác phẩm")
-		return
-	}
-	if strings.TrimSpace(artwork.S3Key) == "" {
-		h.SendError(w, http.StatusNotFound, "NOT_FOUND", "Không có file ảnh để tải")
-		return
-	}
-	if h.s3Repo == nil || strings.TrimSpace(h.s3Bucket) == "" {
-		h.SendError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Không cấu hình được tải ảnh")
-		return
-	}
-
-	body, contentType, _, err := h.s3Repo.GetObject(r.Context(), h.s3Bucket, artwork.S3Key)
-	if err != nil {
-		h.SendError(w, http.StatusBadGateway, "STORAGE_ERROR", "Không lấy được ảnh từ kho lưu trữ")
-		return
-	}
-	defer body.Close()
-
-	raw, err := io.ReadAll(body)
-	if err != nil {
-		h.SendError(w, http.StatusBadGateway, "STORAGE_ERROR", "Không đọc được ảnh từ kho lưu trữ")
-		return
-	}
-
-	ext := strings.ToLower(filepath.Ext(artwork.S3Key))
-	if ext == "" {
-		ext = ".jpg"
-	}
-	downloadName := artworkDownloadFileName(artwork.Title, ext)
-
-	payload := raw
-	if watermarked, outType, werr := service.ApplyArtworkDownloadWatermark(raw, ext); werr != nil {
-		log.Printf("[PublicHandler] watermark artwork %d skipped: %v", id, werr)
-	} else {
-		payload = watermarked
-		if outType != "" {
-			contentType = outType
-		}
-	}
-
-	if contentType == "" || contentType == "application/octet-stream" {
-		if typed := utils.GetContentType(downloadName); typed != "application/octet-stream" {
-			contentType = typed
-		}
-	}
-
-	logArtworkDownload(r, h.artworkService, id, models.ArtworkDownloadSourcePublic)
-
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{
-		"filename": downloadName,
-	}))
-	w.Header().Set("Content-Length", strconv.Itoa(len(payload)))
-	w.Header().Set("Cache-Control", "private, max-age=3600")
-
-	if _, err := w.Write(payload); err != nil {
-		log.Printf("[PublicHandler] write download artwork %d: %v", id, err)
-	}
-}
-
 func artworkDownloadFileName(title, ext string) string {
 	safe := strings.TrimSpace(title)
 	safe = strings.Map(func(r rune) rune {
@@ -316,9 +234,11 @@ func artworkDownloadFileName(title, ext string) string {
 	return safe + ext
 }
 
-// logArtworkDownload ghi nhật ký một lượt tải ảnh gốc - dùng chung cho cả
-// ArtworkHandler.HandleDownload (admin) và PublicHandler.HandleDownloadArtwork
-// (public), chỉ khác source và có/không có admin đăng nhập trong context.
+// logArtworkDownload ghi nhật ký một lượt tải ảnh gốc. Hiện chỉ
+// ArtworkHandler.HandleDownload (admin) còn gọi hàm này - endpoint tải công
+// khai đã bị gỡ (xem docs/plan/03-risks.md), nhưng models.ArtworkDownloadSource*
+// vẫn giữ cả hai giá trị "admin"/"public" vì bảng artwork_downloads còn lưu
+// lịch sử các lượt tải "public" từ trước khi gỡ.
 // Đây là thao tác phụ trợ: lỗi ghi log chỉ log cảnh báo, KHÔNG được chặn
 // việc trả ảnh về cho người tải (ảnh đã sẵn sàng ở phía gọi).
 func logArtworkDownload(r *http.Request, svc service.ArtworkService, artworkID int64, source string) {

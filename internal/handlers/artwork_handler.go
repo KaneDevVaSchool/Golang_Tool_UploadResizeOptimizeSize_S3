@@ -303,9 +303,10 @@ func (h *ArtworkHandler) HandleDeleteBatch(w http.ResponseWriter, r *http.Reques
 
 // HandleDownload GET /api/v1/admin/artworks/{id}/download - stream ảnh gốc
 // (không watermark, không ép is_published) để admin tải về lưu trữ/in ấn.
-// Cùng cơ chế PublicHandler.HandleDownloadArtwork (proxy qua backend thay vì
-// link S3 trực tiếp, để trình duyệt tải same-origin và không cần CORS trên
-// bucket), khác ở hai điểm trên vì đây là công cụ quản trị nội bộ.
+// Proxy qua backend thay vì link S3 trực tiếp, để trình duyệt tải
+// same-origin và không cần CORS trên bucket. Đây là công cụ quản trị nội bộ -
+// không có phiên bản công khai cho khách xem ẩn danh (đã gỡ có chủ đích, xem
+// docs/plan/03-risks.md).
 func (h *ArtworkHandler) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	id, ok := parsePathID(r, "id")
 	if !ok {
