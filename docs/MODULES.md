@@ -284,8 +284,7 @@ qua `?` — không bao giờ nối giá trị vào SQL.
 | File | Dòng | Ghi chú |
 |---|---|---|
 | `upload_service.go` | 251 | Upload đơn, trích S3 key từ URL, xoá object |
-| `artwork_service.go` | 754 | Bulk upload, tạo/sửa/xoá (xoá kèm object S3), xoá hàng loạt, enrich, `SetFeaturedBatch`, `ListPublishedForSitemap`, `LogDownload` |
-| `artwork_download_watermark.go` | 180 | Đóng mốc VAS vào ảnh trước khi trả cho khách tải |
+| `artwork_service.go` | 769 | Bulk upload, tạo/sửa/xoá (xoá kèm object S3), xoá hàng loạt, enrich, `SetFeaturedBatch`, `ListPublishedForSitemap`, `LogDownload` |
 | `award_service.go` | 73 | CRUD giải |
 | `topic_category_service.go` | 80 | CRUD nhóm chủ đề sáng tạo, cùng mẫu `award_service.go` |
 | `dashboard_service.go` | 172 | Gộp số liệu thành 1 DTO, giải nghĩa khoảng ngày (có test ở `dashboard_service_test.go`) |
@@ -318,8 +317,8 @@ qua các hàm `*ByIDs`/`*Batch` — N+1 cho `student` từng tồn tại, đã h
 
 | File | Dòng | Phục vụ |
 |---|---|---|
-| `public_handler.go` | 820 | Toàn bộ `/api/v1/public/*`, trang chia sẻ OG, `/sitemap.xml`, `/robots.txt`, tải ảnh có watermark |
-| `artwork_handler.go` | 513 | Quản trị tác phẩm (gồm `HandleSetFeaturedBatch`, `HandleDeleteBatch`, `HandleDownload`) |
+| `public_handler.go` | 740 | Toàn bộ `/api/v1/public/*`, trang chia sẻ OG, `/sitemap.xml`, `/robots.txt` (không có tải ảnh gốc — đã gỡ) |
+| `artwork_handler.go` | 570 | Quản trị tác phẩm (gồm `HandleSetFeaturedBatch`, `HandleDeleteBatch`, `HandleDownload` — tải ảnh gốc, chỉ có ở khu quản trị) |
 | `api_handler.go` | 257 | Upload + health |
 | `admin_auth_handler.go` | 274 | Luồng OAuth + phiên |
 | `award_handler.go` | 155 | Giải thưởng |

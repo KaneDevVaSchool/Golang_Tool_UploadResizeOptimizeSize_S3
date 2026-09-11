@@ -22,11 +22,10 @@ tường minh trong tài liệu, kèm giải thích bước đó làm gì và h�
 
 ## Hai điều cần biết khi sửa file mẫu
 
-**`WorkingDirectory` trong systemd unit là bắt buộc.** Ứng dụng đọc bốn thứ theo đường dẫn
-tương đối: migration (`internal/database/migrations`), giao diện (`web/dist`), ảnh mốc
-watermark (`web/public/images/`), và thư mục file tạm (`uploads`). Đặt sai thư mục làm việc
-thì cả bốn hỏng, và hai trong số đó hỏng **im lặng** — watermark bị bỏ qua chỉ ghi log, còn
-giao diện thì trả JSON thay vì trang web.
+**`WorkingDirectory` trong systemd unit là bắt buộc.** Ứng dụng đọc ba thứ theo đường dẫn
+tương đối: migration (`internal/database/migrations`), giao diện (`web/dist`), và thư mục
+file tạm (`uploads`). Đặt sai thư mục làm việc thì cả ba hỏng — giao diện trả JSON thay vì
+trang web là dấu hiệu dễ thấy nhất.
 
 **`ReadWritePaths` phải liệt kê đủ thư mục cần ghi.** `ProtectSystem=strict` khiến toàn hệ
 thống chỉ đọc. Nếu sau này ứng dụng cần ghi vào thư mục mới, phải thêm vào dòng này — `chown`

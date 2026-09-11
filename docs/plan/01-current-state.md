@@ -44,7 +44,7 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 | Upload đơn lên S3 | Có timeout co giãn theo dung lượng, dọn file tạm bằng `defer` |
 | Bulk upload | 5 luồng song song, lỗi một file không hỏng cả lô |
 | Nhiều lớp kiểm tra file | Tên file, đuôi, dung lượng (2 lần) — ⚠️ **không còn** kiểm tra magic byte |
-| Tải ảnh có watermark | Endpoint public đóng mốc VAS, ghi nhật ký vào `artwork_downloads` |
+| Tải ảnh gốc (khu quản trị) | Không watermark, ghi nhật ký vào `artwork_downloads` — không có phiên bản public (đã gỡ 2026-09-11) |
 | Sinh S3 key chống trùng | Timestamp + 12 ký tự ngẫu nhiên từ `crypto/rand` |
 | Tự dò region của bucket | Chống lỗi cấu hình region khó chẩn đoán |
 
@@ -69,7 +69,7 @@ Mục P1.5 trong [02-roadmap.md](./02-roadmap.md) vì thế đã đóng.
 | Cảm xúc ẩn danh | 6 loại, idempotent nhờ `INSERT IGNORE` + ràng buộc UNIQUE |
 | Bình luận ẩn danh | Tự nhập tên, tự xoá bình luận của mình; admin kiểm duyệt ẩn/hiện qua `/admin/artworks` (`ArtworkCommentsModal`) |
 | Đếm lượt xem | Mỗi lần mở là 1 lượt — bỏ chống trùng 24 giờ ngày 2026-09-07 |
-| Tải ảnh có watermark | Qua proxy backend, ghi nhật ký vào `artwork_downloads` |
+| Không tải được ảnh gốc | Đã gỡ nút tải + endpoint public ngày 2026-09-11 để chặn thu thập tranh hàng loạt; chuột phải/kéo ảnh trên lưới và lightbox cũng bị chặn — xem [03-risks.md](./03-risks.md) |
 | Trợ lý mascot | Tìm kiếm trong dữ liệu sẵn có, không gọi dịch vụ AI nào |
 | Trang chia sẻ Open Graph | Render phía server để Facebook/Zalo lấy được ảnh preview |
 | Tìm kiếm và lọc | Theo tên, trường, khối, cấp học |
@@ -228,8 +228,8 @@ Không nằm trong lộ trình gốc — ba thay đổi nghiệp vụ có chủ 
 
 | Hạng mục | Ghi chú |
 |---|---|
-| `GET /api/v1/public/artworks/{id}/download` | Tải ảnh gốc kèm watermark logo VAS, stream qua backend (same-origin). Lỗi watermark chỉ ghi log, vẫn trả ảnh gốc — không chặn tải. Mỗi lượt tải ghi vào `artwork_downloads` (`source='public'`, ẩn danh). Chi tiết ở [API.md](../API.md) |
-| `GET /api/v1/admin/artworks/{id}/download` | Cùng cơ chế, dành cho admin: **không** watermark, **không** ép `is_published`. Ghi vào `artwork_downloads` kèm `admin_user_id` của người tải — xem [02-roadmap.md P2.14](./02-roadmap.md). Dùng trong nút "Tải ảnh gốc" ở `ArtworkEditModal` và trong tải hàng loạt ở `ArtworksListPage` — xem [02-roadmap.md P2.13](./02-roadmap.md) |
+| `GET /api/v1/public/artworks/{id}/download` | ⚠️ **Đã gỡ ngày 2026-09-11** — xem mục changelog "Gỡ endpoint tải ảnh gốc public" phía dưới. Lúc thêm ở đây (2026-09-06): tải ảnh gốc kèm watermark logo VAS, stream qua backend (same-origin), lỗi watermark chỉ ghi log không chặn tải, ghi vào `artwork_downloads` (`source='public'`, ẩn danh) |
+| `GET /api/v1/admin/artworks/{id}/download` | Cùng cơ chế, dành cho admin: **không** watermark, **không** ép `is_published`. Ghi vào `artwork_downloads` kèm `admin_user_id` của người tải — xem [02-roadmap.md P2.14](./02-roadmap.md). Dùng trong nút "Tải ảnh gốc" ở `ArtworkEditModal` và trong tải hàng loạt ở `ArtworksListPage` — xem [02-roadmap.md P2.13](./02-roadmap.md). Vẫn còn nguyên, không đổi |
 | `DeleteArtwork` xoá luôn S3 | Đảo ngược quyết định cũ (từng cố ý giữ file S3 khi xoá DB để tránh mất dữ liệu do bấm nhầm). `collectArtworkS3Keys` gom key ảnh gốc + mọi biến thể trước khi gọi `s3Repo.Delete`, xoá S3 **trước** DB row. Xem [03-artwork-domain.md §4](../detail_design/03-artwork-domain.md), rủi ro cập nhật ở [03-risks.md R4](./03-risks.md) |
 | Bỏ chống trùng lượt xem 24h | `RecordView` giờ luôn +1 `view_count` mỗi lần gọi, không còn dedupe theo `visitor_token`/24h. Tăng tốc độ phình bảng `artwork_views` — xem [03-risks.md R5](./03-risks.md) |
 
@@ -256,6 +256,20 @@ Không nằm trong lộ trình gốc — xem [02-roadmap.md P2.15](./02-roadmap.
 | `ArtworkService.ListPublishedForSitemap` | Tự lặp trang vượt trần `page_size=100`, không enrich |
 | OG/Twitter/JSON-LD nâng cao | Trang chia sẻ tác phẩm thêm `og:image:width/height`, `twitter:image:alt`, breadcrumb `BreadcrumbList` |
 | `hooks/usePageMeta.ts`, `components/JsonLd.tsx` | Title/description/canonical động + structured data (`WebSite`/`CollectionPage`/`BreadcrumbList`) cho 4 trang public, không thêm `react-helmet-async` |
+
+### Gỡ endpoint tải ảnh gốc public, chặn chuột phải/kéo ảnh (2026-09-11)
+
+Không nằm trong lộ trình gốc — yêu cầu trực tiếp: chặn khách xem ẩn danh tải ảnh gốc, đảo
+ngược một phần quyết định "Tải ảnh gốc kèm watermark" ở mục 2026-09-06 phía trên.
+
+| Hạng mục | Ghi chú |
+|---|---|
+| `GET /api/v1/public/artworks/{id}/download` | Gỡ hoàn toàn (`PublicHandler.HandleDownloadArtwork`, route trong `container.go`). Endpoint admin `GET /api/v1/admin/artworks/{id}/download` **không đổi** |
+| `ApplyArtworkDownloadWatermark` | Xoá hẳn `internal/service/artwork_download_watermark.go` — dead code sau khi gỡ endpoint public, vì admin download chưa bao giờ dùng watermark |
+| `RATE_LIMIT_DOWNLOAD_REQUESTS`/`WINDOW_MINUTES` | Gỡ theo — bộ đếm này chỉ phục vụ endpoint vừa gỡ. `RateLimitConfig.DownloadRequests/DownloadWindow`, `WithDownloadRateLimit` xoá khỏi `internal/config` |
+| Nút "Tải ảnh" ở `PublicLightbox.tsx` | Gỡ nút và hàm `downloadArtwork`/`safeFileName`/`guessDownloadExtension` |
+| Chặn chuột phải/kéo ảnh | `draggable={false}` + `onContextMenu` chặn mặc định trên ảnh tác phẩm ở `PublicLightbox`, `FeaturedArtworkCard`, `FeaturedArtworkFrame`, `HallArtworkCard`, `MascotAssistant`. ⚠️ Chỉ cản trở người dùng thông thường — không chặn được ai cố tình dùng DevTools hoặc tải trực tiếp từ network tab |
+| Bảng `artwork_downloads` | Không đổi — vẫn giữ lịch sử các dòng `source='public'` từ trước khi gỡ; bản ghi mới chỉ còn phát sinh với `source='admin'` |
 
 ## 3. Đang làm dở 🚧
 

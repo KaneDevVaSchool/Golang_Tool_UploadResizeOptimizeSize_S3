@@ -306,22 +306,24 @@ trong [plan/03-risks.md](../plan/03-risks.md)).
 
 **Index**: `(artwork_id, downloaded_at)` và `(admin_user_id, downloaded_at)`.
 
-Ghi nhật ký ai tải ảnh **gốc** (không phải thumbnail), lúc nào, từ đâu — cả hai đường tải
-đều ghi vào cùng một bảng này qua `ArtworkService.LogDownload`:
+Ghi nhật ký ai tải ảnh **gốc** (không phải thumbnail), lúc nào, từ đâu, qua
+`ArtworkService.LogDownload`:
 
 - `GET /api/v1/admin/artworks/{id}/download` ghi `source='admin'` kèm `admin_user_id` lấy
   từ session đang đăng nhập.
-- `GET /api/v1/public/artworks/{id}/download` ghi `source='public'`, `admin_user_id` luôn
-  `NULL` vì người xem ẩn danh không có tài khoản để định danh — tra cứu khi cần phải dựa
-  vào `ip_address`.
+
+Cột `source` vẫn giữ giá trị `public` vì bảng còn lưu lịch sử các lượt tải trước khi
+endpoint `GET /api/v1/public/artworks/{id}/download` bị gỡ (khách xem ẩn danh không còn
+đường tải ảnh gốc — xem [plan/03-risks.md](../plan/03-risks.md)); bản ghi mới chỉ còn phát
+sinh với `source='admin'`.
 
 Đây là log **phụ trợ**: ghi lỗi (mất kết nối DB tạm thời...) chỉ log cảnh báo ở tầng
-handler (`logArtworkDownload` trong `internal/handlers/public_handler.go`), không chặn
-việc trả ảnh về — đúng nguyên tắc lỗi khâu phụ trợ không được làm hỏng thao tác chính (xem
-mục 3 `CLAUDE.md`). Chưa có giao diện admin để xem lại nhật ký này; tra cứu hiện phải bằng
-SQL trực tiếp. Đây mới là bước lấp một phần mục "Nhật ký thao tác admin" ở
-[05-auth-security.md §10](./05-auth-security.md) — chỉ phần tải ảnh, chưa bao gồm
-xoá/sửa tác phẩm.
+handler (`logArtworkDownload` trong `internal/handlers/public_handler.go`, dùng chung cho
+`ArtworkHandler.HandleDownload`), không chặn việc trả ảnh về — đúng nguyên tắc lỗi khâu phụ
+trợ không được làm hỏng thao tác chính (xem mục 3 `CLAUDE.md`). Chưa có giao diện admin để
+xem lại nhật ký này; tra cứu hiện phải bằng SQL trực tiếp. Đây mới là bước lấp một phần mục
+"Nhật ký thao tác admin" ở [05-auth-security.md §10](./05-auth-security.md) — chỉ phần tải
+ảnh, chưa bao gồm xoá/sửa tác phẩm.
 
 ### Nhóm xác thực
 

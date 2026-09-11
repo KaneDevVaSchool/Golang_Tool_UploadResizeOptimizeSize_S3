@@ -180,20 +180,19 @@ bộ đếm và cả trang tự khoá lúc đông người nhất (R6). Xem
 
 ## 7. Rate limit
 
-Bốn bộ đếm độc lập, mỗi bộ có `map[khoá IP]counter` riêng:
+Ba bộ đếm độc lập, mỗi bộ có `map[khoá IP]counter` riêng:
 
 | Phạm vi | Giới hạn | Áp cho |
 |---|---|---|
 | Toàn cục | `RATE_LIMIT_REQUESTS`/`WINDOW` (mặc định 100/phút) | Mọi request |
 | `/api/v1/metrics` | 10/phút, **cố định trong code** | Chống dò thông tin vận hành |
 | Ghi dữ liệu public | 20/phút | **Chỉ** `POST`/`DELETE` dưới `/api/v1/public/*` |
-| Tải ảnh gốc public | `RATE_LIMIT_DOWNLOAD_REQUESTS` (mặc định 30/phút) | **Chỉ** `GET .../download` |
 
-Các bộ sau lồng trong bộ thứ nhất: một request POST bình luận tính vào **cả hai** bộ đếm.
+Bộ sau lồng trong bộ thứ nhất: một request POST bình luận tính vào **cả hai** bộ đếm.
 
-Bộ đếm tải ảnh tách riêng vì đó là thao tác đắt nhất trên trang public — đọc trọn object từ
-S3 rồi ghi một dòng `artwork_downloads` — và là đích ngắm chính khi ai đó muốn gom toàn bộ
-tranh. Người xem thật hiếm khi tải quá vài tấm một phút.
+Không có route tải ảnh gốc công khai nên không cần bộ đếm riêng cho nó — bộ đếm
+`RATE_LIMIT_DOWNLOAD_*` từng có đã bị gỡ cùng lúc gỡ endpoint (xem
+[03-artwork-domain.md](./03-artwork-domain.md) và [03-risks.md](../plan/03-risks.md)).
 
 Mọi phản hồi 429 đều kèm `Retry-After` và thân JSON cùng khuôn
 `{success,error:{code,message}}` như phần còn lại của API.

@@ -163,16 +163,15 @@ công bố tên miền.
 | `CONCURRENCY_LIMIT_ENABLED` | `true` | |
 | `MAX_CONCURRENT_UPLOADS` | `500` | Cân nhắc hạ theo RAM VPS |
 | `CONCURRENCY_ACQUIRE_TIMEOUT_SECONDS` | `30` | Chờ trước khi báo lỗi |
-| `RATE_LIMIT_DOWNLOAD_REQUESTS` | `30` | Trần riêng cho tải ảnh gốc public |
-| `RATE_LIMIT_DOWNLOAD_WINDOW_MINUTES` | `1` | Cửa sổ của bộ đếm tải ảnh |
 
 Hai giới hạn **cố định trong code**, không cấu hình được: metrics 10 req/phút, và ghi dữ
 liệu public 20 req/phút.
 
-Bộ đếm tải ảnh tách riêng vì `GET /api/v1/public/artworks/{id}/download` là thao tác đắt
-nhất trên trang public — đọc trọn object từ S3 rồi ghi một dòng `artwork_downloads` — và là
-đích ngắm chính khi ai đó muốn gom toàn bộ tranh. Người xem thật hiếm khi tải quá vài tấm
-trong một phút, nên trần 30 rộng rãi với họ mà vẫn chặn được việc tải hàng loạt.
+Không còn route tải ảnh gốc công khai — đã gỡ có chủ đích (xem
+[03-artwork-domain.md](../detail_design/03-artwork-domain.md) và
+[03-risks.md](../plan/03-risks.md)), nên bộ đếm riêng cho nó (`RATE_LIMIT_DOWNLOAD_*`) cũng
+đã bị gỡ theo. Khu quản trị vẫn tải được ảnh gốc qua
+`GET /api/v1/admin/artworks/{id}/download`, dùng chung rate limit của toàn bộ API admin.
 
 ## Proxy tin cậy
 
@@ -254,17 +253,14 @@ Log ghi đồng thời ra stdout (systemd journal thu) và file theo ngày.
 | `./uploads` | File tạm trong lúc upload | ❌ cố định trong `builder.go` |
 | `./storage/logs` | Log theo ngày | ✅ qua `LOG_DIR` |
 | `./web/dist` | Giao diện đã build (SPA) | ❌ cố định |
-| `./web/public/images/vas-white-mark.png` | Mốc watermark cho ảnh tải về | ❌ cố định (lui về `./web/dist/images/`) |
 | `./internal/database/migrations` | Migration khi `DATABASE_AUTO_MIGRATE=true` | ❌ cố định |
 
-⚠️ **Cả năm đường dẫn trên đều tương đối so với thư mục làm việc.** systemd unit đặt
+⚠️ **Cả bốn đường dẫn trên đều tương đối so với thư mục làm việc.** systemd unit đặt
 `WorkingDirectory=/opt/s3-upload-tool` nên chúng trỏ đúng. Chạy binary từ thư mục khác sẽ
-gây bốn kiểu hỏng khác nhau, trong đó hai kiểu **hỏng im lặng**:
+gây ba kiểu hỏng khác nhau, đều báo lỗi rõ ràng chứ không im lặng:
 
 - File tạm rơi vào thư mục lạ.
 - Giao diện không phục vụ được — `/` trả JSON info thay vì trang web.
-- **Watermark bị bỏ qua** — ảnh public tải về không có mốc, chỉ ghi log cảnh báo (fail-open,
-  cố ý: một khâu trang trí hỏng không nên làm hỏng cả lượt tải).
 - **Auto-migrate không tìm thấy file migration** — app không khởi động được.
 
 ## Mẫu `.env` cho production

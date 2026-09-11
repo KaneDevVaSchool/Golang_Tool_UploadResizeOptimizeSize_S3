@@ -249,7 +249,7 @@ tục), phải sửa đồng thời cả hai hàm suy luận bậc này.
 | PUT | `/api/v1/admin/artworks/{id}` | Cập nhật metadata |
 | DELETE | `/api/v1/admin/artworks/{id}` | Xoá bản ghi |
 | DELETE | `/api/v1/admin/artworks/bulk-delete` | Xoá hàng loạt — `{ids}`, xoá tuần tự từng tác phẩm (kèm S3), 1 lỗi không chặn cả lô |
-| GET | `/api/v1/admin/artworks/{id}/download` | Tải ảnh gốc, không watermark, không ép `is_published`, ghi nhật ký vào `artwork_downloads` |
+| GET | `/api/v1/admin/artworks/{id}/download` | Tải ảnh gốc, không watermark, không ép `is_published`, ghi nhật ký vào `artwork_downloads`. Chỉ có ở khu quản trị — không có phiên bản public (đã gỡ, xem [03-risks.md](../plan/03-risks.md)) |
 | PATCH | `/api/v1/admin/artworks/{id}/featured` | Bật/tắt tiêu biểu (1 tác phẩm) |
 | PATCH | `/api/v1/admin/artworks/bulk-featured` | Bật/tắt tiêu biểu hàng loạt — `{ids, featured}`, 1 câu `UPDATE ... WHERE id IN (...)` |
 

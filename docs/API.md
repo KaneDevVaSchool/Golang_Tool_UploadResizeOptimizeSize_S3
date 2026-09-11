@@ -273,20 +273,12 @@ gian. Gọi lại nhiều lần (tải lại trang, mở lại lightbox) sẽ t�
 
 Trả **404** nếu không tồn tại **hoặc** chưa xuất bản — không phân biệt hai trường hợp.
 
-## `GET /api/v1/public/artworks/{id}/download`
-
-Tải ảnh **gốc** (không phải thumbnail/variant), chèn watermark logo VAS góc dưới-phải trước
-khi trả về — stream qua API thay vì trỏ thẳng URL S3 (same-origin, không mở tab rời).
-`Content-Disposition: attachment` kèm tên file lấy từ tiêu đề tác phẩm.
-
-Trả **404** nếu tác phẩm không tồn tại, chưa xuất bản, hoặc không có `s3_key`. Nếu chèn
-watermark lỗi (không đọc được ảnh, thiếu file logo …), trả **ảnh gốc không watermark** kèm
-ghi log — lỗi khâu phụ trợ không chặn việc tải ảnh.
-
-Mỗi lượt tải thành công được ghi vào bảng `artwork_downloads` (`source='public'`,
-`admin_user_id` luôn `NULL` vì người xem ẩn danh không có tài khoản) — phục vụ truy vết nếu
-ảnh bị phát tán sai mục đích. Đây cũng là log phụ trợ: ghi lỗi chỉ log cảnh báo, không chặn
-việc trả ảnh. Xem [01-database.md](./detail_design/01-database.md).
+⚠️ **Không có endpoint tải ảnh gốc công khai.** Đã gỡ có chủ đích để khách xem ẩn danh
+không tải được ảnh gốc — xem [03-risks.md](./plan/03-risks.md). Khách chỉ xem được qua biến
+thể ảnh hiển thị trên trang (`thumb`/`large`, xem
+[02-upload-pipeline.md](./detail_design/02-upload-pipeline.md)); khu quản trị vẫn tải được
+ảnh gốc qua `GET /api/v1/admin/artworks/{id}/download` bên dưới, dùng cho việc quản lý tác
+phẩm/giải.
 
 ## `GET /api/v1/public/billboard`
 
@@ -477,12 +469,13 @@ trên S3 trước khi xoá bản ghi DB. Xem [03-artwork-domain.md §4](./detail
 ### `GET /api/v1/admin/artworks/{id}/download`
 
 Tải ảnh **gốc, không watermark, không ép `is_published`** — công cụ nội bộ để admin lưu
-trữ/in ấn, khác `GET /api/v1/public/artworks/{id}/download` ở hai điểm này. Cùng cơ chế
-proxy qua backend (same-origin, không cần CORS trên bucket).
+trữ/in ấn. Đây là đường tải ảnh gốc **duy nhất** trong hệ thống — không có phiên bản public
+(xem ghi chú ở mục `GET /api/v1/public/artworks/{id}` phía trên). Proxy qua backend
+(same-origin, không cần CORS trên bucket).
 
 Mỗi lượt tải thành công được ghi vào bảng `artwork_downloads` (`source='admin'`, kèm
-`admin_user_id` của admin đang đăng nhập) — vì không watermark, đây là nơi duy nhất định
-danh được người tải khi cần truy vết. Log phụ trợ, không chặn việc tải nếu ghi lỗi. Xem
+`admin_user_id` của admin đang đăng nhập) — định danh được người tải khi cần truy vết. Log
+phụ trợ, không chặn việc tải nếu ghi lỗi. Xem
 [01-database.md](./detail_design/01-database.md).
 
 ### `DELETE /api/v1/admin/artworks/bulk-delete`

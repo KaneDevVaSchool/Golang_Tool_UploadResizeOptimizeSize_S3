@@ -110,6 +110,6 @@ lên nhưng hỏng lúc chạy.
 - [ ] `curl https://pictures.vaschools.edu.vn/api/v1/health` trả `200`
 - [ ] Không còn vhost Nginx nào khác trả lời cho tên miền này
 - [ ] Thử upload một ảnh thật qua giao diện trên tên miền
-- [ ] Tải một ảnh từ trang public và **mở ra xem có watermark** — đây là kiểm tra duy nhất
-      bắt được lỗi thiếu `web/dist`, vì lỗi đó không báo gì
+- [ ] Trang public **không** có nút tải ảnh gốc nào; chuột phải/kéo ảnh trên lưới và
+      lightbox bị chặn (đã gỡ có chủ đích, xem [plan/03-risks.md](../plan/03-risks.md))
 - [ ] `curl https://pictures.vaschools.edu.vn/sitemap.xml` trả danh sách tác phẩm

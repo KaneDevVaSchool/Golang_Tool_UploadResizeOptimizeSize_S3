@@ -181,21 +181,20 @@ thứ tự lui rõ ràng: **biến thể đúng cỡ → `thumbnail_url` → `im
 
 ## 7. Tải ảnh về (đường ngược lại)
 
-Ảnh không chỉ đi lên — cả admin lẫn khách đều tải được ảnh gốc, và cả hai đều **đi qua
-backend** thay vì trỏ thẳng vào S3:
+Ảnh không chỉ đi lên — chỉ **admin** tải được ảnh gốc, qua backend thay vì trỏ thẳng vào S3:
 
-| Endpoint | Watermark | Đòi `is_published` | Dùng cho |
-|---|---|---|---|
-| `GET /api/v1/public/artworks/{id}/download` | **Có** | **Có** | Khách xem triển lãm |
-| `GET /api/v1/admin/artworks/{id}/download` | Không | Không | Admin cần file gốc sạch |
+| Endpoint | Đòi `is_published` | Dùng cho |
+|---|---|---|
+| `GET /api/v1/admin/artworks/{id}/download` | Không | Admin cần file gốc để lưu trữ/in ấn |
 
-Vì sao proxy qua backend chứ không trả link S3: cùng origin nên không phụ thuộc CORS của
-bucket, và đó cũng là chỗ duy nhất chèn được watermark cùng ghi nhật ký lượt tải (bảng
-`artwork_downloads`).
+Khách xem ẩn danh **không** có đường tải ảnh gốc — endpoint public tương ứng đã bị gỡ có
+chủ đích để chặn việc thu thập tranh hàng loạt (xem
+[plan/03-risks.md](../plan/03-risks.md)). Khách chỉ xem được qua biến thể ảnh hiển thị trên
+trang (mục 5 phía trên).
 
-⚠️ **Bẫy vận hành**: ảnh mốc watermark đọc theo **đường dẫn tương đối**
-(`web/public/images/vas-white-mark.png`, lui về `web/dist/images/...`). Chạy binary từ thư
-mục khác thì watermark bị bỏ qua **im lặng** — chỉ ghi log cảnh báo, ảnh vẫn trả về bình
-thường (fail-open, cố ý: một khâu trang trí hỏng không đáng làm hỏng cả lượt tải). Đây là lý
-do systemd unit bắt buộc đặt `WorkingDirectory`; xem
-[deploys/00-tu-dau-den-cuoi.md](../deploys/00-tu-dau-den-cuoi.md).
+Vì sao admin route vẫn proxy qua backend chứ không trả link S3: cùng origin nên không phụ
+thuộc CORS của bucket, và đó cũng là chỗ ghi nhật ký lượt tải (bảng `artwork_downloads`).
+
+Watermark từng được chèn ở endpoint public đã gỡ; hàm chèn watermark
+(`ApplyArtworkDownloadWatermark`) đã xoá cùng lúc vì không còn nơi nào gọi. Admin download
+chưa bao giờ chèn watermark (admin cần file gốc sạch để lưu trữ/in ấn).

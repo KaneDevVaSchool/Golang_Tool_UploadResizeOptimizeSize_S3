@@ -42,7 +42,7 @@ ràng buộc, và lý do đằng sau mỗi quyết định.
 |---|---|
 | [00-overview.md](./detail_design/README.md) | Mục lục, quy ước ký hiệu, ranh giới miền |
 | [01-database.md](./detail_design/01-database.md) | 14 bảng MySQL: cột, index, khoá ngoại, lý do denormalize |
-| [02-upload-pipeline.md](./detail_design/02-upload-pipeline.md) | Upload đơn, bulk upload, sinh biến thể, tải ảnh có watermark; validate; S3 key |
+| [02-upload-pipeline.md](./detail_design/02-upload-pipeline.md) | Upload đơn, bulk upload, sinh biến thể, tải ảnh gốc (chỉ khu quản trị); validate; S3 key |
 | [03-artwork-domain.md](./detail_design/03-artwork-domain.md) | Vòng đời tác phẩm, bulk upload 2 bước, enrich, gán giải |
 | [04-public-engagement.md](./detail_design/04-public-engagement.md) | Reaction/comment/view ẩn danh, visitor_token |
 | [05-auth-security.md](./detail_design/05-auth-security.md) | Google OAuth, session, CSRF, rate limit, phân tầng bảo vệ |

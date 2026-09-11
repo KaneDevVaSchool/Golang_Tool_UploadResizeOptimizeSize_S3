@@ -661,17 +661,13 @@ sudo -u appuser bash -c 'cd web && npm run build'
 Kết quả nằm ở `web/dist/`. Mất 2–5 phút, lâu nhất là `npm ci` lần đầu.
 
 ⚠️ **Đừng bỏ qua bước này kể cả khi chỉ sửa code Go.** Backend phục vụ giao diện từ
-`web/dist` theo đường dẫn tương đối, và **ảnh mốc watermark cũng đọc từ đây**. Thiếu
-`web/dist` gây hai hỏng hóc, một trong hai không báo lỗi gì:
-
-- `/` trả JSON info thay vì trang web — dễ thấy.
-- Ảnh khách tải về **không có watermark** — chỉ ghi một dòng cảnh báo trong log, còn lượt
-  tải vẫn thành công. Đây là lỗi âm thầm, chỉ phát hiện bằng cách mở ảnh ra xem.
+`web/dist` theo đường dẫn tương đối. Thiếu `web/dist` thì `/` trả JSON info thay vì trang
+web — dễ thấy ngay, không phải lỗi âm thầm.
 
 **Đúng thì thấy**:
 
 ```bash
-ls web/dist/index.html && ls web/public/images/vas-white-mark.png
+ls web/dist/index.html
 ```
 
 ### H2. Build backend
@@ -745,7 +741,7 @@ Mở file unit ra đọc trước khi cài — bốn khối quan trọng nhất:
 
 | Dòng | Vì sao cần |
 |---|---|
-| `WorkingDirectory=/opt/s3-upload-tool` | **Bắt buộc.** Migration, `web/dist`, ảnh watermark và thư mục `uploads` đều dùng đường dẫn tương đối. Sai dòng này là hỏng cả bốn, và hai trong số đó hỏng im lặng. |
+| `WorkingDirectory=/opt/s3-upload-tool` | **Bắt buộc.** Migration, `web/dist` và thư mục `uploads` đều dùng đường dẫn tương đối. Sai dòng này là hỏng cả ba. |
 | `EnvironmentFile=/opt/s3-upload-tool/.env` | Nạp cấu hình. Thiếu file thì service không lên. |
 | `Restart=on-failure` + `StartLimitBurst=5` | Tự dậy khi crash, nhưng dừng hẳn sau 5 lần lỗi trong 60s để `systemctl status` báo `failed` thay vì restart vô hạn khi `.env` sai. |
 | `ProtectSystem=strict` + `ReadWritePaths=` | Toàn hệ thống chỉ đọc; mở lại đúng `uploads` và `storage`. Nếu sau này app cần ghi thêm thư mục nào, **phải thêm vào đây** nếu không sẽ bị từ chối quyền dù `chown` đúng. |
@@ -901,9 +897,9 @@ phiên đăng nhập sẵn có:
 - [ ] Vào `/admin`, đăng nhập bằng Google, thấy bảng điều khiển
 - [ ] Upload thử **một ảnh thật** (không phải ảnh test 10KB) qua giao diện admin
 - [ ] Ảnh vừa upload hiện đúng ở trang public
-- [ ] **Bấm tải ảnh ở trang public, mở file tải về và xác nhận có watermark VAS ở góc dưới
-      phải.** Đây là kiểm tra duy nhất bắt được lỗi thiếu `web/dist` — lỗi đó không báo gì,
-      ảnh vẫn tải bình thường, chỉ là không có mốc
+- [ ] Trang public **không** có nút tải ảnh gốc nào (đã gỡ có chủ đích, xem
+      [plan/03-risks.md](../plan/03-risks.md)); chuột phải/kéo ảnh trên lưới và lightbox bị
+      chặn
 - [ ] Trang `/thu-ngo` mở được
 
 Kiểm tra biến thể ảnh đã sinh đúng — nếu chưa, gallery vẫn chạy nhưng nặng gấp nhiều lần:

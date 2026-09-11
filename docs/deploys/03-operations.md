@@ -49,7 +49,6 @@ grep '\[UploadService\]' storage/logs/app-$(date +%F).log  # upload đơn
 grep '\[AdminAuth\]'     storage/logs/app-$(date +%F).log  # đăng nhập, từ chối truy cập
 grep '\[ArtworkService\]' storage/logs/app-$(date +%F).log # nghiệp vụ tác phẩm
 grep '\[BotGuard\]'      storage/logs/app-$(date +%F).log  # chặn công cụ tải trọn site
-grep 'watermark'         storage/logs/app-$(date +%F).log  # cảnh báo không tìm thấy ảnh mốc
 ```
 
 Mọi dòng log kèm request ID để lần theo một request qua nhiều tầng.
@@ -140,7 +139,6 @@ sudo journalctl -u s3-upload-tool -n 50 --no-pager
 | `failed to run database migrations` | Thiếu quyền hoặc SQL lỗi | Kiểm tra quyền của `vasapp` trên database |
 | `bind: address already in use` | Cổng 8080 đã bị chiếm | `sudo lsof -i :8080` |
 | `TRUSTED_PROXIES có giá trị không hợp lệ` | Sai định dạng CIDR trong `.env` | Sửa thành dạng `127.0.0.1/32`; app vẫn chạy nhưng bỏ qua dòng sai |
-| `không đọc được ảnh mốc watermark` | Chạy sai thư mục, hoặc chưa build `web/` | Kiểm tra `WorkingDirectory` của systemd; chạy `npm run build` trong `web/` |
 
 ### Nginx trả 502
 
@@ -177,7 +175,6 @@ Theo thứ tự khả năng:
 | 413 từ Nginx | `client_max_body_size` nhỏ hơn file | Nâng trong vhost, phải ≥ `UPLOAD_ABSOLUTE_MAX_MB` |
 | Ngắt kết nối khi upload file lớn | `proxy_read_timeout` quá ngắn | Nâng lên `300s` |
 | `FILE_TOO_LARGE` từ ứng dụng | Vượt `UPLOAD_MAX_SIZE_MB` | Nâng `UPLOAD_MAX_SIZE_MB` (và `client_max_body_size` của Nginx cho khớp) |
-| Ảnh tải về không có watermark | Chạy sai thư mục hoặc chưa build `web/` | Xem dòng cảnh báo `watermark` trong log — lỗi này **không** làm hỏng lượt tải nên dễ bỏ sót |
 | Khách bị chặn 403 `AUTOMATED_ACCESS_BLOCKED` | BotGuard nhận nhầm | Kiểm tra `TRUSTED_PROXIES` trước tiên: sai dòng đó thì mọi khách gộp thành một IP và cùng vượt ngưỡng |
 | Lỗi ký request S3 | Sai region/khoá | Xem log `[Container]` dòng region đã dò được |
 | `403` khi xem ảnh | Bucket chưa mở quyền đọc | Xem [S3-PUBLIC-READ.md](../S3-PUBLIC-READ.md) |

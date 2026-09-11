@@ -165,22 +165,18 @@ khi cần.
 
 ---
 
-## R9 — Watermark âm thầm không hoạt động 🟡
+## ~~R9 — Watermark âm thầm không hoạt động~~ ✅ Hết hiệu lực 2026-09-11
 
-**Khả năng**: Trung bình — xảy ra mỗi khi deploy quên build `web/`.
-**Ảnh hưởng**: Trung bình — ảnh tác phẩm phát tán không có dấu bản quyền của trường, và
-không ai biết cho tới khi tình cờ mở một file tải về.
+**Khả năng đã từng**: Trung bình — xảy ra mỗi khi deploy quên build `web/`.
+**Ảnh hưởng đã từng**: Trung bình — ảnh tác phẩm phát tán không có dấu bản quyền của
+trường, và không ai biết cho tới khi tình cờ mở một file tải về.
 
-Ảnh mốc watermark đọc theo đường dẫn **tương đối** (`web/public/images/vas-white-mark.png`,
-lui về `web/dist/images/`). Thiếu file hoặc chạy sai thư mục làm việc thì khâu đóng mốc bị bỏ
-qua: chỉ ghi một dòng cảnh báo trong log, còn lượt tải vẫn trả về ảnh bình thường.
-
-Đây là lựa chọn **cố ý** (fail-open): một khâu trang trí hỏng không đáng làm hỏng cả lượt
-tải của khách. Nhưng nó biến một lỗi cấu hình thành lỗi vô hình.
-
-**Xử lý**: sau mỗi lần deploy, tải một ảnh từ trang public và mở ra xem — đã đưa vào danh
-sách nghiệm thu ở [deploys/00-tu-dau-den-cuoi.md](../deploys/00-tu-dau-den-cuoi.md) giai
-đoạn I. Theo dõi log bằng `grep watermark`.
+Rủi ro này gắn với endpoint `GET /api/v1/public/artworks/{id}/download` (chèn watermark
+trước khi trả ảnh cho khách ẩn danh tải). Endpoint đó đã **gỡ hoàn toàn** ngày 2026-09-11 để
+chặn việc thu thập tranh hàng loạt (xem [02-roadmap.md](./02-roadmap.md)); hàm chèn
+watermark (`ApplyArtworkDownloadWatermark`) cũng xoá theo vì không còn nơi nào gọi. Khu quản
+trị tải ảnh gốc qua route riêng và chưa bao giờ dùng watermark, nên rủi ro này không còn áp
+dụng cho bất kỳ đường tải nào trong hệ thống.
 
 ---
 
@@ -325,7 +321,7 @@ nhiều lần — Let's Encrypt giới hạn 5 lần thất bại/giờ cho cùn
 | R6 | Đỉnh truy cập | 🟡 | P1.2 + xem lại rate limit |
 | R7 | Cấu hình sai | 🟡 | Danh sách kiểm tra |
 | R8 | Lạm dụng ẩn danh | 🟡 | P2.1 + trực theo dõi |
-| R9 | Watermark âm thầm không hoạt động | 🟡 | Kiểm tra ở nghiệm thu sau mỗi lần deploy |
+| R9 | Watermark âm thầm không hoạt động | ✅ | Hết hiệu lực 2026-09-11 — endpoint tải ảnh public đã gỡ |
 | R10 | Migration song song | 🟢 | Chấp nhận ở quy mô hiện tại |
 | R11 | `ADD COLUMN IF NOT EXISTS` lỗi cú pháp MySQL 8.1 | 🟡 | Đã sửa 015/016, tránh cú pháp này về sau |
 | R12 | `TRUSTED_PROXIES` khai sai | 🟡 | Mặc định đúng cho kiến trúc hiện tại; kiểm lại nếu thêm proxy |

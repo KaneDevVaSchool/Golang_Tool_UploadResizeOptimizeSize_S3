@@ -80,7 +80,7 @@ Container dựng hệ thống theo **năng lực sẵn có**, không fail toàn 
 |---|---|
 | `DATABASE_ENABLED=false` | Toàn bộ admin + domain + public API **không được mount**. Upload S3 thuần vẫn chạy. |
 | Thiếu `GOOGLE_CLIENT_ID/SECRET` | `AdminAuthHandler` **vẫn được tạo**, `/auth/google/*` trả 503 có thông báo rõ thay vì 404. |
-| Chưa build `web/dist` | `/` trả JSON info endpoint thay vì lỗi — tiện khi dev backend riêng. ⚠️ Watermark ảnh tải về cũng đọc mốc từ đây, nên thiếu `web/dist` thì ảnh public tải về **không có watermark** (chỉ ghi log, không báo lỗi). |
+| Chưa build `web/dist` | `/` trả JSON info endpoint thay vì lỗi — tiện khi dev backend riêng. |
 | `BOT_GUARD_ENABLED=false` | Không chặn công cụ tải trọn site; rate limit thường vẫn còn. |
 | `TRUSTED_PROXIES` rỗng | Bỏ qua `X-Forwarded-For`, mọi giới hạn tính theo địa chỉ kết nối trực tiếp — sau Nginx nghĩa là **toàn bộ khách gộp thành một IP**. |
 
@@ -176,17 +176,17 @@ Chi tiết đầy đủ: [detail_design/02-upload-pipeline.md](./detail_design/0
 ### 5.2 Tải ảnh tác phẩm về
 
 ```text
-GET /api/v1/public/artworks/{id}/download   → chỉ tác phẩm đã xuất bản
-GET /api/v1/admin/artworks/{id}/download    → mọi tác phẩm, kể cả đang ẩn
+GET /api/v1/admin/artworks/{id}/download    → mọi tác phẩm, kể cả đang ẩn (chỉ khu quản trị)
   → S3Repository.GetObject (stream qua backend, không redirect)
-  → nhánh public: đóng watermark VAS vào góc dưới phải
   → ghi 1 dòng vào artwork_downloads (lỗi ghi log chỉ cảnh báo, không chặn tải)
   ← Content-Disposition: attachment
 ```
 
-Cả hai đi qua backend thay vì trả link S3: cùng origin nên không phụ thuộc cấu hình CORS của
-bucket, và đó là chỗ duy nhất chèn được watermark cùng nhật ký. Đổi lại, băng thông ảnh đi
-qua VPS chứ không thẳng từ S3 về máy khách.
+Không có phiên bản public — khách xem ẩn danh không tải được ảnh gốc, đã gỡ có chủ đích để
+chặn việc thu thập tranh hàng loạt (xem [plan/03-risks.md](./plan/03-risks.md)). Route admin
+đi qua backend thay vì trả link S3: cùng origin nên không phụ thuộc cấu hình CORS của bucket,
+và đó là chỗ ghi nhật ký. Đổi lại, băng thông ảnh đi qua VPS chứ không thẳng từ S3 về máy
+admin.
 
 ### 5.3 Xem tác phẩm trên trang public
 
@@ -233,7 +233,7 @@ Chi tiết từng bảng: [detail_design/01-database.md](./detail_design/01-data
 | Session admin lưu DB | Sống sót qua restart/deploy — admin không bị đá ra mỗi lần cập nhật | Mỗi request admin tốn 1 query |
 | Tương tác public ẩn danh | Yêu cầu nghiệp vụ: phụ huynh xem là thả tim được ngay, không đăng ký | Chống lạm dụng chỉ dựa vào rate limit + visitor_token |
 | Xoá tác phẩm **xoá luôn** file S3 | Không để bucket tích rác không ai dọn; xoá S3 trước, hỏng thì giữ nguyên bản ghi DB nên không có bản ghi trỏ vào ảnh đã mất | Bấm nhầm là mất ảnh vĩnh viễn — đổi từ quyết định ngược lại ngày 2026-09-07 |
-| Ảnh tải về đi qua backend | Chỗ duy nhất đóng được watermark và ghi nhật ký; không phụ thuộc CORS của bucket | Băng thông ảnh dồn qua VPS |
+| Ảnh tải về (admin) đi qua backend | Ghi được nhật ký; không phụ thuộc CORS của bucket | Băng thông ảnh dồn qua VPS |
 | Migration tự chạy lúc khởi động | Deploy một bước, không quên chạy migrate | Cần cẩn trọng khi có nhiều instance |
 | `enrichArtworks` batch query | Tránh N+1 khi hiển thị danh sách kèm giải/reaction | Vẫn còn 1 query/artwork cho student (xem nợ kỹ thuật) |
 

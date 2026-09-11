@@ -443,7 +443,9 @@ tải ảnh, chưa bao gồm xoá/sửa tác phẩm. Chi tiết schema ở
 - [x] `ArtworkHandler.HandleDownload` (admin) ghi `source='admin'` kèm `admin_user_id` lấy
       từ session; `PublicHandler.HandleDownloadArtwork` (public) ghi `source='public'`,
       `admin_user_id` luôn `NULL` vì người xem ẩn danh không có tài khoản — dùng chung hàm
-      `logArtworkDownload` (`internal/handlers/public_handler.go`)
+      `logArtworkDownload` (`internal/handlers/public_handler.go`). ⚠️ **Endpoint public đã
+      gỡ 2026-09-11** (xem P2.18) — `logArtworkDownload` nay chỉ còn admin gọi, bản ghi
+      `source='public'` cũ vẫn giữ nguyên trong bảng làm lịch sử
 - [x] Log là thao tác **phụ trợ**: ghi lỗi chỉ log cảnh báo, không chặn việc trả ảnh về —
       cùng nguyên tắc đã áp dụng cho watermark và sinh biến thể ảnh
 - [x] Chưa làm giao diện xem lại nhật ký trong admin (quyết định có chủ đích, giữ phạm vi
@@ -521,7 +523,8 @@ biến môi trường ở [deploys/02-configuration.md](../deploys/02-configurat
       chung vào danh sách chặn là sai lầm dễ mắc và sẽ xoá sổ toàn bộ P2.15
 - [x] **Rate limit riêng cho tải ảnh gốc** (30/phút, `RATE_LIMIT_DOWNLOAD_REQUESTS`) — tách
       khỏi bộ đếm chung vì đây là thao tác đắt nhất trang public (đọc trọn object S3 + ghi
-      `artwork_downloads`) và là đích ngắm chính khi muốn gom tranh hàng loạt
+      `artwork_downloads`) và là đích ngắm chính khi muốn gom tranh hàng loạt. ⚠️ **Đã gỡ
+      2026-09-11** cùng lúc gỡ hẳn endpoint public — xem P2.18
 - [x] **Header bảo mật ở tầng ứng dụng** (`middleware/security_headers.go`) — CSP,
       `Permissions-Policy`, COOP/CORP, HSTS có điều kiện. Đặt trong Go chứ không chỉ ở Nginx
       vì file vhost thật trên VPS do Certbot sửa và người vận hành chỉnh tay, repo không kiểm
@@ -584,6 +587,34 @@ local) chưa bao giờ chạy ở production.
 - Bảng `uploads` (migration 001) thành bảng chết. Không sửa migration đã commit; dọn bằng
   một migration `DROP TABLE` khi tiện.
 - Client cũ gọi các endpoint đã gỡ sẽ nhận 404.
+
+---
+
+### ~~P2.18 — Gỡ endpoint tải ảnh gốc public, chặn chuột phải/kéo ảnh~~ ✅ Xong 2026-09-11
+
+Không nằm trong lộ trình gốc — yêu cầu trực tiếp: khách xem ẩn danh không được tải ảnh gốc
+tác phẩm, chặn hết mọi cách tải thông thường. Đảo ngược một phần quyết định P2.13/P2.14
+(watermark + endpoint public từng thêm ngày 2026-09-06/07).
+
+- [x] Xoá `GET /api/v1/public/artworks/{id}/download` — `PublicHandler.HandleDownloadArtwork`
+      và route trong `container.go`. Endpoint admin `GET /api/v1/admin/artworks/{id}/download`
+      **giữ nguyên** (xác nhận với người dùng trước khi làm — công cụ quản trị vẫn cần tải
+      ảnh gốc để lưu trữ/in ấn)
+- [x] Xoá `internal/service/artwork_download_watermark.go` — `ApplyArtworkDownloadWatermark`
+      thành dead code sau khi gỡ endpoint public (admin download chưa từng dùng watermark)
+- [x] Gỡ cấu hình `RATE_LIMIT_DOWNLOAD_REQUESTS`/`RATE_LIMIT_DOWNLOAD_WINDOW_MINUTES` —
+      `RateLimitConfig.DownloadRequests/DownloadWindow`, `WithDownloadRateLimit` — chỉ phục
+      vụ endpoint vừa gỡ, khỏi `builder.go`, `config.go`, `.env.example`,
+      [02-configuration.md](../deploys/02-configuration.md)
+- [x] Xoá nút "Tải ảnh" và hàm `downloadArtwork`/`safeFileName`/`guessDownloadExtension` ở
+      `PublicLightbox.tsx`
+- [x] Thêm `draggable={false}` + chặn `onContextMenu` mặc định trên ảnh tác phẩm ở
+      `PublicLightbox`, `FeaturedArtworkCard`, `FeaturedArtworkFrame`, `HallArtworkCard`,
+      `MascotAssistant` — cản trở người dùng thông thường, **không** chặn được ai cố tình
+      dùng DevTools hay đọc trực tiếp network tab
+- [x] R9 trong [03-risks.md](./03-risks.md) đánh dấu hết hiệu lực — watermark không còn tồn
+      tại để mà hỏng
+- [x] `go build ./...`, `go vet ./...`, `go test ./...`, `tsc --noEmit`, `vite build` đều sạch
 
 ---
 
