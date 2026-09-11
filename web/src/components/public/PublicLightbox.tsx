@@ -4,7 +4,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
-  Download,
   Eye,
   Info,
   Maximize2,
@@ -45,21 +44,6 @@ function formatDate(value: string): string {
   return Number.isNaN(date.getTime())
     ? "Đang cập nhật"
     : new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "long", year: "numeric" }).format(date);
-}
-
-function safeFileName(value: string): string {
-  return value.trim().replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-") || "tac-pham-vas";
-}
-
-function guessDownloadExtension(imageUrl: string): string {
-  try {
-    const pathname = new URL(imageUrl, window.location.origin).pathname;
-    const ext = pathname.slice(pathname.lastIndexOf(".")).toLowerCase();
-    if (/^\.(jpe?g|png|webp|gif)$/.test(ext)) return ext;
-  } catch {
-    // ignore
-  }
-  return ".jpg";
 }
 
 type Point = { x: number; y: number };
@@ -320,33 +304,6 @@ export function PublicLightbox({
     window.open(url, "vas-facebook-share", "popup=yes,width=680,height=560,noopener,noreferrer");
   }
 
-  async function downloadArtwork() {
-    const downloadUrl = `/api/v1/public/artworks/${artwork.id}/download`;
-    const suggestedName = `${safeFileName(artwork.title)}${guessDownloadExtension(artwork.image_url)}`;
-    try {
-      const response = await fetch(downloadUrl);
-      if (!response.ok) throw new Error("download failed");
-      const blobUrl = URL.createObjectURL(await response.blob());
-      const anchor = document.createElement("a");
-      anchor.href = blobUrl;
-      anchor.download = suggestedName;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(blobUrl);
-      toast.success("Ảnh gốc đang được tải xuống.");
-    } catch {
-      const anchor = document.createElement("a");
-      anchor.href = downloadUrl;
-      anchor.download = suggestedName;
-      anchor.rel = "noopener";
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      toast.success("Ảnh gốc đang được tải xuống.");
-    }
-  }
-
   async function toggleFullscreen() {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -432,10 +389,6 @@ export function PublicLightbox({
                     <Share2 size={17} />
                     <span>Chia sẻ</span>
                   </button>
-                  <button type="button" onClick={downloadArtwork} title="Tải ảnh gốc">
-                    <Download size={17} />
-                    <span>Tải ảnh</span>
-                  </button>
                 </div>
 
                 <button type="button" className="public-lightbox-icon-action" onClick={toggleFullscreen} title={isFullscreen ? "Thoát toàn màn hình" : "Toàn màn hình"}>
@@ -463,6 +416,10 @@ export function PublicLightbox({
                   event.preventDefault();
                   changeZoom(zoom + (event.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
                 }}
+                // Chặn menu chuột phải ("Lưu hình ảnh") trên vùng xem tranh -
+                // không ngăn được người cố tình mở DevTools, nhưng chặn cách
+                // tải phổ biến nhất của khách thông thường.
+                onContextMenu={(event) => event.preventDefault()}
               >
                 <span className="public-lightbox-stage-glow" aria-hidden />
                 <span className="public-lightbox-stage-leaf public-lightbox-stage-leaf--one" aria-hidden>❧</span>

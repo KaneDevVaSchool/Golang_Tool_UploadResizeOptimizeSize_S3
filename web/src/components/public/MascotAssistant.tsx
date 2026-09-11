@@ -272,7 +272,7 @@ export function MascotAssistant() {
                                         to={`/phong-trien-lam?tim=${encodeURIComponent(trimmedQuery)}&tranh=${item.id}`}
                                         onClick={() => setOpen(false)}
                                       >
-                                        <img src={artworkImageURL(item, "thumb")} alt="" className="mascot-result-thumb" />
+                                        <img src={artworkImageURL(item, "thumb")} alt="" className="mascot-result-thumb" draggable={false} onContextMenu={(event) => event.preventDefault()} />
                                         <span className="mascot-result-meta">
                                           <span className="mascot-result-title">{item.title}</span>
                                           <span className="mascot-result-sub">
@@ -319,7 +319,7 @@ export function MascotAssistant() {
                                         to={`/bang-vang?tranh=${entry.id}`}
                                         onClick={() => setOpen(false)}
                                       >
-                                        <img src={artworkImageURL(entry, "thumb")} alt="" className="mascot-result-thumb" />
+                                        <img src={artworkImageURL(entry, "thumb")} alt="" className="mascot-result-thumb" draggable={false} onContextMenu={(event) => event.preventDefault()} />
                                         <span className="mascot-result-meta">
                                           <span className="mascot-result-title">
                                             <Award

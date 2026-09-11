@@ -75,6 +75,8 @@ export function FeaturedArtworkCard({
                 decoding="async"
                 width={item.width}
                 height={item.height}
+                draggable={false}
+                onContextMenu={(event) => event.preventDefault()}
                 onLoad={() => setLoaded(true)}
                 onError={() => setLoaded(true)}
                 data-loaded={loaded ? "true" : "false"}
